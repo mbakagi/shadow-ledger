@@ -598,15 +598,19 @@
   }
 
   function rowToItem(cols, colMap) {
+    const parseNum = (val, def) => {
+      const n = parseInt(val, 10);
+      return isNaN(n) ? def : n;
+    };
     return {
       sku:               String(cols[colMap.sku] ?? '').trim(),
       name:              String(cols[colMap.name] ?? '').trim(),
       category:          String(cols[colMap.category] ?? '').trim(),
-      totalStock:        parseInt(cols[colMap.totalStock], 10) || 0,
-      buildingStock:     parseInt(cols[colMap.buildingStock], 10) || 0,
-      carrierTrigger:    parseInt(cols[colMap.carrierTrigger], 10) || 5,
-      maxCapacity:       parseInt(cols[colMap.maxCapacity], 10) || 20,
-      purchasingTrigger: parseInt(cols[colMap.purchasingTrigger], 10) || 10,
+      totalStock:        parseNum(cols[colMap.totalStock], 0),
+      buildingStock:     parseNum(cols[colMap.buildingStock], 0),
+      carrierTrigger:    parseNum(cols[colMap.carrierTrigger], 5),
+      maxCapacity:       parseNum(cols[colMap.maxCapacity], 20),
+      purchasingTrigger: parseNum(cols[colMap.purchasingTrigger], 10),
     };
   }
 
@@ -660,16 +664,22 @@
         if (arrKey) data = data[arrKey];
         else return [];
       }
-      return data.map(obj => ({
-        sku:               String(obj.sku || obj.SKU || obj.itemCode || obj.code || '').trim(),
-        name:              String(obj.name || obj.itemName || obj.productName || obj.description || '').trim(),
-        category:          String(obj.category || obj.cat || obj.group || obj.type || '').trim(),
-        totalStock:        parseInt(obj.totalStock ?? obj.total ?? obj.qty ?? obj.quantity ?? 0, 10) || 0,
-        buildingStock:     parseInt(obj.buildingStock ?? obj.building ?? obj.localStock ?? 0, 10) || 0,
-        carrierTrigger:    parseInt(obj.carrierTrigger ?? obj.carrier ?? 5, 10) || 5,
-        maxCapacity:       parseInt(obj.maxCapacity ?? obj.max ?? 20, 10) || 20,
-        purchasingTrigger: parseInt(obj.purchasingTrigger ?? obj.purchasing ?? obj.reorder ?? 10, 10) || 10,
-      })).filter(i => i.sku || i.name);
+      return data.map(obj => {
+        const parseNum = (val, def) => {
+          const n = parseInt(val, 10);
+          return isNaN(n) ? def : n;
+        };
+        return {
+          sku:               String(obj.sku || obj.SKU || obj.itemCode || obj.code || '').trim(),
+          name:              String(obj.name || obj.itemName || obj.productName || obj.description || '').trim(),
+          category:          String(obj.category || obj.cat || obj.group || obj.type || '').trim(),
+          totalStock:        parseNum(obj.totalStock ?? obj.total ?? obj.qty ?? obj.quantity, 0),
+          buildingStock:     parseNum(obj.buildingStock ?? obj.building ?? obj.localStock, 0),
+          carrierTrigger:    parseNum(obj.carrierTrigger ?? obj.carrier, 5),
+          maxCapacity:       parseNum(obj.maxCapacity ?? obj.max, 20),
+          purchasingTrigger: parseNum(obj.purchasingTrigger ?? obj.purchasing ?? obj.reorder, 10),
+        };
+      }).filter(i => i.sku || i.name);
     } catch {
       return [];
     }
@@ -794,7 +804,10 @@
     const newItems = State.importParsedData.map(d => ({ id: DAL.generateId(), ...d }));
     let updated = 0, added = 0;
     newItems.forEach(ni => {
-      const existing = State.items.find(i => i.sku.toLowerCase() === ni.sku.toLowerCase());
+      const existing = State.items.find(i => 
+        (ni.sku && i.sku && i.sku.toLowerCase() === ni.sku.toLowerCase()) || 
+        (!ni.sku && i.name && ni.name && i.name.toLowerCase() === ni.name.toLowerCase())
+      );
       if (existing) {
         Object.assign(existing, { ...ni, id: existing.id });
         updated++;
@@ -827,7 +840,7 @@
 
   function exportCSV() {
     const headers = ['sku','name','category','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger'];
-    const rows = State.items.map(i => headers.map(h => `"${String(i[h] || '').replace(/"/g, '""')}"`).join(','));
+    const rows = State.items.map(i => headers.map(h => `"${String(i[h] ?? '').replace(/"/g, '""')}"`).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
