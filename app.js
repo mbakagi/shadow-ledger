@@ -19,7 +19,10 @@
     sortField: 'sku',
     sortAsc: true,
     editingId: null,
+    editingId: null,
     importParsedData: [],
+    importRawHeaders: [],
+    importRawData: [],
     importFormat: 'csv',
   };
 
@@ -76,6 +79,9 @@
     importDropZone:   $('#import-drop-zone'),
     importDropText:   $('#import-drop-text'),
     importFileInput:  $('#import-file-input'),
+    importMapping:    $('#import-mapping'),
+    btnImportMappingConfirm: $('#btn-import-mapping-confirm'),
+    btnImportMappingCancel:  $('#btn-import-mapping-cancel'),
     btnImportConfirm: $('#btn-import-confirm'),
     modalAlertsTitle: $('#modal-alerts-title'),
     modalAlertsList:  $('#modal-alerts-list'),
@@ -614,22 +620,17 @@
     };
   }
 
-  // ─── CSV / TSV Parser ───
-  function parseDelimited(text, forceDelimiter) {
+  // ─── CSV / TSV Extractor ───
+  function extractDelimited(text, forceDelimiter) {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) return [];
+    if (lines.length < 2) return null;
 
     const headerLine = lines[0];
     const delimiter = forceDelimiter || (headerLine.includes('\t') ? '\t' : ',');
     const headers = headerLine.split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
-    const colMap = mapColumns(headers);
 
-    if (colMap.sku === undefined && colMap.name === undefined) return [];
-
-    return lines.slice(1).map(line => {
-      const cols = parseDelimitedLine(line, delimiter);
-      return rowToItem(cols, colMap);
-    }).filter(i => i.sku || i.name);
+    const rows = lines.slice(1).map(line => parseDelimitedLine(line, delimiter));
+    return { headers, rows };
   }
 
   function parseDelimitedLine(line, delimiter) {
@@ -653,53 +654,24 @@
     return result;
   }
 
-  // ─── JSON Parser ───
-  function parseJSON(text) {
+  // ─── JSON Extractor ───
+  function extractJSON(text) {
     try {
       let data = JSON.parse(text);
       if (!Array.isArray(data)) {
-        // Try to find an array property
         const keys = Object.keys(data);
         const arrKey = keys.find(k => Array.isArray(data[k]));
         if (arrKey) data = data[arrKey];
-        else return [];
+        else return null;
       }
-      return data.map(obj => {
-        const parseNum = (val, def) => {
-          const n = parseInt(val, 10);
-          return isNaN(n) ? def : n;
-        };
-        return {
-          sku:               String(obj.sku || obj.SKU || obj.itemCode || obj.code || '').trim(),
-          name:              String(obj.name || obj.itemName || obj.productName || obj.description || '').trim(),
-          category:          String(obj.category || obj.cat || obj.group || obj.type || '').trim(),
-          totalStock:        parseNum(obj.totalStock ?? obj.total ?? obj.qty ?? obj.quantity, 0),
-          buildingStock:     parseNum(obj.buildingStock ?? obj.building ?? obj.localStock, 0),
-          carrierTrigger:    parseNum(obj.carrierTrigger ?? obj.carrier, 5),
-          maxCapacity:       parseNum(obj.maxCapacity ?? obj.max, 20),
-          purchasingTrigger: parseNum(obj.purchasingTrigger ?? obj.purchasing ?? obj.reorder, 10),
-        };
-      }).filter(i => i.sku || i.name);
+      if (data.length === 0) return null;
+      const headersSet = new Set();
+      data.forEach(obj => Object.keys(obj).forEach(k => headersSet.add(k)));
+      const headers = Array.from(headersSet);
+      const rows = data.map(obj => headers.map(h => String(obj[h] ?? '')));
+      return { headers, rows };
     } catch {
-      return [];
-    }
-  }
-
-  // ─── Excel Parser (SheetJS) ───
-  function parseExcel(arrayBuffer) {
-    try {
-      const wb = XLSX.read(arrayBuffer, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      if (data.length < 2) return [];
-
-      const headers = data[0];
-      const colMap = mapColumns(headers);
-      if (colMap.sku === undefined && colMap.name === undefined) return [];
-
-      return data.slice(1).map(row => rowToItem(row, colMap)).filter(i => i.sku || i.name);
-    } catch {
-      return [];
+      return null;
     }
   }
 
@@ -744,27 +716,84 @@
 
     if (effectiveFormat !== format) setImportFormat(effectiveFormat);
 
-    if (effectiveFormat === 'excel') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const parsed = parseExcel(e.target.result);
-        if (!parsed.length) { toast('No valid data found. Check column headers.', 'error'); return; }
-        showImportPreview(parsed);
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        let parsed;
-        if (effectiveFormat === 'json') parsed = parseJSON(e.target.result);
-        else if (effectiveFormat === 'tsv') parsed = parseDelimited(e.target.result, '\t');
-        else parsed = parseDelimited(e.target.result);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let extracted = null;
+      if (effectiveFormat === 'excel') {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          if (data.length >= 2) extracted = { headers: data[0].map(String), rows: data.slice(1) };
+        } catch {}
+      } else {
+        if (effectiveFormat === 'json') extracted = extractJSON(e.target.result);
+        else if (effectiveFormat === 'tsv') extracted = extractDelimited(e.target.result, '\t');
+        else extracted = extractDelimited(e.target.result);
+      }
 
-        if (!parsed.length) { toast('No valid data found. Check file format and headers.', 'error'); return; }
-        showImportPreview(parsed);
-      };
-      reader.readAsText(file);
+      if (!extracted || !extracted.headers.length || !extracted.rows.length) { 
+        toast('No valid data found. Check file format and headers.', 'error'); 
+        return; 
+      }
+      showColumnMapping(extracted.headers, extracted.rows);
+    };
+
+    if (effectiveFormat === 'excel') reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
+  }
+
+  const IMPORT_FIELDS = [
+    { id: 'sku', label: 'SKU' },
+    { id: 'name', label: 'Item Name' },
+    { id: 'category', label: 'Category' },
+    { id: 'totalStock', label: 'Total Stock' },
+    { id: 'buildingStock', label: 'Building Stock' },
+    { id: 'carrierTrigger', label: 'Carrier Trigger' },
+    { id: 'maxCapacity', label: 'Max Capacity' },
+    { id: 'purchasingTrigger', label: 'Purch. Trigger' }
+  ];
+
+  function showColumnMapping(headers, rows) {
+    State.importRawHeaders = headers;
+    State.importRawData = rows;
+    
+    // Attempt auto-mapping
+    const autoMap = mapColumns(headers);
+    
+    // Populate dropdowns
+    IMPORT_FIELDS.forEach(field => {
+      const select = $(`#map-${field.id}`);
+      if (!select) return;
+      select.innerHTML = '<option value="-1">-- Skip / Default --</option>' + 
+        headers.map((h, i) => `<option value="${i}">${esc(h)}</option>`).join('');
+      if (autoMap[field.id] !== undefined) select.value = autoMap[field.id];
+      else select.value = '-1';
+    });
+    
+    dom.importDropZone.classList.add('hidden');
+    dom.importMapping.classList.remove('hidden');
+  }
+
+  function applyMapping() {
+    const colMap = {};
+    IMPORT_FIELDS.forEach(field => {
+      const select = $(`#map-${field.id}`);
+      if (select) {
+        const val = parseInt(select.value, 10);
+        if (val >= 0) colMap[field.id] = val;
+      }
+    });
+    
+    if (colMap.sku === undefined && colMap.name === undefined) {
+      toast('You must map at least SKU or Name', 'error');
+      return;
     }
+    
+    const parsed = State.importRawData.map(row => rowToItem(row, colMap)).filter(i => i.sku || i.name);
+    
+    dom.importMapping.classList.add('hidden');
+    showImportPreview(parsed);
   }
 
   function showImportPreview(parsed) {
@@ -828,7 +857,11 @@
 
   function resetImportPreview() {
     State.importParsedData = [];
+    State.importRawHeaders = [];
+    State.importRawData = [];
     dom.importPreview.classList.add('hidden');
+    dom.importMapping.classList.add('hidden');
+    dom.importDropZone.classList.remove('hidden');
     dom.importPreviewBody.innerHTML = '';
     dom.btnImportConfirm.disabled = true;
   }
@@ -955,8 +988,13 @@
     // Modal closes
     $('#modal-item-close').addEventListener('click', () => closeModal(dom.modalItem));
     $('#btn-cancel-item').addEventListener('click', () => closeModal(dom.modalItem));
+    
+    // Import flow buttons
+    dom.btnImportMappingConfirm.addEventListener('click', applyMapping);
+    dom.btnImportMappingCancel.addEventListener('click', () => { closeModal(dom.modalImport); resetImportModal(); });
     $('#modal-import-close').addEventListener('click', () => { closeModal(dom.modalImport); resetImportModal(); });
     $('#btn-import-cancel').addEventListener('click', () => { closeModal(dom.modalImport); resetImportModal(); });
+    
     $('#modal-manifest-close').addEventListener('click', () => closeModal(dom.modalManifest));
     $('#modal-alerts-close').addEventListener('click', () => closeModal(dom.modalAlerts));
 

@@ -502,7 +502,50 @@
           <p>Same as CSV but uses <strong>tabs</strong> as delimiters. Common when pasting from spreadsheets or clipboard.</p>
         </div>
 
-        <div id="import-preview" class="hidden">
+        <div id="import-mapping" class="hidden animate-fade-in">
+          <p class="text-sm font-semibold mb-3">Map Columns</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 max-h-[40vh] overflow-y-auto px-1 scrollbar-thin">
+            <!-- Shadow Ledger fields vs Dropdowns -->
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">SKU <span class="text-carrier">*</span></label>
+              <select id="map-sku" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Name <span class="text-carrier">*</span></label>
+              <select id="map-name" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Category</label>
+              <select id="map-category" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Total Stock</label>
+              <select id="map-totalStock" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Building Stock</label>
+              <select id="map-buildingStock" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Carrier Trig.</label>
+              <select id="map-carrierTrigger" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Max Capacity</label>
+              <select id="map-maxCapacity" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Purch. Trig.</label>
+              <select id="map-purchasingTrigger" class="input-field flex-1"></select>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button id="btn-import-mapping-confirm" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5">Preview Import</button>
+            <button id="btn-import-mapping-cancel" class="btn-secondary flex-1 justify-center text-sm font-semibold py-2.5">Cancel</button>
+          </div>
+        </div>
+
+        <div id="import-preview" class="hidden animate-fade-in">
           <p class="text-sm font-semibold mb-2">Preview (<span id="import-preview-count">0</span> items):</p>
           <div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table class="w-full text-xs">
