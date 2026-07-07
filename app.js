@@ -340,8 +340,32 @@
   function populateCategoryFilter() {
     const cats = getCategories();
     const current = dom.categorySelect.value;
-    dom.categorySelect.innerHTML = '<option value="">All Categories</option>' +
-      cats.map(c => `<option value="${esc(c)}" ${c === current ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    
+    // Get all predefined options from the add item form
+    const predefinedSelect = $('#field-category');
+    if (!predefinedSelect) return;
+    
+    const predefinedHTML = predefinedSelect.innerHTML;
+    // Extract values to know what is already predefined
+    const predefinedValues = Array.from(predefinedSelect.querySelectorAll('option')).map(o => o.value).filter(Boolean);
+    
+    // Find custom categories
+    const customCats = cats.filter(c => !predefinedValues.includes(c));
+    
+    let html = '<option value="">All Categories</option>' + predefinedHTML.replace('<option value="">-- Select Category --</option>', '');
+    
+    if (customCats.length > 0) {
+      html += '<optgroup label="Custom Categories">';
+      html += customCats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      html += '</optgroup>';
+    }
+    
+    dom.categorySelect.innerHTML = html;
+    if (dom.categorySelect.querySelector(`option[value="${esc(current)}"]`)) {
+      dom.categorySelect.value = current;
+    } else {
+      dom.categorySelect.value = '';
+    }
   }
 
   // ═══════════════════════════════════════════════════════

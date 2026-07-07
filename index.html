@@ -406,68 +406,79 @@
           </div>
           <div>
             <label class="label">Category</label>
-            <input id="field-category" type="text" list="category-options" class="input-field w-full" placeholder="e.g. Fasteners" />
-            <datalist id="category-options">
-              <!-- Détection Incendie: Conventionnel -->
-              <option value="Détection Incendie - Conventionnel - Centrales"></option>
-              <option value="Détection Incendie - Conventionnel - Détecteurs"></option>
-              <option value="Détection Incendie - Conventionnel - Détecteurs spéciaux"></option>
-              <option value="Détection Incendie - Conventionnel - Déclencheurs manuels"></option>
-              <option value="Détection Incendie - Conventionnel - Avertisseurs sonores"></option>
-              <!-- Détection Incendie: Adressable -->
-              <option value="Détection Incendie - Adressable - Centrales"></option>
-              <option value="Détection Incendie - Adressable - Détecteurs"></option>
-              <option value="Détection Incendie - Adressable - Déclencheurs manuels"></option>
-              <option value="Détection Incendie - Adressable - Avertisseurs sonores"></option>
-              <option value="Détection Incendie - Adressable - Modules"></option>
-              <!-- Détection gaz -->
-              <option value="Détection gaz - Centrale Gaz"></option>
-              <option value="Détection gaz - Détecteur gaz"></option>
-              <option value="Détection gaz - Électrovanne"></option>
-              <option value="Détection gaz - Accessoires"></option>
-              <!-- Extinction automatique -->
-              <option value="Extinction automatique - Centrale extinction"></option>
-              <option value="Extinction automatique - Gaz d'extinction"></option>
-              <option value="Extinction automatique - Accessoires"></option>
-              <!-- Alarme: Filaire -->
-              <option value="Alarme - Filaire - Centrale"></option>
-              <option value="Alarme - Filaire - Clavier"></option>
-              <option value="Alarme - Filaire - Détecteurs"></option>
-              <option value="Alarme - Filaire - Sirènes"></option>
-              <!-- Contrôle D'accès Pointage: Contrôle d'accès -->
-              <option value="Contrôle D'accès Pointage - Contrôle d'accès - Contrôleurs"></option>
-              <option value="Contrôle D'accès Pointage - Contrôle d'accès - Lecteurs"></option>
-              <option value="Contrôle D'accès Pointage - Contrôle d'accès - Lecteurs autonomes"></option>
-              <!-- Contrôle D'accès Pointage: Pointage -->
-              <option value="Contrôle D'accès Pointage - Pointage - Empreintes"></option>
-              <option value="Contrôle D'accès Pointage - Pointage - Palm-vein"></option>
-              <option value="Contrôle D'accès Pointage - Pointage - Reconnaissance"></option>
-              <option value="Contrôle D'accès Pointage - Pointage - Proximité"></option>
-              <!-- Contrôle D'accès Pointage: Logiciels -->
-              <option value="Contrôle D'accès Pointage - Logiciels - Contrôle d'accès"></option>
-              <option value="Contrôle D'accès Pointage - Logiciels - Pointage"></option>
-              <option value="Contrôle D'accès Pointage - Logiciels - Gestion des visiteurs"></option>
-              <option value="Contrôle D'accès Pointage - Logiciels - Gestion des travailleurs"></option>
-              <option value="Contrôle D'accès Pointage - Logiciels - Service libre des employés"></option>
-              <option value="Contrôle D'accès Pointage - Logiciels - Gestion des visites"></option>
-              <!-- Contrôle D'accès Pointage: Accessoires -->
-              <option value="Contrôle D'accès Pointage - Accessoires - Ventouse"></option>
-              <option value="Contrôle D'accès Pointage - Accessoires - Serrure électrique"></option>
-              <option value="Contrôle D'accès Pointage - Accessoires - Gâche Electrique"></option>
-              <option value="Contrôle D'accès Pointage - Accessoires - Armature"></option>
-              <option value="Contrôle D'accès Pointage - Accessoires - Bouton de sortie"></option>
-              <option value="Contrôle D'accès Pointage - Accessoires - Flexible"></option>
-              <!-- Vidéosurveillance & Alimentations -->
-              <option value="Vidéosurveillance"></option>
-              <option value="Alimentations"></option>
-              <!-- Réseau -->
-              <option value="Réseau - Switch"></option>
-              <option value="Réseau - Panneaux de brassage"></option>
-              <option value="Réseau - Armoires"></option>
-              <option value="Réseau - Onduleurs"></option>
-              <option value="Réseau - Alimentations"></option>
-              <option value="Réseau - Accessoires"></option>
-            </datalist>
+            <select id="field-category" class="input-field w-full">
+              <option value="">-- Select Category --</option>
+              <optgroup label="Détection Incendie: Conventionnel">
+                <option value="Détection Incendie - Conventionnel - Centrales">Centrales</option>
+                <option value="Détection Incendie - Conventionnel - Détecteurs">Détecteurs</option>
+                <option value="Détection Incendie - Conventionnel - Détecteurs spéciaux">Détecteurs spéciaux</option>
+                <option value="Détection Incendie - Conventionnel - Déclencheurs manuels">Déclencheurs manuels</option>
+                <option value="Détection Incendie - Conventionnel - Avertisseurs sonores">Avertisseurs sonores</option>
+              </optgroup>
+              <optgroup label="Détection Incendie: Adressable">
+                <option value="Détection Incendie - Adressable - Centrales">Centrales</option>
+                <option value="Détection Incendie - Adressable - Détecteurs">Détecteurs</option>
+                <option value="Détection Incendie - Adressable - Déclencheurs manuels">Déclencheurs manuels</option>
+                <option value="Détection Incendie - Adressable - Avertisseurs sonores">Avertisseurs sonores</option>
+                <option value="Détection Incendie - Adressable - Modules">Modules</option>
+              </optgroup>
+              <optgroup label="Détection gaz">
+                <option value="Détection gaz - Centrale Gaz">Centrale Gaz</option>
+                <option value="Détection gaz - Détecteur gaz">Détecteur gaz</option>
+                <option value="Détection gaz - Électrovanne">Électrovanne</option>
+                <option value="Détection gaz - Accessoires">Accessoires</option>
+              </optgroup>
+              <optgroup label="Extinction automatique">
+                <option value="Extinction automatique - Centrale extinction">Centrale extinction</option>
+                <option value="Extinction automatique - Gaz d'extinction">Gaz d'extinction</option>
+                <option value="Extinction automatique - Accessoires">Accessoires</option>
+              </optgroup>
+              <optgroup label="Alarme: Filaire">
+                <option value="Alarme - Filaire - Centrale">Centrale</option>
+                <option value="Alarme - Filaire - Clavier">Clavier</option>
+                <option value="Alarme - Filaire - Détecteurs">Détecteurs</option>
+                <option value="Alarme - Filaire - Sirènes">Sirènes</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Contrôle d'accès">
+                <option value="Contrôle D'accès Pointage - Contrôle d'accès - Contrôleurs">Contrôleurs</option>
+                <option value="Contrôle D'accès Pointage - Contrôle d'accès - Lecteurs">Lecteurs</option>
+                <option value="Contrôle D'accès Pointage - Contrôle d'accès - Lecteurs autonomes">Lecteurs autonomes</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Pointage">
+                <option value="Contrôle D'accès Pointage - Pointage - Empreintes">Empreintes</option>
+                <option value="Contrôle D'accès Pointage - Pointage - Palm-vein">Palm-vein</option>
+                <option value="Contrôle D'accès Pointage - Pointage - Reconnaissance">Reconnaissance</option>
+                <option value="Contrôle D'accès Pointage - Pointage - Proximité">Proximité</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Logiciels">
+                <option value="Contrôle D'accès Pointage - Logiciels - Contrôle d'accès">Contrôle d'accès</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Pointage">Pointage</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Gestion des visiteurs">Gestion des visiteurs</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Gestion des travailleurs">Gestion des travailleurs</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Service libre des employés">Service libre des employés</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Gestion des visites">Gestion des visites</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Accessoires">
+                <option value="Contrôle D'accès Pointage - Accessoires - Ventouse">Ventouse</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Serrure électrique">Serrure électrique</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Gâche Electrique">Gâche Electrique</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Armature">Armature</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Bouton de sortie">Bouton de sortie</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Flexible">Flexible</option>
+              </optgroup>
+              <optgroup label="Vidéosurveillance & Alimentations">
+                <option value="Vidéosurveillance">Vidéosurveillance</option>
+                <option value="Alimentations">Alimentations</option>
+              </optgroup>
+              <optgroup label="Réseau">
+                <option value="Réseau - Switch">Switch</option>
+                <option value="Réseau - Panneaux de brassage">Panneaux de brassage</option>
+                <option value="Réseau - Armoires">Armoires</option>
+                <option value="Réseau - Onduleurs">Onduleurs</option>
+                <option value="Réseau - Alimentations">Alimentations</option>
+                <option value="Réseau - Accessoires">Accessoires</option>
+              </optgroup>
+            </select>
           </div>
         </div>
         <div>
