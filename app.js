@@ -49,16 +49,20 @@
     },
 
     // Write a single item (fire-and-forget is fine — Firestore queues & retries)
+    // Write a single item; returns a Promise so callers can surface errors
     saveOne(item) {
       const { id, ...data } = item;
-      db.collection('inventory').doc(id).set(data)
+      return db.collection('inventory').doc(id).set(data)
         .catch(err => {
           console.error('Firestore write error:', err);
-          // Show toast only for permission errors (most common misconfiguration)
           if (err.code === 'permission-denied') {
-            const el = document.querySelector('#toast-container');
-            if (el) el.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: '⚠ Firestore: permission denied. Check database rules.', type: 'error' } }));
+            toast('Firestore: permission denied. Check database rules.', 'error');
+          } else if (err.code === 'unavailable') {
+            toast('Firebase unavailable. Check your connection.', 'error');
+          } else {
+            toast('Save failed: ' + (err.message || err.code), 'error');
           }
+          throw err;
         });
     },
 
@@ -623,6 +627,7 @@
 
   function saveItem(data) {
     let item;
+    let result;
     if (State.editingId) {
       const idx = State.items.findIndex(i => i.id === State.editingId);
       if (idx >= 0) {
@@ -633,11 +638,12 @@
       item = { id: DAL.generateId(), ...data };
       State.items.push(item);
     }
-    if (item) DAL.saveOne(item);
+    if (item) result = DAL.saveOne(item);
     State.editingId = null;
     applyFilters();
     renderDashboard();
     populateCategoryFilter();
+    return result;
   }
 
   function deleteItem(id) {
@@ -1307,7 +1313,7 @@
     dom.formItem.addEventListener('submit', (e) => {
       e.preventDefault();
       const wasEditing = !!State.editingId;
-      saveItem({
+      const item = saveItem({
         sku:               $('#field-sku').value.trim(),
         name:              $('#field-name').value.trim(),
         category:          $('#field-category').value.trim(),
@@ -1317,8 +1323,12 @@
         maxCapacity:       parseInt($('#field-maxCapacity').value, 10) || 20,
         purchasingTrigger: parseInt($('#field-purchasingTrigger').value, 10) || 10,
       });
-      closeModal(dom.modalItem);
-      toast(wasEditing ? 'Item updated ✓' : 'Item added ✓', 'success');
+      Promise.resolve(item).then(() => {
+        closeModal(dom.modalItem);
+        toast(wasEditing ? 'Item updated ✓' : 'Item added ✓', 'success');
+      }).catch(() => {
+        // saveOne already toasted the specific error; keep modal open so the user can retry
+      });
     });
 
     // Modal closes
