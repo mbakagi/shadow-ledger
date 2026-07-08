@@ -249,7 +249,10 @@
   }
 
   // ─── Sample data loader (Firestore version — only runs once on empty DB) ───
+  let samplesLoaded = false;
   function loadSampleDataToFirestore() {
+    if (samplesLoaded) return;
+    samplesLoaded = true;
     const samples = [
       { sku: 'FB-M8-50',    name: 'M8x50 Hex Bolt',         category: 'Détection Incendie - Conventionnel - Centrales', datasheetUrl: '', totalStock: 500,  buildingStock: 12,  carrierTrigger: 20,  maxCapacity: 100, purchasingTrigger: 80 },
       { sku: 'FB-M10-30',   name: 'M10x30 Flange Bolt',     category: 'Détection Incendie - Conventionnel - Détecteurs', datasheetUrl: '', totalStock: 320,  buildingStock: 45,  carrierTrigger: 30,  maxCapacity: 80,  purchasingTrigger: 60 },
@@ -853,13 +856,17 @@
       }
     });
     
-    // Trigger print
+    // Trigger print (deferred so qrcodejs canvas finishes rasterizing)
     document.body.classList.add('printing-label');
-    window.print();
-    // Remove class after print dialog closes
+    // qrcodejs renders synchronously to canvas/svg, but makeImage() is async.
+    // A short delay ensures the QR pixels are committed before the print spooler reads them.
     setTimeout(() => {
-      document.body.classList.remove('printing-label');
-    }, 500);
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-label');
+        dom.printContainer.innerHTML = '';
+      }, 500);
+    }, 150);
   }
 
   // ═══════════════════════════════════════════════════════
