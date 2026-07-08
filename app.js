@@ -48,12 +48,21 @@
     // Write a single item (fire-and-forget is fine — Firestore queues & retries)
     saveOne(item) {
       const { id, ...data } = item;
-      db.collection('inventory').doc(id).set(data);
+      db.collection('inventory').doc(id).set(data)
+        .catch(err => {
+          console.error('Firestore write error:', err);
+          // Show toast only for permission errors (most common misconfiguration)
+          if (err.code === 'permission-denied') {
+            const el = document.querySelector('#toast-container');
+            if (el) el.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: '⚠ Firestore: permission denied. Check database rules.', type: 'error' } }));
+          }
+        });
     },
 
     // Delete a single item
     deleteOne(id) {
-      db.collection('inventory').doc(id).delete();
+      db.collection('inventory').doc(id).delete()
+        .catch(err => console.error('Firestore delete error:', err));
     },
 
     // Batch-write many items
@@ -1278,6 +1287,7 @@
     // Item Form
     dom.formItem.addEventListener('submit', (e) => {
       e.preventDefault();
+      const wasEditing = !!State.editingId;
       saveItem({
         sku:               $('#field-sku').value.trim(),
         name:              $('#field-name').value.trim(),
@@ -1289,7 +1299,7 @@
         purchasingTrigger: parseInt($('#field-purchasingTrigger').value, 10) || 10,
       });
       closeModal(dom.modalItem);
-      toast(State.editingId ? 'Item updated' : 'Item added', 'success');
+      toast(wasEditing ? 'Item updated ✓' : 'Item added ✓', 'success');
     });
 
     // Modal closes
