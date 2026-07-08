@@ -26,17 +26,53 @@
     viewMode: 'active'
   };
 
-  // ─── Data Access Layer (DAL) — swap for API calls later ───
+  // ─── Data Access Layer (DAL) — Firestore backend ───
   const DAL = {
-    load() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
-      } catch { return []; }
+    _unsub: null,
+
+    // Start real-time listener; calls onUpdate(items[]) whenever Firestore changes
+    startSync(onUpdate) {
+      if (this._unsub) this._unsub();
+      this._unsub = db.collection('inventory')
+        .onSnapshot(snapshot => {
+          const items = [];
+          snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+          onUpdate(items);
+        }, err => console.error('Firestore sync error:', err));
     },
-    save(items) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+
+    stopSync() {
+      if (this._unsub) { this._unsub(); this._unsub = null; }
     },
+
+    // Write a single item (fire-and-forget is fine — Firestore queues & retries)
+    saveOne(item) {
+      const { id, ...data } = item;
+      db.collection('inventory').doc(id).set(data);
+    },
+
+    // Delete a single item
+    deleteOne(id) {
+      db.collection('inventory').doc(id).delete();
+    },
+
+    // Batch-write many items
+    saveMany(items) {
+      const batch = db.batch();
+      items.forEach(item => {
+        const { id, ...data } = item;
+        batch.set(db.collection('inventory').doc(id), data);
+      });
+      return batch.commit();
+    },
+
+    // Batch-delete by ID array
+    deleteMany(ids) {
+      const batch = db.batch();
+      ids.forEach(id => batch.delete(db.collection('inventory').doc(id)));
+      return batch.commit();
+    },
+
     generateId() {
       return 'sl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
     }
@@ -98,6 +134,11 @@
     btnImportConfirm: $('#btn-import-confirm'),
     modalAlertsTitle: $('#modal-alerts-title'),
     modalAlertsList:  $('#modal-alerts-list'),
+    // User-info elements
+    loginOverlay:     document.getElementById('login-overlay'),
+    userInfo:         document.getElementById('user-info'),
+    currentUserEmail: document.getElementById('current-user-email'),
+    btnLogout:        document.getElementById('btn-logout'),
   };
 
   // ═══════════════════════════════════════════════════════
@@ -105,32 +146,92 @@
   // ═══════════════════════════════════════════════════════
   function init() {
     loadTheme();
-    State.items = DAL.load();
-    if (State.items.length === 0) loadSampleData();
-    applyFilters();
-    renderDashboard();
-    populateCategoryFilter();
     bindEvents();
+
+    // ─── Firebase Auth state ───
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // Logged in — hide overlay, show user info
+        dom.loginOverlay.classList.add('hidden');
+        dom.userInfo.classList.remove('hidden');
+        dom.userInfo.classList.add('flex');
+        dom.currentUserEmail.textContent = user.email;
+
+        // Start Firestore real-time sync
+        DAL.startSync(items => {
+          // Only re-render if no inline-input is focused (prevents stealing focus)
+          const active = document.activeElement;
+          State.items = items;
+          if (active && active.classList && active.classList.contains('inline-input')) {
+            renderDashboard(); // silent update
+          } else {
+            applyFilters();
+            renderDashboard();
+            populateCategoryFilter();
+          }
+        });
+
+        // Load sample data on first ever use (empty Firestore)
+        setTimeout(() => {
+          if (State.items.length === 0) loadSampleDataToFirestore();
+        }, 2000);
+
+      } else {
+        // Logged out — show overlay, stop sync
+        DAL.stopSync();
+        dom.loginOverlay.classList.remove('hidden');
+        dom.userInfo.classList.add('hidden');
+        dom.userInfo.classList.remove('flex');
+        State.items = [];
+        State.selectedIds.clear();
+        applyFilters();
+        renderDashboard();
+      }
+    });
+
+    // ─── Login form ───
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email    = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errEl    = document.getElementById('login-error');
+      const btn      = document.getElementById('login-btn');
+
+      errEl.style.display = 'none';
+      btn.textContent = 'Signing in…';
+      btn.disabled = true;
+
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (err) {
+        const msgs = {
+          'auth/user-not-found':  'No account found with this email.',
+          'auth/wrong-password':  'Incorrect password.',
+          'auth/invalid-email':   'Please enter a valid email address.',
+          'auth/too-many-requests': 'Too many failed attempts. Try again later.',
+        };
+        errEl.textContent = msgs[err.code] || err.message;
+        errEl.style.display = 'block';
+      } finally {
+        btn.textContent = 'Sign In to Shadow Ledger';
+        btn.disabled = false;
+      }
+    });
   }
 
-  // ─── Sample data for first-time users ───
-  function loadSampleData() {
+  // ─── Sample data loader (Firestore version — only runs once on empty DB) ───
+  function loadSampleDataToFirestore() {
     const samples = [
       { sku: 'FB-M8-50',    name: 'M8x50 Hex Bolt',         category: 'Fasteners',    totalStock: 500,  buildingStock: 12,  carrierTrigger: 20,  maxCapacity: 100, purchasingTrigger: 80 },
       { sku: 'FB-M10-30',   name: 'M10x30 Flange Bolt',     category: 'Fasteners',    totalStock: 320,  buildingStock: 45,  carrierTrigger: 30,  maxCapacity: 80,  purchasingTrigger: 60 },
-      { sku: 'EL-CB-2.5',   name: '2.5mm² Cable (100m)',     category: 'Electrical',   totalStock: 45,   buildingStock: 3,   carrierTrigger: 5,   maxCapacity: 15,  purchasingTrigger: 10 },
-      { sku: 'EL-CB-4.0',   name: '4.0mm² Cable (100m)',     category: 'Electrical',   totalStock: 8,    buildingStock: 2,   carrierTrigger: 3,   maxCapacity: 10,  purchasingTrigger: 12 },
-      { sku: 'PL-PVC-25',   name: '25mm PVC Conduit (3m)',   category: 'Plumbing',     totalStock: 200,  buildingStock: 35,  carrierTrigger: 15,  maxCapacity: 50,  purchasingTrigger: 40 },
-      { sku: 'PL-CU-15',    name: '15mm Copper Pipe (3m)',   category: 'Plumbing',     totalStock: 150,  buildingStock: 8,   carrierTrigger: 10,  maxCapacity: 30,  purchasingTrigger: 30 },
-      { sku: 'SF-GG-CLR',   name: 'Clear Safety Goggles',    category: 'Safety',       totalStock: 60,   buildingStock: 4,   carrierTrigger: 8,   maxCapacity: 25,  purchasingTrigger: 15 },
-      { sku: 'SF-GL-L',     name: 'Work Gloves (Large)',     category: 'Safety',       totalStock: 90,   buildingStock: 22,  carrierTrigger: 10,  maxCapacity: 40,  purchasingTrigger: 20 },
-      { sku: 'TL-DRL-18V',  name: '18V Cordless Drill',      category: 'Power Tools',  totalStock: 12,   buildingStock: 2,   carrierTrigger: 3,   maxCapacity: 5,   purchasingTrigger: 4 },
-      { sku: 'TL-SAW-CRC',  name: '185mm Circular Saw',      category: 'Power Tools',  totalStock: 6,    buildingStock: 1,   carrierTrigger: 2,   maxCapacity: 3,   purchasingTrigger: 3 },
-      { sku: 'GN-TAPE-BK',  name: 'Black Electrical Tape',   category: 'General',      totalStock: 300,  buildingStock: 50,  carrierTrigger: 20,  maxCapacity: 80,  purchasingTrigger: 50 },
-      { sku: 'GN-WD40-400', name: 'WD-40 400ml Can',         category: 'General',      totalStock: 24,   buildingStock: 6,   carrierTrigger: 4,   maxCapacity: 12,  purchasingTrigger: 8 },
+      { sku: 'EL-CB-2.5',   name: '2.5mm² Cable (100m)',    category: 'Electrical',   totalStock: 45,   buildingStock: 3,   carrierTrigger: 5,   maxCapacity: 15,  purchasingTrigger: 10 },
+      { sku: 'EL-CB-4.0',   name: '4.0mm² Cable (100m)',    category: 'Electrical',   totalStock: 8,    buildingStock: 2,   carrierTrigger: 3,   maxCapacity: 10,  purchasingTrigger: 12 },
+      { sku: 'PL-PVC-25',   name: '25mm PVC Conduit (3m)',  category: 'Plumbing',     totalStock: 200,  buildingStock: 35,  carrierTrigger: 15,  maxCapacity: 50,  purchasingTrigger: 40 },
+      { sku: 'SF-GG-CLR',   name: 'Clear Safety Goggles',   category: 'Safety',       totalStock: 60,   buildingStock: 4,   carrierTrigger: 8,   maxCapacity: 25,  purchasingTrigger: 15 },
+      { sku: 'GN-TAPE-BK',  name: 'Black Electrical Tape',  category: 'General',      totalStock: 300,  buildingStock: 50,  carrierTrigger: 20,  maxCapacity: 80,  purchasingTrigger: 50 },
     ];
-    State.items = samples.map(s => ({ id: DAL.generateId(), ...s }));
-    DAL.save(State.items);
+    const items = samples.map(s => ({ id: DAL.generateId(), ...s }));
+    DAL.saveMany(items).then(() => toast('Sample data loaded', 'success'));
   }
 
   // ═══════════════════════════════════════════════════════
@@ -422,7 +523,7 @@
     const num = Math.max(0, parseInt(value, 10) || 0);
     if (item[field] === num) return; // no change
     item[field] = num;
-    DAL.save(State.items);
+    DAL.saveOne(item); // fire-and-forget to Firestore
 
     // Update just the depot cell and gauge in the same row (without replacing the row)
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
@@ -470,7 +571,7 @@
     if (!item) return;
     const num = Math.max(0, parseInt(value, 10) || 0);
     item[field] = num;
-    DAL.save(State.items);
+    DAL.saveOne(item);
     renderDashboard();
     populateCategoryFilter();
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
@@ -485,7 +586,7 @@
     const item = State.items.find(i => i.id === id);
     if (!item) return;
     item.buildingStock = Math.max(0, item.buildingStock + delta);
-    DAL.save(State.items);
+    DAL.saveOne(item);
     renderDashboard();
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
@@ -960,7 +1061,14 @@
       }
     });
 
-    DAL.save(State.items);
+    // Write changed/new items to Firestore
+    const changedItems = State.parsedData
+      ? State.importParsedData.filter(ni => ni._isNew || ni._isUpdated)
+      : State.importParsedData;
+    DAL.saveMany(State.importParsedData.map(ni => {
+      const existing = State.items.find(i => i.sku === ni.sku);
+      return existing ? { ...existing, ...ni, id: existing.id } : ni;
+    }));
     closeModal(dom.modalImport);
     resetImportModal();
     applyFilters();
@@ -1037,11 +1145,10 @@
 
     // Bulk Archive
     dom.btnBulkArchive.addEventListener('click', () => {
-      State.items.forEach(i => {
-        if (State.selectedIds.has(i.id)) i.archived = true;
-      });
+      const toArchive = State.items.filter(i => State.selectedIds.has(i.id));
+      toArchive.forEach(i => { i.archived = true; });
       State.selectedIds.clear();
-      DAL.save(State.items);
+      DAL.saveMany(toArchive);
       applyFilters();
       renderDashboard();
       toast('Selected items archived', 'success');
@@ -1057,11 +1164,10 @@
 
     // Bulk Restore
     dom.btnBulkRestore.addEventListener('click', () => {
-      State.items.forEach(i => {
-        if (State.selectedIds.has(i.id)) i.archived = false;
-      });
+      const toRestore = State.items.filter(i => State.selectedIds.has(i.id));
+      toRestore.forEach(i => { i.archived = false; });
       State.selectedIds.clear();
-      DAL.save(State.items);
+      DAL.saveMany(toRestore);
       applyFilters();
       renderDashboard();
       toast('Selected items restored', 'success');
@@ -1070,14 +1176,18 @@
     // Bulk Delete
     dom.btnBulkDelete.addEventListener('click', () => {
       if (!confirm(`Delete ${State.selectedIds.size} items? This cannot be undone.`)) return;
+      const ids = [...State.selectedIds];
       State.items = State.items.filter(i => !State.selectedIds.has(i.id));
       State.selectedIds.clear();
-      DAL.save(State.items);
+      DAL.deleteMany(ids);
       applyFilters();
       renderDashboard();
       populateCategoryFilter();
       toast('Selected items deleted', 'info');
     });
+
+    // Logout
+    dom.btnLogout.addEventListener('click', () => auth.signOut());
 
     // Sort headers
     $$('th[data-sort]').forEach(th => {
