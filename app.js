@@ -31,14 +31,17 @@
     _unsub: null,
 
     // Start real-time listener; calls onUpdate(items[]) whenever Firestore changes
-    startSync(onUpdate) {
+    startSync(onUpdate, onError) {
       if (this._unsub) this._unsub();
       this._unsub = db.collection('inventory')
         .onSnapshot(snapshot => {
           const items = [];
           snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
           onUpdate(items);
-        }, err => console.error('Firestore sync error:', err));
+        }, err => {
+          console.error('Firestore sync error:', err);
+          if (onError) onError(err);
+        });
     },
 
     stopSync() {
@@ -167,18 +170,31 @@
         dom.currentUserEmail.textContent = user.email;
 
         // Start Firestore real-time sync
-        DAL.startSync(items => {
-          // Only re-render if no inline-input is focused (prevents stealing focus)
-          const active = document.activeElement;
-          State.items = items;
-          if (active && active.classList && active.classList.contains('inline-input')) {
-            renderDashboard(); // silent update
-          } else {
-            applyFilters();
-            renderDashboard();
-            populateCategoryFilter();
+        DAL.startSync(
+          // Success callback
+          items => {
+            const active = document.activeElement;
+            State.items = items;
+            if (active && active.classList && active.classList.contains('inline-input')) {
+              renderDashboard();
+            } else {
+              applyFilters();
+              renderDashboard();
+              populateCategoryFilter();
+            }
+          },
+          // Error callback — show visible message
+          err => {
+            console.error('Firestore error:', err);
+            if (err.code === 'permission-denied') {
+              toast('⚠ Database rules blocking access. Check Firebase Console → Firestore → Rules.', 'error');
+            } else if (err.code === 'unavailable') {
+              toast('⚠ Firebase unavailable. Check your internet connection.', 'error');
+            } else {
+              toast('⚠ Firebase error: ' + err.message, 'error');
+            }
           }
-        });
+        );
 
         // Load sample data on first ever use (empty Firestore)
         setTimeout(() => {
