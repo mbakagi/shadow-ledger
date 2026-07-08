@@ -1,5 +1,5 @@
 {
-  "name": "St3s — Dual-Location Inventory",
+  "name": "St3s — Inventory",
   "short_name": "St3s",
   "description": "Track stock across Main Depot and Company Building. Instantly calculate depot stock, trigger carrier transfers, and manage purchase orders.",
   "start_url": "/",

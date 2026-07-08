@@ -1,4 +1,4 @@
-# St3s — Dual-Location Inventory Tracker
+# St3s — Inventory Tracker
 
 A lightweight, responsive web application for tracking stock across a **Main Depot** and a **Company Building**.
 
