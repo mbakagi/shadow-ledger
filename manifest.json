@@ -1,0 +1,49 @@
+{
+  "name": "Shadow Ledger — Dual-Location Inventory",
+  "short_name": "Shadow Ledger",
+  "description": "Track stock across Main Depot and Company Building. Instantly calculate depot stock, trigger carrier transfers, and manage purchase orders.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Item",
+      "short_name": "Add",
+      "url": "/?action=add",
+      "description": "Quickly add a new inventory item"
+    },
+    {
+      "name": "Carrier Manifest",
+      "short_name": "Manifest",
+      "url": "/?action=manifest",
+      "description": "Generate today's carrier transfer manifest"
+    }
+  ],
+  "prefer_related_applications": false
+}

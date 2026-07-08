@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════
+// Shadow Ledger — Firestore Security Rules
+//
+// Only authenticated users may read or write inventory items.
+// Each user can only see/edit their own items (replace with
+// `request.auth != null` if you want all signed-in users
+// to share one inventory).
+// ═══════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Inventory collection — sign-in required, per-user data
+    match /inventory/{itemId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['sku', 'name', 'category']);
+      allow update, delete: if request.auth != null
+                             && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Catch-all: anything else is denied
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

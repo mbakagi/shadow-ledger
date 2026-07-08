@@ -51,8 +51,9 @@
     // Write a single item (fire-and-forget is fine — Firestore queues & retries)
     // Write a single item; returns a Promise so callers can surface errors
     saveOne(item) {
-      const { id, ...data } = item;
-      return db.collection('inventory').doc(id).set(data)
+      const { id, ...rest } = item;
+      const data = { ...rest, ownerId: auth.currentUser?.uid || null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      return db.collection('inventory').doc(id).set(data, { merge: true })
         .catch(err => {
           console.error('Firestore write error:', err);
           if (err.code === 'permission-denied') {
@@ -68,16 +69,20 @@
 
     // Delete a single item
     deleteOne(id) {
-      db.collection('inventory').doc(id).delete()
-        .catch(err => console.error('Firestore delete error:', err));
+      return db.collection('inventory').doc(id).delete()
+        .catch(err => {
+          if (err.code !== 'permission-denied') console.error('Firestore delete error:', err);
+          throw err;
+        });
     },
 
     // Batch-write many items
     saveMany(items) {
       const batch = db.batch();
       items.forEach(item => {
-        const { id, ...data } = item;
-        batch.set(db.collection('inventory').doc(id), data);
+        const { id, ...rest } = item;
+        const data = { ...rest, ownerId: auth.currentUser?.uid || null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        batch.set(db.collection('inventory').doc(id), data, { merge: true });
       });
       return batch.commit();
     },
@@ -246,6 +251,27 @@
         btn.disabled = false;
       }
     });
+
+    // Google sign-in
+    const googleBtn = document.getElementById('btn-google-signin');
+    if (googleBtn) {
+      googleBtn.addEventListener('click', async () => {
+        googleBtn.disabled = true;
+        try { await signInWithGoogle(); }
+        catch (_) { /* toast already shown */ }
+        finally { googleBtn.disabled = false; }
+      });
+    }
+
+    // ─── Offline indicator ───
+    const offlineEl = document.getElementById('offline-indicator');
+    const updateOnlineStatus = () => {
+      if (!offlineEl) return;
+      offlineEl.classList.toggle('hidden', navigator.onLine);
+    };
+    window.addEventListener('online',  updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
   }
 
   // ─── Sample data loader (Firestore version — only runs once on empty DB) ───
@@ -657,10 +683,17 @@
     return result;
   }
 
-  function deleteItem(id) {
-    if (!confirm('Delete this item? This cannot be undone.')) return;
+  async function deleteItem(id) {
+    const ok = await confirmDialog({
+      title: 'Delete item?',
+      message: 'This cannot be undone. The item will be permanently removed from Firestore.',
+      confirmText: 'Delete',
+      danger: true
+    });
+    if (!ok) return;
     State.items = State.items.filter(i => i.id !== id);
     DAL.deleteOne(id);
+    State.selectedIds.delete(id);
     applyFilters();
     renderDashboard();
     populateCategoryFilter();
@@ -1247,8 +1280,15 @@
     });
 
     // Bulk Delete
-    dom.btnBulkDelete.addEventListener('click', () => {
-      if (!confirm(`Delete ${State.selectedIds.size} items? This cannot be undone.`)) return;
+    dom.btnBulkDelete.addEventListener('click', async () => {
+      const count = State.selectedIds.size;
+      const ok = await confirmDialog({
+        title: `Delete ${count} items?`,
+        message: `This cannot be undone. ${count} item${count === 1 ? '' : 's'} will be permanently removed from Firestore.`,
+        confirmText: 'Delete all',
+        danger: true
+      });
+      if (!ok) return;
       const ids = [...State.selectedIds];
       State.items = State.items.filter(i => !State.selectedIds.has(i.id));
       State.selectedIds.clear();
@@ -1510,6 +1550,7 @@
 
   function toast(message, type = 'info') {
     const container = $('#toast-container');
+    if (!container) return;
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
     el.innerHTML = `<span>${esc(message)}</span>`;
@@ -1517,7 +1558,77 @@
     setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(8px)'; setTimeout(() => el.remove(), 300); }, 3000);
   }
 
+  // ─── Custom confirm modal (Promise-based; replaces native confirm()) ───
+  function confirmDialog({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal-content w-full max-w-md">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl ${danger ? 'bg-red-500/10 text-red-500' : 'bg-accent/10 text-accent'} flex items-center justify-center shrink-0">
+              ${danger
+                ? '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'
+                : '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'}
+            </div>
+            <h3 class="text-lg font-bold">${esc(title)}</h3>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">${esc(message)}</p>
+          <div class="flex gap-3">
+            <button data-confirm class="${danger ? 'btn-accent' : 'btn-secondary'} flex-1 justify-center text-sm font-semibold py-2.5" style="${danger ? 'background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 4px 14px rgba(239,68,68,0.35);' : ''}">${esc(confirmText)}</button>
+            <button data-cancel class="btn-secondary flex-1 justify-center text-sm font-semibold py-2.5">${esc(cancelText)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const finish = (val) => { overlay.remove(); document.body.style.overflow = ''; resolve(val); };
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay || e.target.dataset.cancel !== undefined) finish(false);
+        else if (e.target.dataset.confirm !== undefined) finish(true);
+      });
+      document.addEventListener('keydown', function onKey(e) {
+        if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); finish(false); }
+        if (e.key === 'Enter') { document.removeEventListener('keydown', onKey); finish(true); }
+      });
+      overlay.querySelector('[data-cancel]').focus();
+      document.body.style.overflow = 'hidden';
+    });
+  }
+
+  // ─── Custom Google sign-in handler ───
+  async function signInWithGoogle() {
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await auth.signInWithPopup(provider);
+    } catch (err) {
+      const msgs = {
+        'auth/popup-blocked':         'Popup blocked — allow popups for this site.',
+        'auth/popup-closed-by-user':  'Sign-in cancelled.',
+        'auth/unauthorized-domain':   'This domain is not authorized for Google sign-in. Add it in Firebase Console → Auth → Settings → Authorized domains.',
+        'auth/operation-not-allowed': 'Google sign-in not enabled. Enable it in Firebase Console → Auth → Sign-in method.'
+      };
+      toast(msgs[err.code] || err.message, 'error');
+      throw err;
+    }
+  }
+
+  // ─── Service worker registration ───
+  function registerSW() {
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('/sw.js').catch(err =>
+        console.warn('Service worker registration failed:', err)
+      );
+    }
+  }
+
   // ─── Boot ───
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => {
+    registerSW();
+    init();
+    // Handle PWA shortcuts from manifest (?action=add / ?action=manifest)
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'add')      setTimeout(() => openItemModal(), 800);
+    if (params.get('action') === 'manifest') setTimeout(() => generateManifest(), 800);
+  });
 
 })();
