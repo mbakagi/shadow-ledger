@@ -1,6 +1,6 @@
 {
-  "name": "Shadow Ledger — Dual-Location Inventory",
-  "short_name": "Shadow Ledger",
+  "name": "St3s — Dual-Location Inventory",
+  "short_name": "St3s",
   "description": "Track stock across Main Depot and Company Building. Instantly calculate depot stock, trigger carrier transfers, and manage purchase orders.",
   "start_url": "/",
   "scope": "/",

@@ -1,4 +1,4 @@
-# Shadow Ledger — Dual-Location Inventory Tracker
+# St3s — Dual-Location Inventory Tracker
 
 A lightweight, responsive web application for tracking stock across a **Main Depot** and a **Company Building**.
 

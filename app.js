@@ -247,7 +247,7 @@
         errEl.textContent = msgs[err.code] || err.message;
         errEl.style.display = 'block';
       } finally {
-        btn.textContent = 'Sign In to Shadow Ledger';
+        btn.textContent = 'Sign In to St3s';
         btn.disabled = false;
       }
     });
@@ -852,7 +852,6 @@
           ${item.datasheetUrl ? '<div class="shelf-label-url-qr" id="url-qr-' + item.id + '"></div>' : ''}
         </div>
         <div class="shelf-label-footer">
-          <span>Max Cap: ${item.maxCapacity}</span>
           <span>${esc(item.category || '')}</span>
         </div>
       `;
