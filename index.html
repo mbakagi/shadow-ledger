@@ -232,6 +232,11 @@
 
       <!-- Right controls -->
       <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Archive Toggle -->
+        <button id="btn-toggle-archive" title="View Archive" class="nav-btn group relative">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+          <span class="hidden sm:inline text-sm">Archive</span>
+        </button>
         <!-- Import -->
         <button id="btn-import" title="Import Data" class="nav-btn group">
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -326,12 +331,18 @@
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
         <input id="input-search" type="text" placeholder="Search by SKU, name, or category…" class="input-field pl-10 w-full" />
       </div>
+      <!-- Stock Filter -->
+      <select id="filter-stock" class="input-field w-full sm:w-40">
+        <option value="all">All Stock</option>
+        <option value="in_stock">Hide Out of Stock (Total=0)</option>
+        <option value="in_building">Hide Empty Bldg (On-Hand=0)</option>
+      </select>
       <!-- Category Filter -->
       <select id="select-category" class="input-field w-full sm:w-48">
         <option value="">All Categories</option>
       </select>
       <!-- Alert Filter -->
-      <select id="select-alert" class="input-field w-full sm:w-48">
+      <select id="select-alert" class="input-field w-full sm:w-40">
         <option value="">All Items</option>
         <option value="carrier">🔴 Carrier Alerts</option>
         <option value="procure">🟡 Purchase Alerts</option>
@@ -344,13 +355,32 @@
       </button>
     </section>
 
+    <!-- ═══════════════════ BULK ACTIONS BAR ═══════════════════ -->
+    <section id="bulk-actions-bar" class="hidden animate-slide-up flex items-center justify-between p-3 rounded-xl bg-accent/10 border border-accent/20">
+      <div class="flex items-center gap-3">
+        <span class="text-accent font-semibold text-sm ml-2"><span id="bulk-count">0</span> items selected</span>
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-bulk-archive" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg> Archive
+        </button>
+        <button id="btn-bulk-restore" class="hidden px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-emerald-600 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Restore
+        </button>
+        <button id="btn-bulk-delete" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Delete
+        </button>
+      </div>
+    </section>
+
     <!-- ═══════════════════ INVENTORY TABLE ═══════════════════ -->
     <section class="card overflow-hidden animate-slide-up" style="animation-delay:.15s">
       <div class="overflow-x-auto">
         <table id="inventory-table" class="w-full text-sm">
           <thead>
             <tr class="bg-gray-50 dark:bg-surface-700/60 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              <th class="px-3 py-3 w-8"></th>
+              <th class="px-3 py-3 w-10 text-center"><input type="checkbox" id="check-all" class="w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent"></th>
+              <th class="px-3 py-3 w-8 text-center" title="Status Badge"></th>
               <th class="px-3 py-3 cursor-pointer select-none hover:text-accent transition-colors" data-sort="sku">SKU ↕</th>
               <th class="px-3 py-3 cursor-pointer select-none hover:text-accent transition-colors" data-sort="name">Item Name ↕</th>
               <th class="px-3 py-3 cursor-pointer select-none hover:text-accent transition-colors hidden sm:table-cell" data-sort="category">Category ↕</th>

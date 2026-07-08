@@ -11,7 +11,6 @@
   const THEME_KEY   = 'shadowLedger_theme';
   const PAGE_SIZE   = 50;
 
-  // ─── State ───
   const State = {
     items: [],
     filteredItems: [],
@@ -19,11 +18,12 @@
     sortField: 'sku',
     sortAsc: true,
     editingId: null,
-    editingId: null,
     importParsedData: [],
     importRawHeaders: [],
     importRawData: [],
     importFormat: 'csv',
+    selectedIds: new Set(),
+    viewMode: 'active'
   };
 
   // ─── Data Access Layer (DAL) — swap for API calls later ───
@@ -66,6 +66,17 @@
     pageIndicator:    $('#page-indicator'),
     btnPrev:          $('#btn-prev-page'),
     btnNext:          $('#btn-next-page'),
+    
+    // Filters & Actions
+    filterStock:      $('#filter-stock'),
+    btnToggleArchive: $('#btn-toggle-archive'),
+    bulkActionsBar:   $('#bulk-actions-bar'),
+    bulkCount:        $('#bulk-count'),
+    btnBulkArchive:   $('#btn-bulk-archive'),
+    btnBulkRestore:   $('#btn-bulk-restore'),
+    btnBulkDelete:    $('#btn-bulk-delete'),
+    checkAll:         $('#check-all'),
+    
     // Modals
     modalItem:        $('#modal-item'),
     modalImport:      $('#modal-import'),
@@ -154,11 +165,11 @@
   }
 
   function getCarrierAlerts() {
-    return State.items.filter(needsCarrier);
+    return State.items.filter(i => !i.archived && needsCarrier(i));
   }
 
   function getProcureAlerts() {
-    return State.items.filter(needsProcurement);
+    return State.items.filter(i => !i.archived && needsProcurement(i));
   }
 
   function getCategories() {
@@ -172,8 +183,9 @@
     const query    = dom.searchInput.value.trim().toLowerCase();
     const category = dom.categorySelect.value;
     const alert    = dom.alertSelect.value;
+    const stock    = dom.filterStock ? dom.filterStock.value : 'all';
 
-    let results = State.items;
+    let results = State.items.filter(i => (State.viewMode === 'archive') ? i.archived : !i.archived);
 
     if (query) {
       results = results.filter(i =>
@@ -190,6 +202,9 @@
     if (alert === 'carrier') results = results.filter(needsCarrier);
     else if (alert === 'procure') results = results.filter(needsProcurement);
     else if (alert === 'ok') results = results.filter(i => !needsCarrier(i) && !needsProcurement(i));
+
+    if (stock === 'in_stock') results = results.filter(i => i.totalStock > 0);
+    else if (stock === 'in_building') results = results.filter(i => i.buildingStock > 0);
 
     // Sort
     results.sort((a, b) => {
@@ -226,6 +241,11 @@
       dom.tableBody.innerHTML = page.map(renderRow).join('');
     }
 
+    // Reset check-all based on current page selection
+    const pageIds = page.map(i => i.id);
+    dom.checkAll.checked = pageIds.length > 0 && pageIds.every(id => State.selectedIds.has(id));
+    updateBulkActions();
+
     // Pagination info
     const showStart = items.length ? start + 1 : 0;
     const showEnd   = Math.min(start + PAGE_SIZE, items.length);
@@ -233,6 +253,23 @@
     dom.pageIndicator.textContent = `${State.currentPage} / ${totalPages}`;
     dom.btnPrev.disabled = State.currentPage <= 1;
     dom.btnNext.disabled = State.currentPage >= totalPages;
+  }
+
+  function updateBulkActions() {
+    if (State.selectedIds.size > 0) {
+      dom.bulkActionsBar.classList.remove('hidden');
+      dom.bulkCount.textContent = State.selectedIds.size;
+      
+      if (State.viewMode === 'archive') {
+        dom.btnBulkArchive.classList.add('hidden');
+        dom.btnBulkRestore.classList.remove('hidden');
+      } else {
+        dom.btnBulkArchive.classList.remove('hidden');
+        dom.btnBulkRestore.classList.add('hidden');
+      }
+    } else {
+      dom.bulkActionsBar.classList.add('hidden');
+    }
   }
 
   function renderRow(item) {
@@ -253,6 +290,7 @@
 
     return `
       <tr class="group hover:bg-gray-50/80 dark:hover:bg-surface-700/30 transition-colors ${rowClass}" data-id="${item.id}">
+        <td class="px-3 py-2.5 text-center"><input type="checkbox" class="row-checkbox w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent" data-id="${item.id}" ${State.selectedIds.has(item.id) ? 'checked' : ''}></td>
         <td class="px-3 py-2.5 text-center">${badge}</td>
         <td class="px-3 py-2.5 font-mono text-xs font-semibold text-accent">${esc(item.sku)}</td>
         <td class="px-3 py-2.5 font-medium">${esc(item.name)}</td>
@@ -920,6 +958,66 @@
     dom.searchInput.addEventListener('input', debounce(applyFilters, 200));
     dom.categorySelect.addEventListener('change', applyFilters);
     dom.alertSelect.addEventListener('change', applyFilters);
+    dom.filterStock.addEventListener('change', applyFilters);
+
+    // Archive Toggle
+    dom.btnToggleArchive.addEventListener('click', () => {
+      State.viewMode = State.viewMode === 'active' ? 'archive' : 'active';
+      dom.btnToggleArchive.classList.toggle('text-accent', State.viewMode === 'archive');
+      dom.btnToggleArchive.classList.toggle('bg-accent/10', State.viewMode === 'archive');
+      
+      State.selectedIds.clear();
+      applyFilters();
+    });
+
+    // Check All Checkbox
+    dom.checkAll.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const start = (State.currentPage - 1) * PAGE_SIZE;
+      const page  = State.filteredItems.slice(start, start + PAGE_SIZE);
+      
+      page.forEach(item => {
+        if (isChecked) State.selectedIds.add(item.id);
+        else State.selectedIds.delete(item.id);
+      });
+      renderTable();
+    });
+
+    // Bulk Archive
+    dom.btnBulkArchive.addEventListener('click', () => {
+      State.items.forEach(i => {
+        if (State.selectedIds.has(i.id)) i.archived = true;
+      });
+      State.selectedIds.clear();
+      DAL.save(State.items);
+      applyFilters();
+      renderDashboard();
+      toast('Selected items archived', 'success');
+    });
+
+    // Bulk Restore
+    dom.btnBulkRestore.addEventListener('click', () => {
+      State.items.forEach(i => {
+        if (State.selectedIds.has(i.id)) i.archived = false;
+      });
+      State.selectedIds.clear();
+      DAL.save(State.items);
+      applyFilters();
+      renderDashboard();
+      toast('Selected items restored', 'success');
+    });
+
+    // Bulk Delete
+    dom.btnBulkDelete.addEventListener('click', () => {
+      if (!confirm(`Delete ${State.selectedIds.size} items? This cannot be undone.`)) return;
+      State.items = State.items.filter(i => !State.selectedIds.has(i.id));
+      State.selectedIds.clear();
+      DAL.save(State.items);
+      applyFilters();
+      renderDashboard();
+      populateCategoryFilter();
+      toast('Selected items deleted', 'info');
+    });
 
     // Sort headers
     $$('th[data-sort]').forEach(th => {
@@ -980,6 +1078,20 @@
     }, true); // use capture for focus events
 
     dom.tableBody.addEventListener('click', (e) => {
+      // Row checkboxes
+      if (e.target.classList.contains('row-checkbox')) {
+        const id = e.target.dataset.id;
+        if (e.target.checked) State.selectedIds.add(id);
+        else State.selectedIds.delete(id);
+        updateBulkActions();
+        
+        const start = (State.currentPage - 1) * PAGE_SIZE;
+        const page  = State.filteredItems.slice(start, start + PAGE_SIZE);
+        const pageIds = page.map(i => i.id);
+        dom.checkAll.checked = pageIds.length > 0 && pageIds.every(pid => State.selectedIds.has(pid));
+        return;
+      }
+
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const { action, id } = btn.dataset;
