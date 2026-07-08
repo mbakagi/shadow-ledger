@@ -77,7 +77,9 @@
     btnBulkDelete:    $('#btn-bulk-delete'),
     checkAll:         $('#check-all'),
     
-    // Modals
+    // Print Container
+    printContainer:   $('#print-container'),
+    btnBulkPrint:     $('#btn-bulk-print'),
     modalItem:        $('#modal-item'),
     modalImport:      $('#modal-import'),
     modalManifest:    $('#modal-manifest'),
@@ -320,6 +322,9 @@
         </td>
         <td class="px-3 py-2.5 text-center">
           <div class="action-btns flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button class="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition" data-action="print" data-id="${item.id}" title="Print Label">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            </button>
             <button class="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition" data-action="edit" data-id="${item.id}" title="Edit">
               <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
@@ -642,6 +647,53 @@
       }).join('');
     }
     openModal(dom.modalAlerts);
+  }
+
+  // ─── Print Labels ───
+  function printLabels(itemsToPrint) {
+    if (!itemsToPrint || itemsToPrint.length === 0) return;
+    
+    // Clear the print container
+    dom.printContainer.innerHTML = '';
+    
+    // Generate label HTML
+    itemsToPrint.forEach(item => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'shelf-label';
+      wrapper.innerHTML = `
+        <div>
+          <div class="shelf-label-sku">${esc(item.sku)}</div>
+          <div class="shelf-label-name">${esc(item.name)}</div>
+        </div>
+        <svg class="shelf-label-barcode" id="barcode-${item.id}"></svg>
+        <div class="shelf-label-footer">
+          <span>Max Cap: ${item.maxCapacity}</span>
+          <span>${esc(item.category || '')}</span>
+        </div>
+      `;
+      dom.printContainer.appendChild(wrapper);
+      
+      // Render Barcode
+      try {
+        JsBarcode(`#barcode-${item.id}`, item.sku, {
+          format: "CODE128",
+          displayValue: false,
+          margin: 0,
+          height: 50,
+          width: 2
+        });
+      } catch (e) {
+        console.warn("Could not generate barcode for SKU:", item.sku);
+      }
+    });
+    
+    // Trigger print
+    document.body.classList.add('printing-label');
+    window.print();
+    // Remove class after print dialog closes
+    setTimeout(() => {
+      document.body.classList.remove('printing-label');
+    }, 500);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -995,6 +1047,14 @@
       toast('Selected items archived', 'success');
     });
 
+    // Bulk Print
+    dom.btnBulkPrint.addEventListener('click', () => {
+      const itemsToPrint = State.items.filter(i => State.selectedIds.has(i.id));
+      printLabels(itemsToPrint);
+      State.selectedIds.clear();
+      renderTable();
+    });
+
     // Bulk Restore
     dom.btnBulkRestore.addEventListener('click', () => {
       State.items.forEach(i => {
@@ -1098,6 +1158,7 @@
       if (action === 'inc')    adjustStock(id, 1);
       if (action === 'dec')    adjustStock(id, -1);
       if (action === 'edit')   openItemModal(State.items.find(i => i.id === id));
+      if (action === 'print')  printLabels([State.items.find(i => i.id === id)]);
       if (action === 'delete') deleteItem(id);
     });
 
@@ -1192,6 +1253,56 @@
     // Dashboard card clicks → alert detail
     $('#card-carrier').addEventListener('click', () => openAlertDetail('carrier'));
     $('#card-procure').addEventListener('click', () => openAlertDetail('procure'));
+
+    // Global Barcode Scanner Listener & Numpad Shortcuts
+    let barcodeBuffer = '';
+    let barcodeTimer = null;
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        if (e.target.classList.contains('inline-input') && e.target.dataset.id && e.target.dataset.field === 'buildingStock') {
+          if (e.key === '+') {
+            e.preventDefault();
+            adjustStock(e.target.dataset.id, 1);
+          } else if (e.key === '-') {
+            e.preventDefault();
+            adjustStock(e.target.dataset.id, -1);
+          }
+        }
+        return;
+      }
+      
+      if (e.key.length === 1) {
+        barcodeBuffer += e.key;
+        clearTimeout(barcodeTimer);
+        barcodeTimer = setTimeout(() => { barcodeBuffer = ''; }, 50); 
+      } else if (e.key === 'Enter' && barcodeBuffer.length > 2) {
+        const scannedSku = barcodeBuffer.toUpperCase();
+        barcodeBuffer = '';
+        
+        const item = State.items.find(i => i.sku.toUpperCase() === scannedSku && !i.archived);
+        if (item) {
+          const input = dom.tableBody.querySelector(`input[data-id="${item.id}"][data-field="buildingStock"]`);
+          if (input) {
+            input.focus();
+            input.select();
+            toast('Scanned: ' + item.sku, 'info');
+          } else {
+            dom.searchInput.value = scannedSku;
+            applyFilters();
+            setTimeout(() => {
+              const newInput = dom.tableBody.querySelector(`input[data-id="${item.id}"][data-field="buildingStock"]`);
+              if (newInput) {
+                newInput.focus();
+                newInput.select();
+              }
+            }, 50);
+            toast('Filtered to: ' + item.sku, 'info');
+          }
+        } else {
+          toast('Barcode not found: ' + scannedSku, 'error');
+        }
+      }
+    });
   }
 
   // ═══════════════════════════════════════════════════════

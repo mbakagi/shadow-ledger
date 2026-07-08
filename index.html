@@ -8,6 +8,9 @@
 
   <!-- Tailwind CSS v3 CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- JsBarcode for Shelf Labels -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -199,11 +202,51 @@
 
 /* ── Print Styles ── */
 @media print {
-  header, #dashboard, section:has(#input-search), .adj-btn, th:last-child, td:last-child,
-  #toast-container, .modal-overlay { display: none !important; }
-  body { background: white !important; color: black !important; }
-  .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  body:not(.printing-label) header,
+  body:not(.printing-label) #dashboard,
+  body:not(.printing-label) section:has(#input-search),
+  body:not(.printing-label) .adj-btn,
+  body:not(.printing-label) th:last-child,
+  body:not(.printing-label) td:last-child,
+  body:not(.printing-label) #toast-container,
+  body:not(.printing-label) .modal-overlay,
+  body:not(.printing-label) #bulk-actions-bar { display: none !important; }
+  
+  body:not(.printing-label) { background: white !important; color: black !important; }
+  body:not(.printing-label) .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+
+  /* Label Print Styles */
+  body.printing-label > * { display: none !important; }
+  body.printing-label #print-container {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 0.1in;
+    align-content: flex-start;
+    justify-content: flex-start;
+    background: white;
+    margin: 0;
+    padding: 0;
+  }
 }
+
+/* ── Shelf Label UI ── */
+.shelf-label {
+  width: 4in;
+  height: 2in;
+  border: 2px solid #000;
+  padding: 0.2in;
+  background: white;
+  color: black;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  page-break-inside: avoid;
+}
+.shelf-label-sku { font-size: 26pt; font-weight: 900; font-family: 'Courier New', Courier, monospace; text-align: center; line-height: 1; margin-bottom: 2px; }
+.shelf-label-name { font-size: 13pt; font-weight: 700; text-align: center; max-height: 2.8em; overflow: hidden; line-height: 1.2; }
+.shelf-label-barcode { margin: 4px auto 0 auto; display: block; height: 50px; }
+.shelf-label-footer { font-size: 10pt; display: flex; justify-content: space-between; font-weight: bold; margin-top: auto; }
 
 /* ── Manifest Print ── */
 .manifest-print-area {
@@ -361,6 +404,9 @@
         <span class="text-accent font-semibold text-sm ml-2"><span id="bulk-count">0</span> items selected</span>
       </div>
       <div class="flex gap-2">
+        <button id="btn-bulk-print" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg> Print Labels
+        </button>
         <button id="btn-bulk-archive" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition">
           <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg> Archive
         </button>
@@ -724,8 +770,12 @@
   </div>
 
   <!-- ═══════════════════ TOAST CONTAINER ═══════════════════ -->
-  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] space-y-2 pointer-events-none"></div>
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
 
+  <!-- ═══════════════════ PRINT CONTAINER ═══════════════════ -->
+  <div id="print-container" class="hidden"></div>
+
+  <!-- Main Logic -->
   <script src="app.js"></script>
 </body>
 </html>
