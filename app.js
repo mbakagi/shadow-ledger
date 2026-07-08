@@ -251,13 +251,13 @@
   // ─── Sample data loader (Firestore version — only runs once on empty DB) ───
   function loadSampleDataToFirestore() {
     const samples = [
-      { sku: 'FB-M8-50',    name: 'M8x50 Hex Bolt',         category: 'Fasteners',    totalStock: 500,  buildingStock: 12,  carrierTrigger: 20,  maxCapacity: 100, purchasingTrigger: 80 },
-      { sku: 'FB-M10-30',   name: 'M10x30 Flange Bolt',     category: 'Fasteners',    totalStock: 320,  buildingStock: 45,  carrierTrigger: 30,  maxCapacity: 80,  purchasingTrigger: 60 },
-      { sku: 'EL-CB-2.5',   name: '2.5mm² Cable (100m)',    category: 'Electrical',   totalStock: 45,   buildingStock: 3,   carrierTrigger: 5,   maxCapacity: 15,  purchasingTrigger: 10 },
-      { sku: 'EL-CB-4.0',   name: '4.0mm² Cable (100m)',    category: 'Electrical',   totalStock: 8,    buildingStock: 2,   carrierTrigger: 3,   maxCapacity: 10,  purchasingTrigger: 12 },
-      { sku: 'PL-PVC-25',   name: '25mm PVC Conduit (3m)',  category: 'Plumbing',     totalStock: 200,  buildingStock: 35,  carrierTrigger: 15,  maxCapacity: 50,  purchasingTrigger: 40 },
-      { sku: 'SF-GG-CLR',   name: 'Clear Safety Goggles',   category: 'Safety',       totalStock: 60,   buildingStock: 4,   carrierTrigger: 8,   maxCapacity: 25,  purchasingTrigger: 15 },
-      { sku: 'GN-TAPE-BK',  name: 'Black Electrical Tape',  category: 'General',      totalStock: 300,  buildingStock: 50,  carrierTrigger: 20,  maxCapacity: 80,  purchasingTrigger: 50 },
+      { sku: 'FB-M8-50',    name: 'M8x50 Hex Bolt',         category: 'Détection Incendie - Conventionnel - Centrales', datasheetUrl: '', totalStock: 500,  buildingStock: 12,  carrierTrigger: 20,  maxCapacity: 100, purchasingTrigger: 80 },
+      { sku: 'FB-M10-30',   name: 'M10x30 Flange Bolt',     category: 'Détection Incendie - Conventionnel - Détecteurs', datasheetUrl: '', totalStock: 320,  buildingStock: 45,  carrierTrigger: 30,  maxCapacity: 80,  purchasingTrigger: 60 },
+      { sku: 'EL-CB-2.5',   name: '2.5mm² Cable (100m)',    category: 'Détection Incendie - Adressable - Centrales',    datasheetUrl: '', totalStock: 45,   buildingStock: 3,   carrierTrigger: 5,   maxCapacity: 15,  purchasingTrigger: 10 },
+      { sku: 'EL-CB-4.0',   name: '4.0mm² Cable (100m)',    category: 'Réseau - Switch',             datasheetUrl: '', totalStock: 8,    buildingStock: 2,   carrierTrigger: 3,   maxCapacity: 10,  purchasingTrigger: 12 },
+      { sku: 'PL-PVC-25',   name: '25mm PVC Conduit (3m)',  category: 'Alarme - Filaire - Centrale', datasheetUrl: '', totalStock: 200,  buildingStock: 35,  carrierTrigger: 15,  maxCapacity: 50,  purchasingTrigger: 40 },
+      { sku: 'SF-GG-CLR',   name: 'Clear Safety Goggles',   category: 'Vidéosurveillance',            datasheetUrl: '', totalStock: 60,   buildingStock: 4,   carrierTrigger: 8,   maxCapacity: 25,  purchasingTrigger: 15 },
+      { sku: 'GN-TAPE-BK',  name: 'Black Electrical Tape',  category: 'Alimentations',                datasheetUrl: '',   totalStock: 300,  buildingStock: 50,  carrierTrigger: 20,  maxCapacity: 80,  purchasingTrigger: 50 },
     ];
     const items = samples.map(s => ({ id: DAL.generateId(), ...s }));
     DAL.saveMany(items).then(() => toast('Sample data loaded', 'success'));
@@ -323,7 +323,8 @@
       results = results.filter(i =>
         i.sku.toLowerCase().includes(query) ||
         i.name.toLowerCase().includes(query) ||
-        (i.category && i.category.toLowerCase().includes(query))
+        (i.category && i.category.toLowerCase().includes(query)) ||
+        (i.datasheetUrl && i.datasheetUrl.toLowerCase().includes(query))
       );
     }
 
@@ -427,6 +428,13 @@
         <td class="px-3 py-2.5 font-mono text-xs font-semibold text-accent">${esc(item.sku)}</td>
         <td class="px-3 py-2.5 font-medium">${esc(item.name)}</td>
         <td class="px-3 py-2.5 text-gray-500 dark:text-gray-400 hidden sm:table-cell">${esc(item.category || '—')}</td>
+        <td class="px-3 py-2.5 text-center hidden lg:table-cell">
+          ${item.datasheetUrl
+            ? `<a href="${esc(item.datasheetUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center text-accent hover:text-accent-dark transition" title="${esc(item.datasheetUrl)}">
+                 <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+               </a>`
+            : '<span class="text-gray-300 dark:text-gray-600">—</span>'}
+        </td>
         <td class="px-3 py-2.5 text-center">
           <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.totalStock}" data-field="totalStock" data-id="${item.id}" />
         </td>
@@ -559,7 +567,7 @@
     if (row) {
       // Update depot stock display
       const depot = depotStock(item);
-      const depotCell = row.cells[6]; // 7th cell = depot
+      const depotCell = row.cells[8]; // depot is the 9th cell (index 8) after adding Datasheet column
       if (depotCell) {
         depotCell.textContent = depot;
         depotCell.className = `px-3 py-2.5 text-center font-semibold tabular-nums ${depot <= 0 ? 'text-red-500' : ''}`;
@@ -581,7 +589,7 @@
       row.classList.toggle('row-procure', pAlert);
 
       // Update badge
-      const badgeCell = row.cells[0];
+      const badgeCell = row.cells[1];
       if (badgeCell) {
         let badge = '<span class="badge badge-ok">OK</span>';
         if (cAlert && pAlert) badge = '<span class="badge badge-carrier">CARRIER</span> <span class="badge badge-procure">ORDER</span>';
@@ -674,6 +682,7 @@
     $('#field-carrierTrigger').value    = item ? item.carrierTrigger : 5;
     $('#field-maxCapacity').value       = item ? item.maxCapacity : 20;
     $('#field-purchasingTrigger').value = item ? item.purchasingTrigger : 10;
+    $('#field-datasheetUrl').value      = item ? (item.datasheetUrl || '') : '';
     openModal(dom.modalItem);
     setTimeout(() => $('#field-sku').focus(), 100);
   }
@@ -798,11 +807,14 @@
       const wrapper = document.createElement('div');
       wrapper.className = 'shelf-label';
       wrapper.innerHTML = `
-        <div>
-          <div class="shelf-label-sku">${esc(item.sku)}</div>
-          <div class="shelf-label-name">${esc(item.name)}</div>
+        <div class="shelf-label-top">
+          <div class="shelf-label-info">
+            <div class="shelf-label-sku">${esc(item.sku)}</div>
+            <div class="shelf-label-name">${esc(item.name)}</div>
+          </div>
+          <div class="shelf-label-sku-qr" id="sku-qr-${item.id}"></div>
+          ${item.datasheetUrl ? '<div class="shelf-label-url-qr" id="url-qr-' + item.id + '"></div>' : ''}
         </div>
-        <svg class="shelf-label-barcode" id="barcode-${item.id}"></svg>
         <div class="shelf-label-footer">
           <span>Max Cap: ${item.maxCapacity}</span>
           <span>${esc(item.category || '')}</span>
@@ -810,17 +822,34 @@
       `;
       dom.printContainer.appendChild(wrapper);
       
-      // Render Barcode
+      // Render SKU QR Code
       try {
-        JsBarcode(`#barcode-${item.id}`, item.sku, {
-          format: "CODE128",
-          displayValue: false,
-          margin: 0,
-          height: 50,
-          width: 2
+        new QRCode(document.getElementById(`sku-qr-${item.id}`), {
+          text: item.sku,
+          width: 140,
+          height: 140,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
         });
       } catch (e) {
-        console.warn("Could not generate barcode for SKU:", item.sku);
+        console.warn('Could not generate SKU QR for:', item.sku);
+      }
+      
+      // Render Datasheet URL QR Code (if URL exists)
+      if (item.datasheetUrl) {
+        try {
+          new QRCode(document.getElementById(`url-qr-${item.id}`), {
+            text: item.datasheetUrl,
+            width: 115,
+            height: 115,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        } catch (e) {
+          console.warn('Could not generate URL QR for:', item.datasheetUrl);
+        }
       }
     });
     
@@ -845,6 +874,7 @@
       if (['sku', 'itemcode', 'code', 'productcode', 'stockcode', 'partno', 'partnumber', 'articlenumber'].includes(hh)) colMap.sku = i;
       else if (['name', 'itemname', 'productname', 'description', 'item', 'itemdescription', 'desc'].includes(hh)) colMap.name = i;
       else if (['category', 'cat', 'group', 'type', 'productgroup', 'itemgroup'].includes(hh)) colMap.category = i;
+      else if (['datasheeturl', 'datasheet', 'url', 'link', 'producturl', 'productlink', 'specsheet', 'productpage'].includes(hh)) colMap.datasheetUrl = i;
       else if (['totalstock', 'total', 'qty', 'quantity', 'stockqty', 'onhand', 'qtyonhand', 'stockonhand', 'available'].includes(hh)) colMap.totalStock = i;
       else if (['buildingstock', 'building', 'bldgstock', 'sitestock', 'localstock', 'buildingqty'].includes(hh)) colMap.buildingStock = i;
       else if (['carriertrigger', 'carrier', 'carriermin', 'mintransfer', 'transfermin'].includes(hh)) colMap.carrierTrigger = i;
@@ -863,6 +893,7 @@
       sku:               String(cols[colMap.sku] ?? '').trim(),
       name:              String(cols[colMap.name] ?? '').trim(),
       category:          String(cols[colMap.category] ?? '').trim(),
+      datasheetUrl:      String(cols[colMap.datasheetUrl] ?? '').trim(),
       totalStock:        parseNum(cols[colMap.totalStock], 0),
       buildingStock:     parseNum(cols[colMap.buildingStock], 0),
       carrierTrigger:    parseNum(cols[colMap.carrierTrigger], 5),
@@ -998,6 +1029,7 @@
     { id: 'sku', label: 'SKU' },
     { id: 'name', label: 'Item Name' },
     { id: 'category', label: 'Category' },
+    { id: 'datasheetUrl', label: 'Datasheet URL' },
     { id: 'totalStock', label: 'Total Stock' },
     { id: 'buildingStock', label: 'Building Stock' },
     { id: 'carrierTrigger', label: 'Carrier Trigger' },
@@ -1128,7 +1160,7 @@
   }
 
   function exportCSV() {
-    const headers = ['sku','name','category','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger'];
+    const headers = ['sku','name','category','datasheetUrl','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger'];
     const rows = State.items.map(i => headers.map(h => `"${String(i[h] ?? '').replace(/"/g, '""')}"`).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -1317,6 +1349,7 @@
         sku:               $('#field-sku').value.trim(),
         name:              $('#field-name').value.trim(),
         category:          $('#field-category').value.trim(),
+        datasheetUrl:      $('#field-datasheetUrl').value.trim(),
         totalStock:        parseInt($('#field-totalStock').value, 10) || 0,
         buildingStock:     parseInt($('#field-buildingStock').value, 10) || 0,
         carrierTrigger:    parseInt($('#field-carrierTrigger').value, 10) || 5,
