@@ -622,13 +622,18 @@
   }
 
   function saveItem(data) {
+    let item;
     if (State.editingId) {
       const idx = State.items.findIndex(i => i.id === State.editingId);
-      if (idx >= 0) State.items[idx] = { ...State.items[idx], ...data };
+      if (idx >= 0) {
+        State.items[idx] = { ...State.items[idx], ...data, id: State.editingId };
+        item = State.items[idx];
+      }
     } else {
-      State.items.push({ id: DAL.generateId(), ...data });
+      item = { id: DAL.generateId(), ...data };
+      State.items.push(item);
     }
-    DAL.save(State.items);
+    if (item) DAL.saveOne(item);
     State.editingId = null;
     applyFilters();
     renderDashboard();
@@ -638,7 +643,7 @@
   function deleteItem(id) {
     if (!confirm('Delete this item? This cannot be undone.')) return;
     State.items = State.items.filter(i => i.id !== id);
-    DAL.save(State.items);
+    DAL.deleteOne(id);
     applyFilters();
     renderDashboard();
     populateCategoryFilter();
@@ -1058,8 +1063,10 @@
     const mode = document.querySelector('input[name="import-mode"]:checked')?.value || 'merge';
 
     if (mode === 'replace') {
+      const oldIds = State.items.map(i => i.id);
       State.items = State.importParsedData.map(d => ({ id: DAL.generateId(), ...d }));
-      DAL.save(State.items);
+      DAL.deleteMany(oldIds);
+      DAL.saveMany(State.items);
       closeModal(dom.modalImport);
       resetImportModal();
       applyFilters();
@@ -1071,6 +1078,7 @@
 
     // Merge mode
     const newItems = State.importParsedData.map(d => ({ id: DAL.generateId(), ...d }));
+    const toWrite = [];
     let updated = 0, added = 0;
     newItems.forEach(ni => {
       const existing = State.items.find(i => 
@@ -1079,21 +1087,16 @@
       );
       if (existing) {
         Object.assign(existing, { ...ni, id: existing.id });
+        toWrite.push(existing);
         updated++;
       } else {
         State.items.push(ni);
+        toWrite.push(ni);
         added++;
       }
     });
 
-    // Write changed/new items to Firestore
-    const changedItems = State.parsedData
-      ? State.importParsedData.filter(ni => ni._isNew || ni._isUpdated)
-      : State.importParsedData;
-    DAL.saveMany(State.importParsedData.map(ni => {
-      const existing = State.items.find(i => i.sku === ni.sku);
-      return existing ? { ...existing, ...ni, id: existing.id } : ni;
-    }));
+    DAL.saveMany(toWrite);
     closeModal(dom.modalImport);
     resetImportModal();
     applyFilters();
