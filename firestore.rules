@@ -12,24 +12,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Inventory collection — sign-in required, per-user data
+    // Inventory collection — any signed-in user can read & write (shared inventory)
+    // include self-created ownerId for transactions/log filtering; not required anymore
     match /inventory/{itemId} {
-      // Each user only reads their own items
-      allow read: if request.auth != null
-                  && resource.data.ownerId == request.auth.uid;
-
-      // Enforce ownerId on create and require core fields
-      allow create: if request.auth != null
-                    && request.resource.data.ownerId == request.auth.uid
-                    && request.resource.data.keys().hasAll(['sku', 'name', 'category']);
-
-      // Update/delete only by owner
-      allow update, delete: if request.auth != null
-                             && resource.data.ownerId == request.auth.uid;
+      allow read, write: if request.auth != null;
     }
 
-    // Transactions log — all authenticated users can create (scan-out)
-    // and read (history view). Only the creator user can delete their own logs.
+    // Locations — signed-in users can manage their list of warehouses/spaces
+    match /locations/{locId} {
+      allow read, write, delete: if request.auth != null;
+    }
+
+    // Transactions log — signed-in users can write (scan-out/transfer) and read all
     match /transactions/{txId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;

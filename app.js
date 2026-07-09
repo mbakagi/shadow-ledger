@@ -2619,6 +2619,7 @@
       const total = selected.length * qty;
       toast(`Generated ${total} label${total === 1 ? '' : 's'}`, 'success');
     };
+  }
 
   // ═══════════════════════════════════════════════════════
   //  UTILITIES
