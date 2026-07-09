@@ -14,9 +14,16 @@ service cloud.firestore {
 
     // Inventory collection — sign-in required, per-user data
     match /inventory/{itemId} {
-      allow read: if request.auth != null;
+      // Each user only reads their own items
+      allow read: if request.auth != null
+                  && resource.data.ownerId == request.auth.uid;
+
+      // Enforce ownerId on create and require core fields
       allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid
                     && request.resource.data.keys().hasAll(['sku', 'name', 'category']);
+
+      // Update/delete only by owner
       allow update, delete: if request.auth != null
                              && resource.data.ownerId == request.auth.uid;
     }

@@ -16,6 +16,26 @@
   <meta name="apple-mobile-web-app-title" content="St3s" />
   <meta name="mobile-web-app-capable" content="yes" />
 
+  <!-- Content-Security-Policy (hardening; adjust origins for your hosting) -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline'
+                            https://cdn.tailwindcss.com
+                            https://www.gstatic.com
+                            https://cdn.jsdelivr.net
+                            https://cdn.sheetjs.com;
+                 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+                 font-src 'self' https://fonts.gstatic.com;
+                 img-src 'self' data: blob:;
+                 connect-src 'self'
+                             https://firestore.googleapis.com
+                             https://*.firebaseio.com
+                             https://identitytoolkit.googleapis.com
+                             https://securetoken.googleapis.com
+                             https://www.googleapis.com;
+                 media-src 'self' blob:;
+                 worker-src 'self';">
+
   <!-- Preconnect to external origins (saves ~200ms on first load) -->
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -445,6 +465,11 @@
       <button id="btn-history" title="View scan-out transaction history" class="btn-secondary whitespace-nowrap">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         <span class="text-sm font-semibold hidden lg:inline">History</span>
+      </button>
+      <!-- Locations Button -->
+      <button id="btn-locations" title="Manage stock locations / warehouses" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">Locations</span>
       </button>
     </section>
 
@@ -1109,6 +1134,74 @@
       </div>
       <div id="history-list" class="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
         <p class="text-center text-gray-400 py-6">Loading…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ LOCATIONS MANAGER MODAL ═══════════════════ -->
+  <div id="modal-locations" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold">Stock Locations</h2>
+        <button id="modal-locations-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Track stock at each location (main depot, building, showroom, vans). Each item's total stock = sum across all locations.</p>
+
+      <div id="locations-list" class="space-y-2 mb-4 max-h-[40vh] overflow-y-auto scrollbar-thin">
+        <p class="text-center text-gray-400 py-6">Loading…</p>
+      </div>
+
+      <form id="add-location-form" class="flex gap-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <input id="new-location-name" type="text" placeholder="New location name (e.g. 'Showroom A')" class="input-field flex-1" required />
+        <button type="submit" class="btn-accent px-4 text-sm font-semibold">Add</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TRANSFER MODAL ═══════════════════ -->
+  <div id="modal-transfer" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-md">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-accent">Transfer Stock</h2>
+        <button id="modal-transfer-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div class="bg-gray-50 dark:bg-surface-700/40 rounded-xl p-4">
+          <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Item</p>
+          <p id="transfer-item-sku" class="font-mono font-bold text-accent text-lg"></p>
+          <p id="transfer-item-name" class="text-sm"></p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">From location</label>
+            <select id="transfer-from" class="input-field w-full"></select>
+          </div>
+          <div>
+            <label class="label">To location</label>
+            <select id="transfer-to" class="input-field w-full"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="label">Quantity</label>
+          <div class="flex items-center gap-2">
+            <button id="transfer-qty-dec" class="adj-btn" title="−1">−</button>
+            <input id="transfer-qty" type="number" min="1" value="1" class="inline-input flex-1" style="width:80px;" />
+            <button id="transfer-qty-inc" class="adj-btn" title="+1">+</button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1" id="transfer-avail-text"></p>
+        </div>
+
+        <button id="transfer-confirm" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">
+          Transfer Stock
+        </button>
       </div>
     </div>
   </div>

@@ -23,7 +23,10 @@
     importRawData: [],
     importFormat: 'csv',
     selectedIds: new Set(),
-    viewMode: 'active'
+    viewMode: 'active',
+    locations: [],            // [{ id, name, order }]
+    activeLocation: 'all',    // 'all' | locationId
+    labelGenSelected: new Set() // SKUs chosen for bulk label print
   };
 
   // ─── Data Access Layer (DAL) — Firestore backend ───
@@ -48,7 +51,6 @@
       if (this._unsub) { this._unsub(); this._unsub = null; }
     },
 
-    // Write a single item (fire-and-forget is fine — Firestore queues & retries)
     // Write a single item; returns a Promise so callers can surface errors
     saveOne(item) {
       const { id, ...rest } = item;
@@ -96,6 +98,36 @@
 
     generateId() {
       return 'sl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    },
+
+    // ─── Locations CRUD ───
+    startLocationsSync(onUpdate, onError) {
+      return db.collection('locations').orderBy('order', 'asc')
+        .onSnapshot(snapshot => {
+          const locs = [];
+          snapshot.forEach(doc => locs.push({ id: doc.id, ...doc.data() }));
+          onUpdate(locs);
+        }, err => { console.error('Locations sync error:', err); if (onError) onError(err); });
+    },
+
+    saveLocation(loc) {
+      const { id, ...data } = loc;
+      if (id) return db.collection('locations').doc(id).set(data, { merge: true });
+      return db.collection('locations').add({ ...data, order: Date.now() });
+    },
+
+    deleteLocation(id) {
+      return db.collection('locations').doc(id).delete();
+    },
+
+    // Log a stock movement (transfer or scan-out)
+    logTransaction(txData) {
+      return db.collection('transactions').add({
+        ...txData,
+        user: auth.currentUser?.email || 'unknown',
+        userId: auth.currentUser?.uid || null,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(e => console.warn('Transaction log failed', e));
     }
   };
 
@@ -178,12 +210,13 @@
         dom.userInfo.classList.add('flex');
         dom.currentUserEmail.textContent = user.email;
 
-        // Start Firestore real-time sync
+        // Start inventory Firestore real-time sync
         DAL.startSync(
           // Success callback
           items => {
             const active = document.activeElement;
-            State.items = items;
+            // Auto-migrate old items: ensure locationStock map exists
+            State.items = items.map(migrateItemLocations);
             if (active && active.classList && active.classList.contains('inline-input')) {
               renderDashboard();
             } else {
@@ -205,6 +238,13 @@
           }
         );
 
+        // Start locations sync (and seed defaults on first run)
+        DAL.startLocationsSync(locs => {
+          State.locations = locs;
+          if (locs.length === 0) seedDefaultLocations();
+          populateLocationFilters();
+        });
+
         // Load sample data on first ever use (empty Firestore)
         setTimeout(() => {
           if (State.items.length === 0) loadSampleDataToFirestore();
@@ -217,6 +257,7 @@
         dom.userInfo.classList.add('hidden');
         dom.userInfo.classList.remove('flex');
         State.items = [];
+        State.locations = [];
         State.selectedIds.clear();
         applyFilters();
         renderDashboard();
@@ -293,6 +334,74 @@
   }
 
   // ═══════════════════════════════════════════════════════
+  //  LOCATION HELPERS + MIGRATION + SEEDING
+  // ═══════════════════════════════════════════════════════
+
+  const LOC_DEPOT    = 'depot';     // fixed id for "Main Depot"
+  const LOC_BUILDING  = 'building'; // fixed id for "Company Building"
+
+  // Convert legacy items (only totalStock + buildingStock) to per-location map
+  function migrateItemLocations(item) {
+    if (item.locationStock && typeof item.locationStock === 'object') {
+      // Already migrated; derive totals for backward compat
+      return { ...item, buildingStock: locStock(item, LOC_BUILDING), totalStock: totalStockFromLocs(item) };
+    }
+    // Legacy: buildingStock was on-site, depot = totalStock - buildingStock
+    const building = item.buildingStock || 0;
+    const depot    = Math.max(0, (item.totalStock || 0) - building);
+    return {
+      ...item,
+      locationStock: { [LOC_DEPOT]: depot, [LOC_BUILDING]: building }
+    };
+  }
+
+  // Get stock at a specific location for an item (0 if missing)
+  function locStock(item, locId) {
+    if (!item.locationStock) return 0;
+    return Math.max(0, Number(item.locationStock[locId]) || 0);
+  }
+
+  // Sum stock across all locations
+  function totalStockFromLocs(item) {
+    if (!item.locationStock) return item.totalStock || 0;
+    return Object.values(item.locationStock).reduce((s, v) => s + (Number(v) || 0), 0);
+  }
+
+  // Get the friendly name of a location by id
+  function getLocName(locId) {
+    const loc = State.locations.find(l => l.id === locId);
+    return loc ? loc.name : locId;
+  }
+
+  // Seed the 2 default locations on first run
+  function seedDefaultLocations() {
+    DAL.saveLocation({ id: LOC_DEPOT,    name: 'Main Depot',      order: 1 });
+    DAL.saveLocation({ id: LOC_BUILDING, name: 'Company Building', order: 2 });
+  }
+
+  // Populate location filter + transfer dropdowns
+  function populateLocationFilters() {
+    const locs = State.locations;
+    // Build options once
+    const opts = '<option value="all">All Locations</option>' +
+      locs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+
+    // Insert a location filter dropdown next to category filter (only if not present)
+    let filter = $('#filter-location');
+    if (!filter) {
+      const cat = dom.categorySelect;
+      filter = document.createElement('select');
+      filter.id = 'filter-location';
+      filter.className = 'input-field w-full sm:w-44';
+      cat.parentNode.insertBefore(filter, cat.nextSibling);
+      filter.addEventListener('change', applyFilters);
+    }
+    const cur = filter.value;
+    filter.innerHTML = opts;
+    if (cur && (cur === 'all' || locs.some(l => l.id === cur))) filter.value = cur;
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  THEME
   // ═══════════════════════════════════════════════════════
   function loadTheme() {
@@ -310,19 +419,19 @@
   //  COMPUTED HELPERS
   // ═══════════════════════════════════════════════════════
   function depotStock(item) {
-    return Math.max(0, item.totalStock - item.buildingStock);
+    return locStock(item, LOC_DEPOT);
   }
 
   function needsCarrier(item) {
-    return item.buildingStock <= item.carrierTrigger;
+    return locStock(item, LOC_BUILDING) <= item.carrierTrigger;
   }
 
   function needsProcurement(item) {
-    return item.totalStock <= item.purchasingTrigger;
+    return totalStockFromLocs(item) <= item.purchasingTrigger;
   }
 
   function carrierQty(item) {
-    return Math.max(0, item.maxCapacity - item.buildingStock);
+    return Math.max(0, (item.maxCapacity || 0) - locStock(item, LOC_BUILDING));
   }
 
   function getCarrierAlerts() {
@@ -441,7 +550,8 @@
     const rowClass = [cAlert ? 'row-carrier' : '', pAlert ? 'row-procure' : ''].join(' ').trim();
 
     // Building stock gauge (percentage of max capacity)
-    const gaugePercent = item.maxCapacity > 0 ? Math.min(100, (item.buildingStock / item.maxCapacity) * 100) : 0;
+    const buildingNow = locStock(item, LOC_BUILDING);
+    const gaugePercent = item.maxCapacity > 0 ? Math.min(100, (buildingNow / item.maxCapacity) * 100) : 0;
     const gaugeColor   = gaugePercent <= 25 ? 'bg-red-500' : gaugePercent <= 50 ? 'bg-amber-500' : 'bg-emerald-500';
 
     // Status badge
@@ -465,12 +575,12 @@
             : '<span class="text-gray-300 dark:text-gray-600">—</span>'}
         </td>
         <td class="px-3 py-2.5 text-center">
-          <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.totalStock}" data-field="totalStock" data-id="${item.id}" />
+          <input type="number" inputmode="numeric" min="0" class="inline-input" value="${totalStockFromLocs(item)}" data-field="totalStock" data-id="${item.id}" title="Sum across all locations — edits adjust Main Depot" />
         </td>
         <td class="px-3 py-2.5">
           <div class="flex items-center justify-center gap-1.5">
             <button class="adj-btn" data-action="dec" data-id="${item.id}" title="−1">−</button>
-            <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.buildingStock}" data-field="buildingStock" data-id="${item.id}" />
+            <input type="number" inputmode="numeric" min="0" class="inline-input" value="${locStock(item, LOC_BUILDING)}" data-field="buildingStock" data-id="${item.id}" />
             <button class="adj-btn" data-action="inc" data-id="${item.id}" title="+1">+</button>
           </div>
           <div class="mt-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden" title="${Math.round(gaugePercent)}% of max capacity">
@@ -492,6 +602,9 @@
             <button class="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition" data-action="print" data-id="${item.id}" title="Print Label">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
             </button>
+            <button class="p-1.5 rounded-lg hover:bg-emerald-500/10 text-emerald-500 transition" data-action="transfer" data-id="${item.id}" title="Transfer stock between locations">
+              <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            </button>
             <button class="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition" data-action="edit" data-id="${item.id}" title="Edit">
               <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
@@ -510,7 +623,7 @@
     const carriers = getCarrierAlerts();
     const procures = getProcureAlerts();
     const categories = getCategories();
-    const totalUnits = State.items.reduce((s, i) => s + i.totalStock, 0);
+    const totalUnits = State.items.reduce((s, i) => s + totalStockFromLocs(i), 0);
 
     dom.statTotalItems.textContent   = State.items.length.toLocaleString();
     dom.statCategories.textContent   = categories.length;
@@ -587,23 +700,45 @@
     const item = State.items.find(i => i.id === id);
     if (!item) return;
     const num = Math.max(0, parseInt(value, 10) || 0);
-    if (item[field] === num) return; // no change
-    item[field] = num;
-    DAL.saveOne(item); // fire-and-forget to Firestore
 
-    // Update just the depot cell and gauge in the same row (without replacing the row)
+    if (field === 'buildingStock') {
+      const ls = { ...(item.locationStock || {}) };
+      const cur = locStock(item, LOC_BUILDING);
+      if (cur === num) return;
+      ls[LOC_BUILDING] = num;
+      item.locationStock = ls;
+      item.buildingStock = num;
+      item.totalStock = totalStockFromLocs(item);
+    } else if (field === 'totalStock') {
+      // Editing total adjusts depot so that new total = user input, keeping building stable
+      const currentTotal = totalStockFromLocs(item);
+      if (currentTotal === num) return;
+      const currentDepot = depotStock(item);
+      const currentBuilding = locStock(item, LOC_BUILDING);
+      // Sum of locations other than depot and building (e.g. showroom, vans)
+      const otherTotal = currentTotal - currentDepot - currentBuilding;
+      const newDepot = Math.max(0, num - currentBuilding - Math.max(0, otherTotal));
+      const ls = { ...(item.locationStock || {}) };
+      ls[LOC_DEPOT] = newDepot;
+      item.locationStock = ls;
+      item.totalStock = totalStockFromLocs(item);
+    } else {
+      if (item[field] === num) return;
+      item[field] = num;
+    }
+    DAL.saveOne(item);
+
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
-      // Update depot stock display
       const depot = depotStock(item);
-      const depotCell = row.cells[8]; // depot is the 9th cell (index 8) after adding Datasheet column
+      const depotCell = row.cells[8];
       if (depotCell) {
         depotCell.textContent = depot;
         depotCell.className = `px-3 py-2.5 text-center font-semibold tabular-nums ${depot <= 0 ? 'text-red-500' : ''}`;
       }
 
-      // Update the gauge bar
-      const gaugePercent = item.maxCapacity > 0 ? Math.min(100, (item.buildingStock / item.maxCapacity) * 100) : 0;
+      const buildingNow = locStock(item, LOC_BUILDING);
+      const gaugePercent = item.maxCapacity > 0 ? Math.min(100, (buildingNow / item.maxCapacity) * 100) : 0;
       const gaugeColor = gaugePercent <= 25 ? 'bg-red-500' : gaugePercent <= 50 ? 'bg-amber-500' : 'bg-emerald-500';
       const gaugeBar = row.querySelector('.gauge-bar');
       if (gaugeBar) {
@@ -611,13 +746,11 @@
         gaugeBar.className = `gauge-bar ${gaugeColor}`;
       }
 
-      // Update row status classes
       const cAlert = needsCarrier(item);
       const pAlert = needsProcurement(item);
       row.classList.toggle('row-carrier', cAlert);
       row.classList.toggle('row-procure', pAlert);
 
-      // Update badge
       const badgeCell = row.cells[1];
       if (badgeCell) {
         let badge = '<span class="badge badge-ok">OK</span>';
@@ -626,17 +759,41 @@
         else if (pAlert) badge = '<span class="badge badge-procure">ORDER</span>';
         badgeCell.innerHTML = badge;
       }
+
+      const totalCell = row.cells[6];
+      if (totalCell) {
+        const inp = totalCell.querySelector('input.inline-input');
+        if (inp && document.activeElement !== inp) inp.value = totalStockFromLocs(item);
+      }
     }
 
     renderDashboard();
   }
 
-  // Full row update (used after ± buttons, when we don't need focus preservation)
   function updateFieldFull(id, field, value) {
     const item = State.items.find(i => i.id === id);
     if (!item) return;
     const num = Math.max(0, parseInt(value, 10) || 0);
-    item[field] = num;
+
+    if (field === 'buildingStock') {
+      const ls = { ...(item.locationStock || {}) };
+      ls[LOC_BUILDING] = num;
+      item.locationStock = ls;
+      item.buildingStock = num;
+      item.totalStock = totalStockFromLocs(item);
+    } else if (field === 'totalStock') {
+      const currentTotal = totalStockFromLocs(item);
+      const currentDepot = depotStock(item);
+      const currentBuilding = locStock(item, LOC_BUILDING);
+      const otherTotal = currentTotal - currentDepot - currentBuilding;
+      const newDepot = Math.max(0, num - currentBuilding - Math.max(0, otherTotal));
+      const ls = { ...(item.locationStock || {}) };
+      ls[LOC_DEPOT] = newDepot;
+      item.locationStock = ls;
+      item.totalStock = totalStockFromLocs(item);
+    } else {
+      item[field] = num;
+    }
     DAL.saveOne(item);
     renderDashboard();
     populateCategoryFilter();
@@ -651,7 +808,9 @@
   function adjustStock(id, delta) {
     const item = State.items.find(i => i.id === id);
     if (!item) return;
-    item.buildingStock = Math.max(0, item.buildingStock + delta);
+    const newQty = Math.max(0, locStock(item, LOC_BUILDING) + delta);
+    item.locationStock = { ...(item.locationStock || {}), [LOC_BUILDING]: newQty };
+    item.buildingStock = newQty;
     DAL.saveOne(item);
     renderDashboard();
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
@@ -665,14 +824,25 @@
   function saveItem(data) {
     let item;
     let result;
+    // Build locationStock map from form fields if not already present
+    const locData = data.locationStock || {};
+    if (!locData[LOC_DEPOT])    locData[LOC_DEPOT]   = data.totalStock || 0;
+    if (!locData[LOC_BUILDING]) locData[LOC_BUILDING] = data.buildingStock || 0;
+    const merged = { ...data, locationStock: locData };
+
     if (State.editingId) {
       const idx = State.items.findIndex(i => i.id === State.editingId);
       if (idx >= 0) {
-        State.items[idx] = { ...State.items[idx], ...data, id: State.editingId };
+        // Merge new data into existing, preserving other location entries
+        const existing = State.items[idx];
+        const mergedLS = { ...(existing.locationStock || {}), ...locData };
+        State.items[idx] = { ...existing, ...merged, id: State.editingId, locationStock: mergedLS };
         item = State.items[idx];
       }
     } else {
-      item = { id: DAL.generateId(), ...data };
+      // New item: initialize locationStock from seed
+      const mergedLS = { ...locData };
+      item = { id: DAL.generateId(), ...merged, locationStock: mergedLS };
       State.items.push(item);
     }
     if (item) result = DAL.saveOne(item);
@@ -713,8 +883,8 @@
     $('#field-sku').value               = item ? item.sku : '';
     $('#field-name').value              = item ? item.name : '';
     $('#field-category').value          = item ? item.category : '';
-    $('#field-totalStock').value        = item ? item.totalStock : 0;
-    $('#field-buildingStock').value     = item ? item.buildingStock : 0;
+    $('#field-totalStock').value        = item ? totalStockFromLocs(item) : 0;
+    $('#field-buildingStock').value     = item ? locStock(item, LOC_BUILDING) : 0;
     $('#field-carrierTrigger').value    = item ? item.carrierTrigger : 5;
     $('#field-maxCapacity').value       = item ? item.maxCapacity : 20;
     $('#field-purchasingTrigger').value = item ? item.purchasingTrigger : 10;
@@ -897,6 +1067,7 @@
       setTimeout(() => {
         document.body.classList.remove('printing-label');
         dom.printContainer.innerHTML = '';
+        dom.printContainer.className = '';
       }, 500);
     }, 150);
   }
@@ -918,11 +1089,11 @@
   // ─── Label size presets (returns {w, h} in inches) ───
   function getLabelSize() {
     const preset = $('#labelgen-size').value;
-    if (preset === 'custom') return { w: parseFloat($('#labelgen-w').value) || 4, h: parseFloat($('#labelgen-h').value) || 2 };
-    if (preset === '4x2')     return { w: 4, h: 2 };
-    if (preset === '2x1')     return { w: 2, h: 1 };
-    if (preset === 'a4-grid') return { w: 2, h: 1.33 };
-    return { w: 4, h: 2 };
+    if (preset === 'custom') return { w: parseFloat($('#labelgen-w').value) || 4, h: parseFloat($('#labelgen-h').value) || 2, isGrid: false };
+    if (preset === '4x2')     return { w: 4, h: 2, isGrid: false };
+    if (preset === '2x1')     return { w: 2, h: 1, isGrid: false };
+    if (preset === 'a4-grid') return { w: 2, h: 1.33, isGrid: true };
+    return { w: 4, h: 2, isGrid: false };
   }
 
   // ─── Build a single label DOM node (used for both preview and print rows) ───
@@ -1061,6 +1232,7 @@
     if (itemsToLabel.length === 0) return toast('No items to label', 'info');
 
     dom.printContainer.innerHTML = '';
+    dom.printContainer.className = (size.isGrid) ? 'a4-grid-mode' : '';
     itemsToLabel.forEach(({ item, overrides }) => {
       const labelEl = buildLabelElement(item, {
         ...size, logoDataUrl,
@@ -1078,6 +1250,7 @@
       setTimeout(() => {
         document.body.classList.remove('printing-label');
         dom.printContainer.innerHTML = '';
+        dom.printContainer.className = '';
       }, 500);
     }, 200);
 
@@ -1195,17 +1368,23 @@
     const item = ScanOut.capturedItem;
     if (!item) return;
     const qty = Math.max(1, parseInt($('#scanout-qty').value, 10) || 1);
-    if (qty > item.buildingStock) {
+    const currentBuilding = locStock(item, LOC_BUILDING);
+    if (qty > currentBuilding) {
       const ok = await confirmDialog({
         title: 'Quantity exceeds stock',
-        message: `Scanning out ${qty} but only ${item.buildingStock} on hand. Stock will go to 0. Continue?`,
+        message: `Scanning out ${qty} but only ${currentBuilding} on hand. Stock will go to 0. Continue?`,
         confirmText: 'Continue',
         danger: true
       });
       if (!ok) return;
     }
 
-    item.buildingStock = Math.max(0, item.buildingStock - qty);
+    const newBuilding = Math.max(0, currentBuilding - qty);
+    const newLS = { ...(item.locationStock || {}) };
+    newLS[LOC_BUILDING] = newBuilding;
+    item.locationStock = newLS;
+    item.buildingStock = newBuilding;
+    item.totalStock = totalStockFromLocs(item);
     await DAL.saveOne(item);
 
     // Log transaction
@@ -1250,9 +1429,8 @@
     $('#scanout-error').classList.add('hidden');
     $('#scanout-manual-sku').value = '';
     $('#scanout-qty').value = 1;
-    if ($('#scanout-camera-toggle').textContent === 'Start camera') {
-      startScanCamera();
-    }
+    // Restart camera (modal is still open)
+    startScanCamera();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1295,6 +1473,75 @@
       console.error('History load failed:', err);
       list.innerHTML = '<p class="text-center text-red-500 py-6">Failed to load history. Check Firestore rules for the `transactions` collection.</p>';
     }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  LOCATIONS MANAGER UI
+  // ═══════════════════════════════════════════════════════
+
+  function openLocationsModal() {
+    openModal($('#modal-locations'));
+    renderLocationsList();
+  }
+
+  function renderLocationsList() {
+    const list = $('#locations-list');
+    if (!list) return;
+    const locs = State.locations;
+    if (!locs.length) {
+      list.innerHTML = '<p class="text-center text-gray-400 py-6">No locations defined. Core locations (Main Depot, Company Building) will be seeded automatically.</p>';
+      return;
+    }
+    list.innerHTML = locs.map(l => {
+      const isCore = (l.id === LOC_DEPOT || l.id === LOC_BUILDING);
+      const total = State.items.reduce((s, i) => s + locStock(i, l.id), 0);
+      return `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-surface-700/40 border border-gray-200 dark:border-gray-700">
+          <div>
+            <p class="font-semibold text-sm">${esc(l.name)}</p>
+            <p class="text-xs text-gray-500">${total.toLocaleString()} total units across all SKUs</p>
+          </div>
+          ${isCore
+            ? '<span class="text-[10px] text-gray-400 dark:text-gray-600 font-semibold uppercase bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full">Core</span>'
+            : `<button data-delete-loc="${esc(l.id)}" class="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500 transition" title="Delete">
+                 <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+               </button>`}
+        </div>`;
+    }).join('');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  TRANSFER MODAL UI
+  // ═══════════════════════════════════════════════════════
+
+  function openTransferModal(item) {
+    State.transferItem = item;
+    $('#transfer-item-sku').textContent = item.sku;
+    $('#transfer-item-name').textContent = item.name;
+
+    // Populate location dropdowns
+    const locs = State.locations;
+    const opts = locs.map(l => `<option value="${esc(l.id)}">${esc(l.name)} (${locStock(item, l.id)} available)</option>`).join('');
+    $('#transfer-from').innerHTML = opts;
+    $('#transfer-to').innerHTML = opts;
+    // Default: from the first location that has stock, or the first overall
+    const firstWithStock = locs.find(l => locStock(item, l.id) > 0);
+    if (firstWithStock) $('#transfer-from').value = firstWithStock.id;
+    $('#transfer-to').value = locs.length > 1 ? locs[1].id : locs[0]?.id || '';
+    $('#transfer-qty').value = 1;
+    updateTransferAvail();
+    openModal($('#modal-transfer'));
+  }
+
+  function updateTransferAvail() {
+    const item = State.transferItem;
+    if (!item) return;
+    const from = $('#transfer-from')?.value || '';
+    const qty = parseInt($('#transfer-qty')?.value, 10) || 1;
+    const avail = locStock(item, from);
+    $('#transfer-avail-text').textContent = `Available at source: ${avail}. ${qty > avail ? 'WARNING: exceeds stock!' : ''}`;
+    $('#transfer-avail-text').classList.toggle('text-red-500', qty > avail);
+    $('#transfer-confirm').disabled = qty > avail;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1595,8 +1842,15 @@
   }
 
   function exportCSV() {
-    const headers = ['sku','name','category','datasheetUrl','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger'];
-    const rows = State.items.map(i => headers.map(h => `"${String(i[h] ?? '').replace(/"/g, '""')}"`).join(','));
+    const headers = ['sku','name','category','datasheetUrl','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger','locationStock'];
+    const rows = State.items.map(i =>
+      headers.map(h => {
+        const val = h === 'locationStock'
+          ? JSON.stringify(i.locationStock || {})
+          : i[h];
+        return `"${String(val ?? '').replace(/"/g, '""')}"`;
+      }).join(',')
+    );
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -1777,6 +2031,7 @@
       if (action === 'dec')    adjustStock(id, -1);
       if (action === 'edit')   openItemModal(State.items.find(i => i.id === id));
       if (action === 'print')  printLabels([State.items.find(i => i.id === id)]);
+      if (action === 'transfer') openTransferModal(State.items.find(i => i.id === id));
       if (action === 'delete') deleteItem(id);
     });
 
@@ -1819,10 +2074,15 @@
     $('#modal-manifest-close').addEventListener('click', () => closeModal(dom.modalManifest));
     $('#modal-alerts-close').addEventListener('click', () => closeModal(dom.modalAlerts));
 
-    // Close modals on overlay click
-    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts].forEach(modal => {
+    // Close modals on overlay click (includes new modals)
+    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history')].forEach(modal => {
+      if (!modal) return;
       modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal(modal);
+        if (e.target === modal) {
+          // Stop camera if closing scan-out modal
+          if (modal.id === 'modal-scanout') stopScanCamera();
+          closeModal(modal);
+        }
       });
     });
 
@@ -1830,7 +2090,10 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history')].forEach(m => {
-          if (m && !m.classList.contains('hidden')) closeModal(m);
+          if (m && !m.classList.contains('hidden')) {
+            if (m.id === 'modal-scanout') stopScanCamera();
+            closeModal(m);
+          }
         });
       }
     });
@@ -1878,9 +2141,23 @@
     $('#card-carrier').addEventListener('click', () => openAlertDetail('carrier'));
     $('#card-procure').addEventListener('click', () => openAlertDetail('procure'));
 
+    // Keyboard accessibility for dashboard cards (role="button" must be keyboard-activatable)
+    const makeCardKeyboardButton = (el, handler) => {
+      if (!el) return;
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handler();
+        }
+      });
+    };
+    makeCardKeyboardButton($('#card-carrier'), () => openAlertDetail('carrier'));
+    makeCardKeyboardButton($('#card-procure'), () => openAlertDetail('procure'));
+
     // Global Barcode Scanner Listener & Numpad Shortcuts
     let barcodeBuffer = '';
     let barcodeTimer = null;
+    const BARCODE_IDLE_MS = 250; // forgiving timeout for slower scanners
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
         if (e.target.classList.contains('inline-input') && e.target.dataset.id && e.target.dataset.field === 'buildingStock') {
@@ -1898,7 +2175,7 @@
       if (e.key.length === 1) {
         barcodeBuffer += e.key;
         clearTimeout(barcodeTimer);
-        barcodeTimer = setTimeout(() => { barcodeBuffer = ''; }, 50); 
+        barcodeTimer = setTimeout(() => { barcodeBuffer = ''; }, BARCODE_IDLE_MS);
       } else if (e.key === 'Enter' && barcodeBuffer.length > 2) {
         const scannedSku = barcodeBuffer.toUpperCase();
         barcodeBuffer = '';
@@ -2023,24 +2300,25 @@
     });
 
     // Manual SKU entry
+    const lookupManualSku = () => {
+      const sku = $('#scanout-manual-sku').value.trim().toUpperCase();
+      if (!sku) return;
+      const item = State.items.find(i => i.sku && i.sku.toUpperCase() === sku && !i.archived);
+      if (!item) {
+        $('#scanout-error').textContent = `No matching item for "${sku}". Check the spelling.`;
+        $('#scanout-error').classList.remove('hidden');
+        return;
+      }
+      stopScanCamera();
+      showScanOutStep2(item);
+    };
     $('#scanout-manual-sku').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const sku = e.target.value.trim().toUpperCase();
-        if (!sku) return;
-        const item = State.items.find(i => i.sku && i.sku.toUpperCase() === sku && !i.archived);
-        if (!item) {
-          $('#scanout-error').textContent = `No matching item for "${sku}". Check the spelling.`;
-          $('#scanout-error').classList.remove('hidden');
-          return;
-        }
-        stopScanCamera();
-        showScanOutStep2(item);
+        lookupManualSku();
       }
     });
-    $('#scanout-manual-go').addEventListener('click', () => {
-      $('#scanout-manual-sku').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    });
+    $('#scanout-manual-go').addEventListener('click', lookupManualSku);
 
     // Qty adjustments
     $('#scanout-qty').addEventListener('input', () => {
@@ -2074,7 +2352,244 @@
     // ═══════════════════════════════════════════════════════
     $('#btn-history').addEventListener('click', openHistory);
     $('#modal-history-close').addEventListener('click', () => closeModal($('#modal-history')));
-  }
+
+    // ═══════════════════════════════════════════════════════
+    //  LOCATIONS MANAGER
+    // ═══════════════════════════════════════════════════════
+    $('#btn-locations').addEventListener('click', openLocationsModal);
+    $('#modal-locations-close').addEventListener('click', () => closeModal($('#modal-locations')));
+
+    // Add new location
+    $('#add-location-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = $('#new-location-name').value.trim();
+      if (!name) return;
+      await DAL.saveLocation({ name, order: Date.now() });
+      $('#new-location-name').value = '';
+      toast('Location added', 'success');
+      // Locations list refreshed via onSnapshot
+    });
+
+    // Delete location (delegated on the list)
+    $('#locations-list').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-delete-loc]');
+      if (!btn) return;
+      const locId = btn.dataset.deleteLoc;
+      // Prevent deleting the 2 core locations
+      if (locId === LOC_DEPOT || locId === LOC_BUILDING) {
+        return toast('Cannot delete core locations (Main Depot, Company Building).', 'error');
+      }
+      DAL.deleteLocation(locId).catch(() => toast('Delete failed.', 'error'));
+    });
+
+    // ═══════════════════════════════════════════════════════
+    //  TRANSFER MODAL
+    // ═══════════════════════════════════════════════════════
+    $('#modal-transfer-close').addEventListener('click', () => closeModal($('#modal-transfer')));
+    $('#transfer-qty').addEventListener('input', updateTransferAvail);
+    $('#transfer-from').addEventListener('change', updateTransferAvail);
+    $('#transfer-qty-dec').addEventListener('click', () => {
+      let v = parseInt($('#transfer-qty').value, 10) || 1;
+      if (v > 1) $('#transfer-qty').value = v - 1;
+      updateTransferAvail();
+    });
+    $('#transfer-qty-inc').addEventListener('click', () => {
+      $('#transfer-qty').value = (parseInt($('#transfer-qty').value, 10) || 1) + 1;
+      updateTransferAvail();
+    });
+    $('#transfer-confirm').addEventListener('click', async () => {
+      const item = State.transferItem;
+      if (!item) return;
+      const from = $('#transfer-from').value;
+      const to   = $('#transfer-to').value;
+      const qty  = parseInt($('#transfer-qty').value, 10) || 1;
+      if (!from || !to || from === to) return toast('Select different locations.', 'error');
+      const fromStock = locStock(item, from);
+      if (qty > fromStock) return toast(`Only ${fromStock} available at source.`, 'error');
+
+      // Move stock
+      const newLS = { ...(item.locationStock || {}) };
+      newLS[from] = Math.max(0, (newLS[from] || 0) - qty);
+      newLS[to]   = (newLS[to] || 0) + qty;
+      item.locationStock = newLS;
+      item.buildingStock = locStock(item, LOC_BUILDING);
+      item.totalStock = totalStockFromLocs(item);
+      await DAL.saveOne(item);
+
+      // Log
+      DAL.logTransaction({
+        itemId: item.id, sku: item.sku, name: item.name,
+        qtyOut: qty, type: 'transfer', from: from, to: to,
+        remainingMap: newLS
+      });
+
+      closeModal($('#modal-transfer'));
+      State.transferItem = null;
+      applyFilters(); renderDashboard();
+      toast(`Transferred ${qty} ${item.sku}`, 'success');
+    });
+
+    // ═══════════════════════════════════════════════════════
+    //  LABEL GENERATOR — MULTI-SELECT SEARCH
+    // ═══════════════════════════════════════════════════════
+    // Override the old "item picker" with a searchable multi-select
+    const labelSearchInput = document.createElement('input');
+    labelSearchInput.type = 'text';
+    labelSearchInput.placeholder = 'Search SKU or name… (click to add)';
+    labelSearchInput.className = 'input-field w-full mt-2';
+    const labelResults = document.createElement('div');
+    labelResults.className = 'max-h-32 overflow-y-auto scrollbar-thin rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-surface-800 mt-1 hidden';
+
+    // Move them into the DOM (if labelgen-single exists)
+    const singleEl = $('#labelgen-single');
+    if (singleEl) {
+      singleEl.appendChild(labelSearchInput);
+      singleEl.appendChild(labelResults);
+    }
+
+    // Search → dropdown
+    const renderSearchResults = debounce(() => {
+      const q = labelSearchInput.value.trim().toLowerCase();
+      if (!q || q.length < 1) { labelResults.classList.add('hidden'); return; }
+      const hits = State.items.filter(i =>
+        i.sku.toLowerCase().includes(q) ||
+        i.name.toLowerCase().includes(q)
+      ).slice(0, 8);
+      if (hits.length === 0) { labelResults.classList.add('hidden'); return; }
+      labelResults.innerHTML = hits.map(i => `
+        <div class="px-3 py-2 cursor-pointer hover:bg-blue-50 dark:hover:bg-surface-700/50 border-b border-gray-100 dark:border-gray-700/40 text-sm flex justify-between"
+             data-add-sku="${esc(i.sku)}">
+          <span class="font-mono text-accent">${esc(i.sku)}</span>
+          <span class="truncate ml-3">${esc(i.name)}</span>
+          ${State.labelGenSelected.has(i.sku) ? '<span class="text-green-500 ml-2">✓</span>' : '<span class="text-gray-400 ml-2">+</span>'}
+        </div>`).join('');
+      labelResults.classList.remove('hidden');
+    }, 200);
+    labelSearchInput.addEventListener('input', renderSearchResults);
+
+    // Click → add / remove
+    labelResults.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-add-sku]');
+      if (!row) return;
+      const sku = row.dataset.addSku;
+      if (State.labelGenSelected.has(sku)) State.labelGenSelected.delete(sku);
+      else State.labelGenSelected.add(sku);
+      renderSearchResults();
+      renderLabelGenMulti();
+    });
+
+    // Chip list (selected items)
+    const chipBox = document.createElement('div');
+    chipBox.className = 'flex flex-wrap gap-1 mt-2';
+    chipBox.id = 'labelgen-chips';
+    if (singleEl) singleEl.appendChild(chipBox);
+
+    function renderLabelGenMulti() {
+      const chips = $('#labelgen-chips');
+      if (!chips) return;
+      const selected = [...State.labelGenSelected].map(sku => State.items.find(i => i.sku === sku)).filter(Boolean);
+      chips.innerHTML = selected.map(i => `
+        <span class="inline-flex items-center gap-1 bg-accent/10 text-accent text-xs font-semibold px-2 py-1 rounded-full">
+          ${esc(i.sku)}
+          <button data-remove-sku="${esc(i.sku)}" class="ml-0.5 text-red-500 hover:text-red-700 font-bold">&times;</button>
+        </span>`).join('')
+        + (selected.length === 0 ? '<span class="text-xs text-gray-400 italic">No items selected — search above</span>' : '');
+      // Update count
+      const countEl = $('#labelgen-bulk-count');
+      if (countEl) countEl.textContent = selected.length;
+      // Auto-trigger preview
+      renderLabelGenPreview();
+    }
+
+    // Remove chip
+    chipBox.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove-sku]');
+      if (!btn) return;
+      State.labelGenSelected.delete(btn.dataset.removeSku);
+      renderLabelGenMulti();
+    });
+
+    // Bulk count display next to the source radio
+    const countSpan = document.createElement('span');
+    countSpan.id = 'labelgen-bulk-count';
+    countSpan.className = 'text-accent font-bold';
+    const sourceDiv = $('[name="labelgen-source"]')?.parentElement?.parentElement;
+    if (sourceDiv) sourceDiv.appendChild(countSpan);
+
+    // Print button for multi-select
+    $('#btn-labelgen-print').addEventListener('click', () => {
+      const source = document.querySelector('input[name="labelgen-source"]:checked')?.value || 'single';
+      if (source === 'single') { generateLabels(); return; }
+      // Bulk → use the chip set
+      if (State.labelGenSelected.size === 0) return toast('Select items to label first', 'info');
+      generateLabels();
+    });
+
+    // Make renderLabelGenPreview handle multi-select:
+    // (override the old function with a wrapper)
+    const origRenderPreview = renderLabelGenPreview;
+    renderLabelGenPreview = function() {
+      const source = document.querySelector('input[name="labelgen-source"]:checked')?.value || 'single';
+      if (source === 'single') return origRenderPreview();
+      // Preview first selected item
+      const sku = [...State.labelGenSelected][0];
+      if (!sku) {
+        const previewBox = $('#labelgen-preview');
+        if (previewBox) previewBox.innerHTML = '<p class="text-gray-400 text-sm italic">Search & pick items above</p>';
+        return;
+      }
+      const item = State.items.find(i => i.sku === sku) || null;
+      const size = getLabelSize();
+      const logoDataUrl = getSavedLogo();
+      const name = $('#labelgen-name').value.trim()  || item?.name || '';
+      const extra = $('#labelgen-extra').value.trim();
+      const qrSource = $('#labelgen-qr-source').value;
+      const qrCustom = $('#labelgen-qr-custom').value.trim();
+      const previewBox = $('#labelgen-preview');
+      if (previewBox) {
+        previewBox.innerHTML = '';
+        const labelEl = buildLabelElement(item, { ...size, logoDataUrl, sku, name, extra, qrSource, qrCustom });
+        previewBox.appendChild(labelEl);
+      }
+    };
+
+    // Override generateLabels for multi mode
+    const origGenerateLabels = generateLabels;
+    generateLabels = function() {
+      const source = document.querySelector('input[name="labelgen-source"]:checked')?.value || 'single';
+      if (source === 'single') return origGenerateLabels();
+      // Multi mode — use chip selections
+      const selected = [...State.labelGenSelected].map(sku => State.items.find(i => i.sku === sku)).filter(Boolean);
+      if (selected.length === 0) return toast('No items in selection', 'info');
+
+      const size = getLabelSize();
+      const logoDataUrl = getSavedLogo();
+      const extra = $('#labelgen-extra').value.trim();
+      const qrSource = $('#labelgen-qr-source').value;
+      const qrCustom = $('#labelgen-qr-custom').value.trim();
+
+      dom.printContainer.innerHTML = '';
+      dom.printContainer.className = size.isGrid ? 'a4-grid-mode' : '';
+      selected.forEach(item => {
+        const labelEl = buildLabelElement(item, {
+          ...size, logoDataUrl,
+          sku: item.sku, name: item.name, extra,
+          qrSource, qrCustom
+        });
+        dom.printContainer.appendChild(labelEl);
+      });
+
+      document.body.classList.add('printing-label');
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => {
+          document.body.classList.remove('printing-label');
+          dom.printContainer.innerHTML = '';
+          dom.printContainer.className = '';
+        }, 500);
+      }, 200);
+      toast(`Generated ${selected.length} label${selected.length === 1 ? '' : 's'}`, 'success');
+    };
 
   // ═══════════════════════════════════════════════════════
   //  UTILITIES
@@ -2122,15 +2637,22 @@
           </div>
         </div>`;
       document.body.appendChild(overlay);
-      const finish = (val) => { overlay.remove(); document.body.style.overflow = ''; resolve(val); };
+      let keyHandler;
+      const finish = (val) => {
+        overlay.remove();
+        document.body.style.overflow = '';
+        if (keyHandler) document.removeEventListener('keydown', keyHandler);
+        resolve(val);
+      };
       overlay.addEventListener('click', e => {
         if (e.target === overlay || e.target.dataset.cancel !== undefined) finish(false);
         else if (e.target.dataset.confirm !== undefined) finish(true);
       });
-      document.addEventListener('keydown', function onKey(e) {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); finish(false); }
-        if (e.key === 'Enter') { document.removeEventListener('keydown', onKey); finish(true); }
-      });
+      keyHandler = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
+        if (e.key === 'Enter')  { e.stopPropagation(); finish(true); }
+      };
+      document.addEventListener('keydown', keyHandler);
       overlay.querySelector('[data-cancel]').focus();
       document.body.style.overflow = 'hidden';
     });

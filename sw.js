@@ -3,28 +3,21 @@
    Cache-first for app shell, network-first for Firebase
    ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'sl-v1';
+const CACHE_VERSION = 'sl-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/app.js',
   '/firebase-config.js',
   '/manifest.json',
-  '/icon.svg',
-  'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js',
-  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
-  'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
-  'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
-  'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js',
-  'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js'
+  '/icon.svg'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
       .then(cache => cache.addAll(APP_SHELL).catch(() => {
-        // Some CDN URLs may fail (e.g. xlsx.fullmin.js typo) — skip silently
+        // Fallback: cache each asset individually so one failure doesn't block install
         return Promise.all(
           APP_SHELL.map(url =>
             cache.add(url).catch(() => null)
