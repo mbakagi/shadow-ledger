@@ -461,6 +461,7 @@
       results = results.filter(i =>
         i.sku.toLowerCase().includes(query) ||
         i.name.toLowerCase().includes(query) ||
+        (i.binCode && i.binCode.toLowerCase().includes(query)) ||
         (i.category && i.category.toLowerCase().includes(query)) ||
         (i.datasheetUrl && i.datasheetUrl.toLowerCase().includes(query))
       );
@@ -566,6 +567,7 @@
         <td class="px-3 py-2.5 text-center">${badge}</td>
         <td class="px-3 py-2.5 font-mono text-xs font-semibold text-accent">${esc(item.sku)}</td>
         <td class="px-3 py-2.5 font-medium">${esc(item.name)}</td>
+        <td class="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell font-mono">${esc(item.binCode || '—')}</td>
         <td class="px-3 py-2.5 text-gray-500 dark:text-gray-400 hidden sm:table-cell">${esc(item.category || '—')}</td>
         <td class="px-3 py-2.5 text-center hidden lg:table-cell">
           ${item.datasheetUrl
@@ -889,6 +891,7 @@
     $('#field-maxCapacity').value       = item ? item.maxCapacity : 20;
     $('#field-purchasingTrigger').value = item ? item.purchasingTrigger : 10;
     $('#field-datasheetUrl').value      = item ? (item.datasheetUrl || '') : '';
+    if ($('#field-binCode')) $('#field-binCode').value = item ? (item.binCode || '') : '';
     openModal(dom.modalItem);
     setTimeout(() => $('#field-sku').focus(), 100);
   }
@@ -1089,11 +1092,12 @@
   // ─── Label size presets (returns {w, h} in inches) ───
   function getLabelSize() {
     const preset = $('#labelgen-size').value;
-    if (preset === 'custom') return { w: parseFloat($('#labelgen-w').value) || 4, h: parseFloat($('#labelgen-h').value) || 2, isGrid: false };
-    if (preset === '4x2')     return { w: 4, h: 2, isGrid: false };
-    if (preset === '2x1')     return { w: 2, h: 1, isGrid: false };
-    if (preset === 'a4-grid') return { w: 2, h: 1.33, isGrid: true };
-    return { w: 4, h: 2, isGrid: false };
+    if (preset === 'custom')   return { w: parseFloat($('#labelgen-w').value) || 4, h: parseFloat($('#labelgen-h').value) || 2, isGrid: false, isA4Land: false };
+    if (preset === '4x2')     return { w: 4, h: 2, isGrid: false, isA4Land: false };
+    if (preset === '2x1')     return { w: 2, h: 1, isGrid: false, isA4Land: false };
+    if (preset === 'a4-land') return { w: 2.6, h: 1.4, isGrid: false, isA4Land: true };
+    if (preset === 'a4-grid') return { w: 2, h: 1.33, isGrid: true, isA4Land: false }; // legacy compat
+    return { w: 4, h: 2, isGrid: false, isA4Land: false };
   }
 
   // ─── Build a single label DOM node (used for both preview and print rows) ───
@@ -1131,6 +1135,7 @@
       </div>
       <div class="shelf-label-footer">
         <span>${esc(item?.category || '')}</span>
+        ${item?.binCode ? `<span class="shelf-label-bin">${esc(item.binCode)}</span>` : ''}
       </div>
     `;
 
@@ -1219,6 +1224,7 @@
     const extra = $('#labelgen-extra').value.trim();
     const qrSource = $('#labelgen-qr-source').value;
     const qrCustom = $('#labelgen-qr-custom').value.trim();
+    const qty = Math.max(1, Math.min(20, parseInt($('#labelgen-qty')?.value, 10) || 1));
 
     let itemsToLabel = [];
     if (source === 'single') {
@@ -1232,29 +1238,33 @@
     if (itemsToLabel.length === 0) return toast('No items to label', 'info');
 
     dom.printContainer.innerHTML = '';
-    dom.printContainer.className = (size.isGrid) ? 'a4-grid-mode' : '';
+    dom.printContainer.className = size.isGrid ? 'a4-grid-mode' : (size.isA4Land ? 'a4-landscape-mode' : '');
     itemsToLabel.forEach(({ item, overrides }) => {
-      const labelEl = buildLabelElement(item, {
-        ...size, logoDataUrl,
-        sku:   overrides.sku   || item?.sku   || '',
-        name:  overrides.name  || item?.name  || '',
-        extra: overrides.extra || '',
-        qrSource, qrCustom
-      });
-      dom.printContainer.appendChild(labelEl);
+      for (let c = 0; c < qty; c++) {
+        const labelEl = buildLabelElement(item, {
+          ...size, logoDataUrl,
+          sku:   overrides.sku   || item?.sku   || '',
+          name:  overrides.name  || item?.name  || '',
+          extra: overrides.extra || '',
+          qrSource, qrCustom
+        });
+        dom.printContainer.appendChild(labelEl);
+      }
     });
 
+    if (size.isA4Land) document.body.classList.add('print-a4-landscape');
     document.body.classList.add('printing-label');
     setTimeout(() => {
       window.print();
       setTimeout(() => {
         document.body.classList.remove('printing-label');
+        document.body.classList.remove('print-a4-landscape');
         dom.printContainer.innerHTML = '';
         dom.printContainer.className = '';
       }, 500);
     }, 200);
 
-    toast(`Generated ${itemsToLabel.length} label${itemsToLabel.length === 1 ? '' : 's'}`, 'success');
+    toast(`Generated ${itemsToLabel.length * qty} label${itemsToLabel.length * qty === 1 ? '' : 's'}`, 'success');
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1559,6 +1569,7 @@
       else if (['datasheeturl', 'datasheet', 'url', 'link', 'producturl', 'productlink', 'specsheet', 'productpage'].includes(hh)) colMap.datasheetUrl = i;
       else if (['totalstock', 'total', 'qty', 'quantity', 'stockqty', 'onhand', 'qtyonhand', 'stockonhand', 'available'].includes(hh)) colMap.totalStock = i;
       else if (['buildingstock', 'building', 'bldgstock', 'sitestock', 'localstock', 'buildingqty'].includes(hh)) colMap.buildingStock = i;
+      else if (['bincode', 'bin', 'binlocation', 'shelf', 'shelfcode', 'location', 'storagelocation'].includes(hh)) colMap.binCode = i;
       else if (['carriertrigger', 'carrier', 'carriermin', 'mintransfer', 'transfermin'].includes(hh)) colMap.carrierTrigger = i;
       else if (['maxcapacity', 'max', 'maxbuilding', 'maxbldg', 'capacity', 'maxqty'].includes(hh)) colMap.maxCapacity = i;
       else if (['purchasingtrigger', 'purchasing', 'reorder', 'reorderlevel', 'minstock', 'reorderpoint'].includes(hh)) colMap.purchasingTrigger = i;
@@ -1575,6 +1586,7 @@
       sku:               String(cols[colMap.sku] ?? '').trim(),
       name:              String(cols[colMap.name] ?? '').trim(),
       category:          String(cols[colMap.category] ?? '').trim(),
+      binCode:            String(cols[colMap.binCode] ?? '').trim(),
       datasheetUrl:      String(cols[colMap.datasheetUrl] ?? '').trim(),
       totalStock:        parseNum(cols[colMap.totalStock], 0),
       buildingStock:     parseNum(cols[colMap.buildingStock], 0),
@@ -1842,7 +1854,7 @@
   }
 
   function exportCSV() {
-    const headers = ['sku','name','category','datasheetUrl','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger','locationStock'];
+    const headers = ['sku','name','category','binCode','datasheetUrl','totalStock','buildingStock','carrierTrigger','maxCapacity','purchasingTrigger','locationStock'];
     const rows = State.items.map(i =>
       headers.map(h => {
         const val = h === 'locationStock'
@@ -2052,6 +2064,7 @@
         carrierTrigger:    parseInt($('#field-carrierTrigger').value, 10) || 5,
         maxCapacity:       parseInt($('#field-maxCapacity').value, 10) || 20,
         purchasingTrigger: parseInt($('#field-purchasingTrigger').value, 10) || 10,
+        binCode:           $('#field-binCode')?.value.trim() || '',
       });
       Promise.resolve(item).then(() => {
         closeModal(dom.modalItem);
@@ -2516,6 +2529,16 @@
     const sourceDiv = $('[name="labelgen-source"]')?.parentElement?.parentElement;
     if (sourceDiv) sourceDiv.appendChild(countSpan);
 
+    // Qty +/- button bindings
+    const qtyInput = () => $('#labelgen-qty');
+    const adjustQty = (delta) => {
+      const el = qtyInput();
+      if (!el) return;
+      el.value = Math.max(1, Math.min(20, (parseInt(el.value, 10) || 1) + delta));
+    };
+    $('#labelgen-qty-dec')?.addEventListener('click', () => adjustQty(-1));
+    $('#labelgen-qty-inc')?.addEventListener('click', () => adjustQty(1));
+
     // Print button for multi-select
     $('#btn-labelgen-print').addEventListener('click', () => {
       const source = document.querySelector('input[name="labelgen-source"]:checked')?.value || 'single';
@@ -2567,28 +2590,34 @@
       const extra = $('#labelgen-extra').value.trim();
       const qrSource = $('#labelgen-qr-source').value;
       const qrCustom = $('#labelgen-qr-custom').value.trim();
+      const qty = Math.max(1, Math.min(20, parseInt($('#labelgen-qty')?.value, 10) || 1));
 
       dom.printContainer.innerHTML = '';
-      dom.printContainer.className = size.isGrid ? 'a4-grid-mode' : '';
+      dom.printContainer.className = size.isGrid ? 'a4-grid-mode' : (size.isA4Land ? 'a4-landscape-mode' : '');
       selected.forEach(item => {
-        const labelEl = buildLabelElement(item, {
-          ...size, logoDataUrl,
-          sku: item.sku, name: item.name, extra,
-          qrSource, qrCustom
-        });
-        dom.printContainer.appendChild(labelEl);
+        for (let c = 0; c < qty; c++) {
+          const labelEl = buildLabelElement(item, {
+            ...size, logoDataUrl,
+            sku: item.sku, name: item.name, extra,
+            qrSource, qrCustom
+          });
+          dom.printContainer.appendChild(labelEl);
+        }
       });
 
+      if (size.isA4Land) document.body.classList.add('print-a4-landscape');
       document.body.classList.add('printing-label');
       setTimeout(() => {
         window.print();
         setTimeout(() => {
           document.body.classList.remove('printing-label');
+          document.body.classList.remove('print-a4-landscape');
           dom.printContainer.innerHTML = '';
           dom.printContainer.className = '';
         }, 500);
       }, 200);
-      toast(`Generated ${selected.length} label${selected.length === 1 ? '' : 's'}`, 'success');
+      const total = selected.length * qty;
+      toast(`Generated ${total} label${total === 1 ? '' : 's'}`, 'success');
     };
 
   // ═══════════════════════════════════════════════════════
