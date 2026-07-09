@@ -23,16 +23,22 @@
                             https://cdn.tailwindcss.com
                             https://www.gstatic.com
                             https://cdn.jsdelivr.net
-                            https://cdn.sheetjs.com;
+                            https://cdn.sheetjs.com
+                            https://apis.google.com;
                  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
                  font-src 'self' https://fonts.gstatic.com;
-                 img-src 'self' data: blob:;
+                 img-src 'self' data: blob: https://*.googleusercontent.com;
                  connect-src 'self'
                              https://firestore.googleapis.com
                              https://*.firebaseio.com
                              https://identitytoolkit.googleapis.com
                              https://securetoken.googleapis.com
-                             https://www.googleapis.com;
+                             https://www.googleapis.com
+                             https://token.googleapis.com
+                             https://oauth2.googleapis.com
+                             https://accounts.google.com;
+                 frame-src https://accounts.google.com
+                           https://*.firebaseapp.com;
                  media-src 'self' blob:;
                  worker-src 'self';">
 
