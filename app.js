@@ -902,6 +902,402 @@
   }
 
   // ═══════════════════════════════════════════════════════
+  //  LABEL GENERATOR + TRANSACTIONS + SCAN OUT
+  // ═══════════════════════════════════════════════════════
+
+  const LG_LOGO_KEY = 'st3s_label_logo';   // localStorage key
+
+  // Read saved logo (data URL) on demand
+  function getSavedLogo() {
+    try { return localStorage.getItem(LG_LOGO_KEY) || ''; } catch { return ''; }
+  }
+  function setSavedLogo(dataUrl) {
+    try { localStorage.setItem(LG_LOGO_KEY, dataUrl); } catch (e) { console.warn('Logo save failed', e); }
+  }
+
+  // ─── Label size presets (returns {w, h} in inches) ───
+  function getLabelSize() {
+    const preset = $('#labelgen-size').value;
+    if (preset === 'custom') return { w: parseFloat($('#labelgen-w').value) || 4, h: parseFloat($('#labelgen-h').value) || 2 };
+    if (preset === '4x2')     return { w: 4, h: 2 };
+    if (preset === '2x1')     return { w: 2, h: 1 };
+    if (preset === 'a4-grid') return { w: 2, h: 1.33 };
+    return { w: 4, h: 2 };
+  }
+
+  // ─── Build a single label DOM node (used for both preview and print rows) ───
+  function buildLabelElement(item, opts) {
+    const { w, h, logoDataUrl, sku, name, extra, qrSource, qrCustom } = opts;
+    const label = document.createElement('div');
+    label.className = 'shelf-label';
+    label.style.width  = `${w}in`;
+    label.style.height = `${h}in`;
+    label.style.padding = `${Math.max(0.08, h * 0.08)}in ${Math.max(0.1, w * 0.06)}in`;
+
+    const finalSku  = sku  || item?.sku  || '';
+    const finalName = name || item?.name || '';
+    const finalExtra = extra || '';
+    const fontSize  = Math.max(8, Math.min(20, h * 10));
+    const skuFont   = Math.max(10, Math.min(28, h * 14));
+    const nameFont  = Math.max(8, Math.min(14, h * 7));
+
+    // Decide QR content
+    let qrContent = '';
+    if (qrSource === 'sku' && finalSku) qrContent = finalSku;
+    else if (qrSource === 'datasheet' && item?.datasheetUrl) qrContent = item.datasheetUrl;
+    else if (qrSource === 'custom' && qrCustom) qrContent = qrCustom;
+    const qrId = 'lg-qr-' + Math.random().toString(36).slice(2, 9);
+
+    label.innerHTML = `
+      <div class="shelf-label-top">
+        <div class="shelf-label-info">
+          ${logoDataUrl ? `<img src="${logoDataUrl}" alt="logo" style="max-height:${Math.min(0.4, h*0.3)}in; max-width:${w*0.5}in; object-fit:contain; margin-bottom:2px;">` : ''}
+          <div class="shelf-label-sku" style="font-size:${skuFont}pt;">${esc(finalSku)}</div>
+          <div class="shelf-label-name" style="font-size:${nameFont}pt;">${esc(finalName)}</div>
+          ${finalExtra ? `<div style="font-size:${fontSize-2}pt; color:#444; margin-top:2px;">${esc(finalExtra)}</div>` : ''}
+        </div>
+        ${qrContent ? `<div class="shelf-label-sku-qr" id="${qrId}" style="width:${Math.min(1.1, h*0.7)}in; height:${Math.min(1.1, h*0.7)}in;"></div>` : ''}
+      </div>
+      <div class="shelf-label-footer">
+        <span>${esc(item?.category || '')}</span>
+      </div>
+    `;
+
+    if (qrContent) {
+      try {
+        const qrSize = Math.min(1.1, h*0.7) * 144;
+        new QRCode(label.querySelector('#' + qrId), {
+          text: qrContent,
+          width: qrSize, height: qrSize,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (e) { console.warn('QR render failed', e); }
+    }
+    return label;
+  }
+
+  // ─── Render the live preview (single or first-of-bulk) ───
+  function renderLabelGenPreview() {
+    const source = document.querySelector('input[name="labelgen-source"]:checked')?.value || 'single';
+    let item = null;
+    if (source === 'single') {
+      const sku = $('#labelgen-item').value;
+      item = State.items.find(i => i.sku === sku) || null;
+    } else {
+      item = State.filteredItems[0] || State.items[0] || null;
+    }
+
+    const size = getLabelSize();
+    const logoDataUrl = getSavedLogo();
+    const sku   = $('#labelgen-sku').value.trim()   || item?.sku || '';
+    const name  = $('#labelgen-name').value.trim()  || item?.name || '';
+    const extra = $('#labelgen-extra').value.trim();
+    const qrSource = $('#labelgen-qr-source').value;
+    const qrCustom = $('#labelgen-qr-custom').value.trim();
+
+    // Dark surface behind preview to show through the print label
+    const previewBox = $('#labelgen-preview');
+    previewBox.innerHTML = '';
+    previewBox.style.background = 'transparent';
+    if (!item && !sku && !name) {
+      previewBox.innerHTML = '<p class="text-gray-400 text-sm italic">Pick an item or enter text to see preview</p>';
+      return;
+    }
+
+    const labelEl = buildLabelElement(item, { ...size, logoDataUrl, sku, name, extra, qrSource, qrCustom });
+    previewBox.appendChild(labelEl);
+  }
+
+  // ─── Populate item dropdown ───
+  function populateLabelGenItems() {
+    const select = $('#labelgen-item');
+    if (!select) return;
+    const cur = select.value;
+    select.innerHTML = '<option value="">— Custom (enter text below) —</option>' +
+      State.items.map(i => `<option value="${esc(i.sku)}">${esc(i.sku)} — ${esc(i.name)}</option>`).join('');
+    if (cur && State.items.some(i => i.sku === cur)) select.value = cur;
+  }
+
+  // ─── Open label generator modal ───
+  function openLabelGen() {
+    if (State.items.length === 0) return toast('Add inventory items first', 'info');
+    populateLabelGenItems();
+    renderLogoPreview();
+    // Reset QR source selector (default depends on item)
+    $('#labelgen-qr-source').value = 'sku';
+    $('#labelgen-qr-custom').classList.add('hidden');
+    openModal($('#modal-labelgen'));
+    setTimeout(renderLabelGenPreview, 100);
+  }
+
+  function renderLogoPreview() {
+    const logo = getSavedLogo();
+    const box = $('#labelgen-logo-preview');
+    if (logo) box.innerHTML = `<img src="${logo}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
+    else      box.innerHTML = '<span class="text-[10px] text-gray-400">No logo</span>';
+  }
+
+  // ─── Generate & print labels (single or bulk) ───
+  function generateLabels() {
+    const source = document.querySelector('input[name="labelgen-source"]:checked')?.value || 'single';
+    const size = getLabelSize();
+    const logoDataUrl = getSavedLogo();
+    const sku   = $('#labelgen-sku').value.trim();
+    const name  = $('#labelgen-name').value.trim();
+    const extra = $('#labelgen-extra').value.trim();
+    const qrSource = $('#labelgen-qr-source').value;
+    const qrCustom = $('#labelgen-qr-custom').value.trim();
+
+    let itemsToLabel = [];
+    if (source === 'single') {
+      const selectedSku = $('#labelgen-item').value;
+      const item = State.items.find(i => i.sku === selectedSku) || null;
+      itemsToLabel = [{ item, overrides: { sku, name, extra } }];
+    } else {
+      itemsToLabel = State.filteredItems.map(item => ({ item, overrides: { extra } }));
+    }
+
+    if (itemsToLabel.length === 0) return toast('No items to label', 'info');
+
+    dom.printContainer.innerHTML = '';
+    itemsToLabel.forEach(({ item, overrides }) => {
+      const labelEl = buildLabelElement(item, {
+        ...size, logoDataUrl,
+        sku:   overrides.sku   || item?.sku   || '',
+        name:  overrides.name  || item?.name  || '',
+        extra: overrides.extra || '',
+        qrSource, qrCustom
+      });
+      dom.printContainer.appendChild(labelEl);
+    });
+
+    document.body.classList.add('printing-label');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-label');
+        dom.printContainer.innerHTML = '';
+      }, 500);
+    }, 200);
+
+    toast(`Generated ${itemsToLabel.length} label${itemsToLabel.length === 1 ? '' : 's'}`, 'success');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  SCAN OUT — camera + jsQR + decrement + log
+  // ═══════════════════════════════════════════════════════
+
+  const ScanOut = {
+    stream: null,
+    rafId: null,
+    capturedSku: '',
+    capturedItem: null
+  };
+
+  async function startScanCamera() {
+    const video = $('#scanout-video');
+    if (!video) return;
+    try {
+      ScanOut.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false
+      });
+      video.srcObject = ScanOut.stream;
+      video.play();
+      ScanOut.rafId = requestAnimationFrame(decodeFrame);
+      $('#scanout-camera-toggle').textContent = 'Stop camera';
+    } catch (err) {
+      const errEl = $('#scanout-error');
+      errEl.textContent = 'Camera unavailable: ' + (err.message || err.name) + '. You can still type the SKU.';
+      errEl.classList.remove('hidden');
+    }
+  }
+
+  function stopScanCamera() {
+    if (ScanOut.rafId) cancelAnimationFrame(ScanOut.rafId);
+    ScanOut.rafId = null;
+    if (ScanOut.stream) {
+      ScanOut.stream.getTracks().forEach(t => t.stop());
+      ScanOut.stream = null;
+    }
+    const video = $('#scanout-video');
+    if (video) video.srcObject = null;
+    const btn = $('#scanout-camera-toggle');
+    if (btn) btn.textContent = 'Start camera';
+  }
+
+  function decodeFrame() {
+    const video = $('#scanout-video');
+    const canvas = $('#scanout-canvas');
+    if (!video || !canvas || video.readyState < 2) {
+      ScanOut.rafId = requestAnimationFrame(decodeFrame);
+      return;
+    }
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    try {
+      const result = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (result && result.data) {
+        handleScanResult(result.data.trim());
+        return; // stop after first decode
+      }
+    } catch (e) { /* ignore decode error — keep trying */ }
+    ScanOut.rafId = requestAnimationFrame(decodeFrame);
+  }
+
+  function handleScanResult(scanData) {
+    // qr-source = sku → exact match; otherwise try lookup by sku
+    let sku = scanData;
+    // Match the first whitespace-separated token (sometimes scanners append counts)
+    if (sku.includes(' ')) sku = sku.split(/\s+/)[0];
+    sku = sku.toUpperCase();
+
+    const item = State.items.find(i => i.sku && i.sku.toUpperCase() === sku && !i.archived);
+    if (!item) {
+      const errEl = $('#scanout-error');
+      errEl.textContent = `No matching SKU found for "${sku}". Try again or type the SKU manually.`;
+      errEl.classList.remove('hidden');
+      // Try again next frame
+      ScanOut.rafId = requestAnimationFrame(decodeFrame);
+      return;
+    }
+    // Stop camera, advance to step 2
+    stopScanCamera();
+    showScanOutStep2(item);
+  }
+
+  function showScanOutStep2(item) {
+    ScanOut.capturedItem = item;
+    $('#scanout-step1').classList.add('hidden');
+    $('#scanout-step2').classList.remove('hidden');
+    $('#scanout-success').classList.add('hidden');
+    $('#scanout-error').classList.add('hidden');
+    $('#scanout-item-sku').textContent = item.sku;
+    $('#scanout-item-name').textContent = item.name;
+    $('#scanout-current-stock').textContent = item.buildingStock;
+    $('#scanout-qty').value = 1;
+    updateScanOutNewStock();
+  }
+
+  function updateScanOutNewStock() {
+    const qty = Math.max(1, parseInt($('#scanout-qty').value, 10) || 1);
+    const current = ScanOut.capturedItem ? ScanOut.capturedItem.buildingStock : 0;
+    const newVal = Math.max(0, current - qty);
+    $('#scanout-new-stock').textContent = newVal;
+    $('#scanout-confirm-qty').textContent = qty;
+  }
+
+  async function confirmScanOut() {
+    const item = ScanOut.capturedItem;
+    if (!item) return;
+    const qty = Math.max(1, parseInt($('#scanout-qty').value, 10) || 1);
+    if (qty > item.buildingStock) {
+      const ok = await confirmDialog({
+        title: 'Quantity exceeds stock',
+        message: `Scanning out ${qty} but only ${item.buildingStock} on hand. Stock will go to 0. Continue?`,
+        confirmText: 'Continue',
+        danger: true
+      });
+      if (!ok) return;
+    }
+
+    item.buildingStock = Math.max(0, item.buildingStock - qty);
+    await DAL.saveOne(item);
+
+    // Log transaction
+    try {
+      await db.collection('transactions').add({
+        itemId: item.id,
+        sku: item.sku,
+        name: item.name,
+        qtyOut: qty,
+        remainingBuilding: item.buildingStock,
+        user: auth.currentUser?.email || 'unknown',
+        userId: auth.currentUser?.uid || null,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) { console.warn('Transaction log failed', e); }
+
+    // UI
+    $('#scanout-step2').classList.add('hidden');
+    $('#scanout-success').classList.remove('hidden');
+    $('#scanout-success-msg').textContent = `Removed ${qty} from ${item.sku}. Building stock: ${item.buildingStock}.`;
+
+    // Refresh table + dashboard
+    applyFilters();
+    renderDashboard();
+
+    // Re-render the row inline
+    const row = dom.tableBody.querySelector(`tr[data-id="${item.id}"]`);
+    if (row) {
+      const temp = document.createElement('tbody');
+      temp.innerHTML = renderRow(item);
+      row.replaceWith(temp.firstElementChild);
+    }
+  }
+
+  function resetScanOut() {
+    stopScanCamera();
+    ScanOut.capturedItem = null;
+    ScanOut.capturedSku = '';
+    $('#scanout-step1').classList.remove('hidden');
+    $('#scanout-step2').classList.add('hidden');
+    $('#scanout-success').classList.add('hidden');
+    $('#scanout-error').classList.add('hidden');
+    $('#scanout-manual-sku').value = '';
+    $('#scanout-qty').value = 1;
+    if ($('#scanout-camera-toggle').textContent === 'Start camera') {
+      startScanCamera();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  TRANSACTION HISTORY
+  // ═══════════════════════════════════════════════════════
+
+  async function openHistory() {
+    openModal($('#modal-history'));
+    const list = $('#history-list');
+    list.innerHTML = '<p class="text-center text-gray-400 py-6">Loading…</p>';
+    try {
+      const snap = await db.collection('transactions')
+        .orderBy('timestamp', 'desc')
+        .limit(100)
+        .get();
+      if (snap.empty) {
+        list.innerHTML = '<p class="text-center text-gray-400 py-6">No transactions logged yet.</p>';
+        return;
+      }
+      list.innerHTML = snap.docs.map(doc => {
+        const t = doc.data();
+        const ts = t.timestamp?.toDate?.() || new Date();
+        const tsStr = ts.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="flex items-center justify-between p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-900/10 border border-emerald-200/60 dark:border-emerald-900/40">
+            <div>
+              <p class="font-semibold text-sm">${esc(t.sku || '—')} — ${esc(t.name || '')}</p>
+              <p class="text-xs text-gray-500">
+                Remaining: <span class="font-semibold">${t.remainingBuilding ?? '?'}</span> ·
+                by <span class="font-medium">${esc(t.user || '?')}</span>
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="font-bold text-emerald-600">−${t.qtyOut}</p>
+              <p class="text-xs text-gray-400">${tsStr}</p>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      console.error('History load failed:', err);
+      list.innerHTML = '<p class="text-center text-red-500 py-6">Failed to load history. Check Firestore rules for the `transactions` collection.</p>';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  MULTI-FORMAT IMPORT / EXPORT
   // ═══════════════════════════════════════════════════════
 
@@ -1433,8 +1829,8 @@
     // Close modals on Escape
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts].forEach(m => {
-          if (!m.classList.contains('hidden')) closeModal(m);
+        [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history')].forEach(m => {
+          if (m && !m.classList.contains('hidden')) closeModal(m);
         });
       }
     });
@@ -1531,6 +1927,153 @@
         }
       }
     });
+
+    // ═══════════════════════════════════════════════════════
+    //  LABEL GENERATOR EVENTS
+    // ═══════════════════════════════════════════════════════
+    $('#btn-labelgen').addEventListener('click', openLabelGen);
+    $('#modal-labelgen-close').addEventListener('click', () => closeModal($('#modal-labelgen')));
+
+    // Logo upload
+    $('#labelgen-logo-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setSavedLogo(ev.target.result);
+        renderLogoPreview();
+        renderLabelGenPreview();
+      };
+      reader.readAsDataURL(file);
+    });
+    $('#labelgen-logo-clear').addEventListener('click', () => {
+      { try { localStorage.removeItem(LG_LOGO_KEY); } catch {} }
+      renderLogoPreview();
+      renderLabelGenPreview();
+    });
+
+    // Size change → show/hide custom dims + re-preview
+    $('#labelgen-size').addEventListener('change', () => {
+      $('#labelgen-custom-dims').classList.toggle('hidden', $('#labelgen-size').value !== 'custom');
+      renderLabelGenPreview();
+    });
+    $('#labelgen-w').addEventListener('input', renderLabelGenPreview);
+    $('#labelgen-h').addEventListener('input', renderLabelGenPreview);
+
+    // Source change → enable/disable single item picker
+    $$('input[name="labelgen-source"]').forEach(r => {
+      r.addEventListener('change', () => {
+        $('#labelgen-single').classList.toggle('hidden', document.querySelector('input[name="labelgen-source"]:checked')?.value !== 'single');
+        renderLabelGenPreview();
+      });
+    });
+
+    // Item picker change → auto-fill override fields
+    $('#labelgen-item').addEventListener('change', () => {
+      const item = State.items.find(i => i.sku === $('#labelgen-item').value);
+      if (item) {
+        if (!$('#labelgen-sku').value) $('#labelgen-sku').value = item.sku;
+        if (!$('#labelgen-name').value) $('#labelgen-name').value = item.name;
+      }
+      renderLabelGenPreview();
+    });
+
+    // Override fields
+    $('#labelgen-sku').addEventListener('input', renderLabelGenPreview);
+    $('#labelgen-name').addEventListener('input', renderLabelGenPreview);
+    $('#labelgen-extra').addEventListener('input', renderLabelGenPreview);
+
+    // QR source
+    $('#labelgen-qr-source').addEventListener('change', () => {
+      $('#labelgen-qr-custom').classList.toggle('hidden', $('#labelgen-qr-source').value !== 'custom');
+      renderLabelGenPreview();
+    });
+    $('#labelgen-qr-custom').addEventListener('input', renderLabelGenPreview);
+
+    // Print & clear
+    $('#btn-labelgen-print').addEventListener('click', generateLabels);
+    $('#btn-labelgen-clear').addEventListener('click', () => {
+      $('#labelgen-sku').value = '';
+      $('#labelgen-name').value = '';
+      $('#labelgen-extra').value = '';
+      $('#labelgen-qr-source').value = 'sku';
+      $('#labelgen-qr-custom').classList.add('hidden');
+      renderLabelGenPreview();
+    });
+
+    // ═══════════════════════════════════════════════════════
+    //  SCAN OUT EVENTS
+    // ═══════════════════════════════════════════════════════
+    $('#btn-scan-out').addEventListener('click', () => {
+      resetScanOut();
+      openModal($('#modal-scanout'));
+      // Start camera after modal is visible (DOM ready)
+      setTimeout(startScanCamera, 300);
+    });
+    $('#modal-scanout-close').addEventListener('click', () => {
+      stopScanCamera();
+      closeModal($('#modal-scanout'));
+      ScanOut.capturedItem = null;
+    });
+
+    // Camera toggle
+    $('#scanout-camera-toggle').addEventListener('click', () => {
+      if (ScanOut.stream) stopScanCamera();
+      else startScanCamera();
+    });
+
+    // Manual SKU entry
+    $('#scanout-manual-sku').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const sku = e.target.value.trim().toUpperCase();
+        if (!sku) return;
+        const item = State.items.find(i => i.sku && i.sku.toUpperCase() === sku && !i.archived);
+        if (!item) {
+          $('#scanout-error').textContent = `No matching item for "${sku}". Check the spelling.`;
+          $('#scanout-error').classList.remove('hidden');
+          return;
+        }
+        stopScanCamera();
+        showScanOutStep2(item);
+      }
+    });
+    $('#scanout-manual-go').addEventListener('click', () => {
+      $('#scanout-manual-sku').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    });
+
+    // Qty adjustments
+    $('#scanout-qty').addEventListener('input', () => {
+      const val = parseInt($('#scanout-qty').value, 10);
+      if (isNaN(val) || val < 1) $('#scanout-qty').value = 1;
+      updateScanOutNewStock();
+    });
+    $('#scanout-qty-dec').addEventListener('click', () => {
+      let v = parseInt($('#scanout-qty').value, 10) || 1;
+      if (v > 1) $('#scanout-qty').value = v - 1;
+      updateScanOutNewStock();
+    });
+    $('#scanout-qty-inc').addEventListener('click', () => {
+      let v = parseInt($('#scanout-qty').value, 10) || 1;
+      $('#scanout-qty').value = v + 1;
+      updateScanOutNewStock();
+    });
+
+    // Confirm / cancel
+    $('#scanout-confirm').addEventListener('click', confirmScanOut);
+    $('#scanout-cancel').addEventListener('click', () => {
+      $('#scanout-step2').classList.add('hidden');
+      $('#scanout-step1').classList.remove('hidden');
+      ScanOut.capturedItem = null;
+      startScanCamera();
+    });
+    $('#scanout-again').addEventListener('click', resetScanOut);
+
+    // ═══════════════════════════════════════════════════════
+    //  HISTORY
+    // ═══════════════════════════════════════════════════════
+    $('#btn-history').addEventListener('click', openHistory);
+    $('#modal-history-close').addEventListener('click', () => closeModal($('#modal-history')));
   }
 
   // ═══════════════════════════════════════════════════════
