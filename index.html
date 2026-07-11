@@ -625,6 +625,11 @@
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
         <span class="text-sm font-semibold hidden lg:inline">Pareto</span>
       </button>
+      <!-- 3D Warehouse -->
+      <a href="warehouse-3d.html" target="_blank" rel="noopener" title="3D warehouse view — explore rooms, aisles, bays, bins" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        <span class="text-sm font-semibold">3D View</span>
+      </a>
     </section>
 
     <!-- ═══════════════════ BULK ACTIONS BAR ═══════════════════ -->
@@ -1008,6 +1013,41 @@
         </button>
       </div>
       <div id="modal-alerts-list" class="space-y-2 max-h-[60vh] overflow-y-auto">
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ ITEM HISTORY MODAL ═══════════════════ -->
+  <div id="modal-item-history" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-2xl">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-bold flex items-center gap-2">
+            <svg class="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span id="item-history-title">Item History</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-1">Double-click any row in the inventory table to view its full stock movement timeline.</p>
+        </div>
+        <button id="modal-item-history-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="card p-3 text-center">
+          <p class="text-xs text-gray-400">Current Building</p>
+          <p class="text-xl font-extrabold text-emerald-500" id="ih-current-bldg">—</p>
+        </div>
+        <div class="card p-3 text-center">
+          <p class="text-xs text-gray-400">Total Removed</p>
+          <p class="text-xl font-extrabold text-red-500" id="ih-total-out">—</p>
+        </div>
+        <div class="card p-3 text-center">
+          <p class="text-xs text-gray-400">Movements</p>
+          <p class="text-xl font-extrabold text-accent" id="ih-count">—</p>
+        </div>
+      </div>
+      <div id="item-history-list" class="space-y-2 max-h-[50vh] overflow-y-auto scrollbar-thin">
+        <p class="text-center text-gray-400 py-6">Loading…</p>
       </div>
     </div>
   </div>

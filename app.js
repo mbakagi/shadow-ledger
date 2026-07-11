@@ -858,6 +858,9 @@
             <button class="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition" data-action="edit" data-id="${item.id}" title="Edit">
               <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
+            <button class="p-1.5 rounded-lg hover:bg-indigo-500/10 text-indigo-500 transition" data-action="history" data-id="${item.id}" title="Item history — stock movements">
+              <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </button>
             <button class="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500 transition" data-action="delete" data-id="${item.id}" title="Delete">
               <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
@@ -1910,6 +1913,76 @@
   }
 
   // ═══════════════════════════════════════════════════════
+  //  PER-ITEM TRANSACTION HISTORY
+  // ═══════════════════════════════════════════════════════
+
+  async function openItemHistory(item) {
+    openModal($('#modal-item-history'));
+    $('#item-history-title').textContent = `${item.sku} — ${item.name}`;
+    $('#ih-current-bldg').textContent = locStock(item, LOC_BUILDING);
+    $('#ih-total-out').textContent = '?';
+    $('#ih-count').textContent = '?';
+    const list = $('#item-history-list');
+    list.innerHTML = '<p class="text-center text-gray-400 py-6">Loading movements…</p>';
+    try {
+      const snap = await db.collection('transactions')
+        .where('itemId', '==', item.id)
+        .orderBy('timestamp', 'desc')
+        .limit(200)
+        .get();
+      if (snap.empty) {
+        $('#ih-count').textContent = '0';
+        $('#ih-total-out').textContent = '0';
+        list.innerHTML = `<p class="text-center text-gray-400 py-6">No stock movements recorded for ${esc(item.sku)} yet.</p>`;
+        return;
+      }
+      const txns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      $('#ih-count').textContent = txns.length;
+      const totalOut = txns.reduce((s, t) => {
+        const isOut = t.type === 'scan-out' || (t.type === 'adjust' && t.direction === 'out');
+        const isTransferOut = t.type === 'transfer' && t.from === LOC_BUILDING;
+        return (isOut || isTransferOut) ? s + (t.qtyOut || 0) : s;
+      }, 0);
+      $('#ih-total-out').textContent = totalOut;
+
+      list.innerHTML = txns.map(t => {
+        const ts = t.timestamp?.toDate?.() || new Date();
+        const tsStr = ts.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const isOut = t.type === 'scan-out' || t.type === 'adjust' && t.direction === 'out';
+        const isIn = t.type === 'transfer' && t.to === LOC_BUILDING;
+        const isTransferOut = t.type === 'transfer' && t.from === LOC_BUILDING;
+        const color = (isOut || isTransferOut) ? 'text-red-600' : 'text-emerald-600';
+        const icon = (isOut || isTransferOut) ? '−' : '+';
+        const label = t.type === 'scan-out' ? 'Scan out' :
+                      t.type === 'transfer' ? `Transfer ${t.from}→${t.to}` :
+                      t.type === 'adjust' ? `Adjust (${t.direction})` : t.type;
+        const remaining = t.remainingBuilding ?? t.remainingMap?.[LOC_BUILDING] ?? '?';
+        const source = t.source === 'guest-checkout' ? ' · Guest' : '';
+        return `
+          <div class="flex items-start justify-between p-3 rounded-xl bg-gray-50/80 dark:bg-surface-700/40 border border-gray-200 dark:border-gray-700/50">
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-semibold text-accent">${esc(t.sku || '—')}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">${esc(label)}${source}</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Remaining bldg: <span class="font-semibold">${remaining}</span> ·
+                by <span class="font-medium">${esc(t.user || '?')}</span>
+              </p>
+            </div>
+            <div class="text-right shrink-0 ml-3">
+              <p class="font-bold ${color}">${icon}${t.qtyOut || 0}</p>
+              <p class="text-xs text-gray-400">${tsStr}</p>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      console.error('Item history load failed:', err);
+      list.innerHTML = '<p class="text-center text-red-500 py-6">Failed to load. The Firestore index may still be building — try again in a minute.</p>';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  LOCATIONS MANAGER UI
   // ═══════════════════════════════════════════════════════
 
@@ -2469,6 +2542,7 @@
       if (action === 'print')  printLabels([State.items.find(i => i.id === id)]);
       if (action === 'transfer') openTransferModal(State.items.find(i => i.id === id));
       if (action === 'delete') deleteItem(id);
+      if (action === 'history') openItemHistory(State.items.find(i => i.id === id));
     });
 
     // Add Item
@@ -2512,7 +2586,7 @@
     $('#modal-alerts-close').addEventListener('click', () => closeModal(dom.modalAlerts));
 
     // Close modals on overlay click (includes new modals)
-    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), dom.modalBins, dom.modalPareto].forEach(modal => {
+    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), $('#modal-item-history'), dom.modalBins, dom.modalPareto].forEach(modal => {
       if (!modal) return;
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -2526,7 +2600,7 @@
     // Close modals on Escape
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), dom.modalBins, dom.modalPareto].forEach(m => {
+        [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), $('#modal-item-history'), dom.modalBins, dom.modalPareto].forEach(m => {
           if (m && !m.classList.contains('hidden')) {
             if (m.id === 'modal-scanout') stopScanCamera();
             closeModal(m);
@@ -2803,6 +2877,20 @@
     // ═══════════════════════════════════════════════════════
     $('#btn-history').addEventListener('click', openHistory);
     $('#modal-history-close').addEventListener('click', () => closeModal($('#modal-history')));
+
+    // ═══════════════════════════════════════════════════════
+    //  PER-ITEM HISTORY
+    // ═══════════════════════════════════════════════════════
+    $('#modal-item-history-close').addEventListener('click', () => closeModal($('#modal-item-history')));
+    // Double-click on a table row opens item history
+    // (but ignore double-clicks inside inline input fields — user is selecting text)
+    dom.tableBody.addEventListener('dblclick', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+      const row = e.target.closest('tr[data-id]');
+      if (!row) return;
+      const item = State.items.find(i => i.id === row.dataset.id);
+      if (item) openItemHistory(item);
+    });
 
     // ═══════════════════════════════════════════════════════
     //  LOCATIONS MANAGER

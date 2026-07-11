@@ -3,14 +3,15 @@
    Cache-first for app shell, network-first for Firebase
    ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'sl-v3';
+const CACHE_VERSION = 'sl-v4';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/app.js',
   '/firebase-config.js',
   '/manifest.json',
-  '/icon.svg'
+  '/icon.svg',
+  '/warehouse-3d.html'
 ];
 
 self.addEventListener('install', event => {
