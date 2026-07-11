@@ -1321,12 +1321,14 @@
     const skuFont   = Math.max(10, Math.min(28, h * 14));
     const nameFont  = Math.max(8, Math.min(14, h * 7));
 
-    // Decide QR content
     let qrContent = '';
     if (qrSource === 'sku' && finalSku) qrContent = finalSku;
     else if (qrSource === 'datasheet' && item?.datasheetUrl) qrContent = item.datasheetUrl;
     else if (qrSource === 'custom' && qrCustom) qrContent = qrCustom;
     const qrId = 'lg-qr-' + Math.random().toString(36).slice(2, 9);
+
+    const hasDatasheetQR = item?.datasheetUrl && qrSource !== 'datasheet';
+    const dsQrId = 'lg-dsqr-' + Math.random().toString(36).slice(2, 9);
 
     label.innerHTML = `
       <div class="shelf-label-top">
@@ -1336,7 +1338,10 @@
           <div class="shelf-label-name" style="font-size:${nameFont}pt;">${esc(finalName)}</div>
           ${finalExtra ? `<div style="font-size:${fontSize-2}pt; color:#444; margin-top:2px;">${esc(finalExtra)}</div>` : ''}
         </div>
-        ${qrContent ? `<div class="shelf-label-sku-qr" id="${qrId}" style="width:${Math.min(1.1, h*0.7)}in; height:${Math.min(1.1, h*0.7)}in;"></div>` : ''}
+        <div style="display:flex; gap:0.1in; flex-shrink:0;">
+          ${qrContent ? `<div class="shelf-label-sku-qr" id="${qrId}" style="width:${Math.min(1.1, h*0.7)}in; height:${Math.min(1.1, h*0.7)}in;"></div>` : ''}
+          ${hasDatasheetQR ? `<div class="shelf-label-url-qr" id="${dsQrId}" style="width:${Math.min(0.9, h*0.55)}in; height:${Math.min(0.9, h*0.55)}in;"></div>` : ''}
+        </div>
       </div>
       <div class="shelf-label-footer">
         <span>${esc(item?.category || '')}</span>
@@ -1355,6 +1360,19 @@
         });
       } catch (e) { console.warn('QR render failed', e); }
     }
+
+    if (hasDatasheetQR) {
+      try {
+        const dsSize = Math.min(0.9, h*0.55) * 144;
+        new QRCode(label.querySelector('#' + dsQrId), {
+          text: item.datasheetUrl,
+          width: dsSize, height: dsSize,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (e) { console.warn('Datasheet QR render failed', e); }
+    }
+
     return label;
   }
 
@@ -2879,17 +2897,18 @@
   //  BIN SETUP
   // ═══════════════════════════════════════════════════════
   function openBinsModal() {
-    const prefix  = $('#bins-prefix').value.trim().toUpperCase() || 'A';
-    const start   = parseInt($('#bins-start').value, 10) || 1;
-    const count   = parseInt($('#bins-count').value, 10) || 12;
-    const suffix  = $('#bins-suffix').value.trim().toUpperCase() || '';
+    const aisle   = ($('#bins-aisle')?.value || '').trim().toUpperCase() || 'A';
+    const shelf   = parseInt($('#bins-shelf')?.value, 10) || 1;
+    const start   = parseInt($('#bins-start')?.value, 10) || 1;
+    const count   = parseInt($('#bins-count')?.value, 10) || 12;
+    const action  = ($('#bins-action')?.value || 'STOCK').toUpperCase();
     const existingBins = new Set(State.items.filter(i => i.binCode).map(i => i.binCode));
 
-    // Generate bin codes
     const codes = [];
     for (let i = 0; i < count; i++) {
-      const num = String(start + i).padStart(2, '0');
-      codes.push(`${prefix}${num}${suffix}`);
+      const binNum = String(start + i).padStart(2, '0');
+      const shelfNum = String(shelf).padStart(2, '0');
+      codes.push(`${aisle}-${shelfNum}-${binNum}-${action}`);
     }
 
     // Items without bins (for auto-assignment)
@@ -2899,8 +2918,11 @@
     const grid = $('#bins-grid');
     grid.innerHTML = codes.map((code, idx) => {
       const taken = existingBins.has(code);
+      const parts = code.split('-');
+      const [aisle, shelfNum, binNum, act] = parts;
       return `<div class="bin-cell ${taken ? 'bin-taken' : 'bin-free'}" data-bincode="${esc(code)}" title="${taken ? 'Already assigned' : 'Free bin — click to assign'}">
-        <span class="font-mono text-xs font-bold">${esc(code)}</span>
+        <span class="text-[10px] opacity-60">Aisle ${esc(aisle)} Shelf ${esc(shelfNum)}</span>
+        <span class="font-mono text-xs font-bold">${esc(binNum)}-${esc(act)}</span>
         <span class="text-[10px] opacity-70">${taken ? 'in use' : 'free'}</span>
       </div>`;
     }).join('') + (codes.length === 0 ? '<p class="col-span-full text-gray-400 text-xs">No codes generated</p>' : '');

@@ -356,7 +356,7 @@
 .shelf-label-sku { font-size: 18pt; font-weight: 900; line-height: 1; margin-bottom: 1px; }
 .shelf-label-name { font-size: 10pt; font-weight: 700; max-height: 2.6em; overflow: hidden; line-height: 1.2; margin-bottom: 2px; }
 .shelf-label-sku-qr { flex-shrink: 0; width: 1.1in; height: 1.1in; background: white; }
-.shelf-label-url-qr { flex-shrink: 0; width: 0.9in; height: 0.9in; background: white; margin-left: auto; }
+.shelf-label-url-qr { flex-shrink: 0; width: 0.9in; height: 0.9in; background: white; border: 1px dashed #ccc; padding: 1px; }
 .shelf-label-footer { font-size: 8pt; display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-top: 4px; border-top: 1px dashed #ccc; padding-top: 3px; }
 .shelf-label-bin { font-size: 8pt; font-weight: 900; background: #000; color: #fff; padding: 1px 4px; border-radius: 2px; letter-spacing: 0.03em; flex-shrink: 0; margin-left: 4px; }
 
@@ -1344,30 +1344,41 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- Bulk bin creator -->
         <div class="lg:col-span-1 space-y-3">
-          <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Bulk assign bins</h3>
+          <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Industrial Bin Generator</h3>
           <div>
-            <label class="label">Prefix</label>
-            <input id="bins-prefix" type="text" class="input-field w-full" placeholder="A" maxlength="3" />
+            <label class="label">Aisle</label>
+            <input id="bins-aisle" type="text" class="input-field w-full" placeholder="A" maxlength="3" />
+          </div>
+          <div>
+            <label class="label">Shelf</label>
+            <input id="bins-shelf" type="number" min="1" class="input-field w-full" value="1" />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="label">Start #</label>
+              <label class="label">Bin Start #</label>
               <input id="bins-start" type="number" min="1" class="input-field w-full" value="1" />
             </div>
             <div>
-              <label class="label">Count</label>
+              <label class="label">Bin Count</label>
               <input id="bins-count" type="number" min="1" max="500" class="input-field w-full" value="12" />
             </div>
           </div>
           <div>
-            <label class="label">Suffix (optional)</label>
-            <input id="bins-suffix" type="text" class="input-field w-full" placeholder="-L1, -B2…" maxlength="6" />
+            <label class="label">Action Code</label>
+            <select id="bins-action" class="input-field w-full">
+              <option value="STOCK">STOCK (default storage)</option>
+              <option value="PICK">PICK (high-frequency pick)</option>
+              <option value="BULK">BULK (overflow storage)</option>
+              <option value="STAGE">STAGE (staging area)</option>
+              <option value="QC">QC (quality check)</option>
+              <option value="RET">RET (returns processing)</option>
+            </select>
           </div>
           <button id="bins-generate" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">
             <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             Generate Bin Codes
           </button>
-          <p class="text-xs text-gray-500 dark:text-gray-400">Generates codes like <code class="font-mono">A01-L1</code> ready to print and stick on shelves. Unassigned bins are also kept so you can reuse them.</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Generates structural bin codes like <code class="font-mono">A-01-03-STOCK</code> (Aisle-Shelf-Bin-Action). Scan-ready for warehouse barcode readers.</p>
         </div>
 
         <!-- List preview + assignments -->
