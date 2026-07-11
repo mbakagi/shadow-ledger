@@ -529,6 +529,74 @@
     DAL.saveLocation({ id: LOC_BUILDING, name: 'Company Building', order: 2 });
   }
 
+  // ─── Amazon-style chaotic storage helpers ───
+  function normalizeRoom(roomPart) {
+    if (!roomPart) return 99;
+    const m = String(roomPart).match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : 99;
+  }
+
+  function normalizeAisle(aislePart) {
+    if (!aislePart) return 99;
+    const m = String(aislePart).match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : (String(aislePart).charCodeAt(0) || 99);
+  }
+
+  function levelValue(levelPart) {
+    if (!levelPart) return 3;
+    if (String(levelPart).toUpperCase() === 'F') return 1;
+    const n = parseInt(levelPart, 10);
+    if (!isNaN(n)) return n + 1; // F=1, 1=2, 2=3, 3=4, 4=5
+    return 3;
+  }
+
+  function parseBinSortKey(binCode) {
+    if (!binCode) return [99, 99, 99, 99, 99, 99, ''];
+    const parts = String(binCode).split('-');
+    if (parts[0] === 'GENERAL') {
+      // General zones always walk last
+      return [9, 9, normalizeRoom(parts[1]), normalizeAisle(parts[2]), 0, 0, binCode];
+    }
+    // Structured: ROOM-AISLE-BAY-BIN-LEVEL-ACTION
+    return [
+      normalizeRoom(parts[0]),
+      normalizeAisle(parts[1]),
+      parseInt(parts[2], 10) || 0,
+      parseInt(parts[3], 10) || 0,
+      levelValue(parts[4]),
+      0,
+      binCode
+    ];
+  }
+
+  function sortByPickPath(items) {
+    return [...items].sort((a, b) => {
+      const ka = parseBinSortKey(a.binCode);
+      const kb = parseBinSortKey(b.binCode);
+      for (let i = 0; i < 6; i++) {
+        if (ka[i] !== kb[i]) return ka[i] - kb[i];
+      }
+      return (a.sku || '').localeCompare(b.sku || '');
+    });
+  }
+
+  function isHighVelocity(item) {
+    // Proxy: items actively consumed or with high total volume
+    return locStock(item, LOC_BUILDING) > (item.carrierTrigger || 0) ||
+           totalStockFromLocs(item) > (item.purchasingTrigger || 0);
+  }
+
+  function isGoldenZone(binCode) {
+    if (!binCode) return true;
+    const parts = String(binCode).split('-');
+    const lvl = parts[0] === 'GENERAL' ? 3 : levelValue(parts[4]);
+    return lvl >= 2 && lvl <= 4;
+  }
+
+  function needsGoldenZoneWarning(item) {
+    return isHighVelocity(item) && !isGoldenZone(item.binCode);
+  }
+
   // Populate location filter + transfer dropdowns
   function populateLocationFilters() {
     const locs = State.locations;
@@ -629,17 +697,22 @@
     else if (stock === 'in_building') results = results.filter(i => locStock(i, LOC_BUILDING) > 0);
 
     // Sort
-    results.sort((a, b) => {
-      let av, bv;
-      if (State.sortField === 'depotStock') { av = depotStock(a); bv = depotStock(b); }
-      else if (State.sortField === 'totalStock') { av = totalStockFromLocs(a); bv = totalStockFromLocs(b); }
-      else if (State.sortField === 'buildingStock') { av = locStock(a, LOC_BUILDING); bv = locStock(b, LOC_BUILDING); }
-      else { av = a[State.sortField]; bv = b[State.sortField]; }
-      if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
-      if (av < bv) return State.sortAsc ? -1 : 1;
-      if (av > bv) return State.sortAsc ? 1 : -1;
-      return 0;
-    });
+    if (State.sortField === 'binCode') {
+      results = sortByPickPath(results);
+      if (!State.sortAsc) results.reverse();
+    } else {
+      results.sort((a, b) => {
+        let av, bv;
+        if (State.sortField === 'depotStock') { av = depotStock(a); bv = depotStock(b); }
+        else if (State.sortField === 'totalStock') { av = totalStockFromLocs(a); bv = totalStockFromLocs(b); }
+        else if (State.sortField === 'buildingStock') { av = locStock(a, LOC_BUILDING); bv = locStock(b, LOC_BUILDING); }
+        else { av = a[State.sortField]; bv = b[State.sortField]; }
+        if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+        if (av < bv) return State.sortAsc ? -1 : 1;
+        if (av > bv) return State.sortAsc ? 1 : -1;
+        return 0;
+      });
+    }
 
     State.filteredItems = results;
     State.currentPage = 1;
@@ -700,7 +773,8 @@
     const depot   = depotStock(item);
     const cAlert  = needsCarrier(item);
     const pAlert  = needsProcurement(item);
-    const rowClass = [cAlert ? 'row-carrier' : '', pAlert ? 'row-procure' : ''].join(' ').trim();
+    const gzWarn  = needsGoldenZoneWarning(item);
+    const rowClass = [cAlert ? 'row-carrier' : '', pAlert ? 'row-procure' : '', gzWarn ? 'row-golden-zone' : ''].join(' ').trim();
 
     const buildingNow = locStock(item, LOC_BUILDING);
     const totalNow = totalStockFromLocs(item);
@@ -721,13 +795,17 @@
     const bldgCls    = stockColor(buildingNow, item.carrierTrigger);
     const depotCls   = stockColor(depot, undefined);
 
+    const binCell = gzWarn
+      ? `<span class="text-red-600 dark:text-red-400 font-bold" title="High-velocity item not in Golden Zone (Levels 2-4)">${esc(item.binCode)}</span><span class="ml-1 inline-block w-2 h-2 rounded-full bg-red-500"></span>`
+      : esc(item.binCode || '—');
+
     return `
       <tr class="group hover:bg-gray-50/80 dark:hover:bg-surface-700/30 transition-colors ${rowClass}" data-id="${item.id}">
         <td class="px-2 py-1.5 text-center"><input type="checkbox" class="row-checkbox w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent" data-id="${item.id}" ${State.selectedIds.has(item.id) ? 'checked' : ''}></td>
         <td class="px-2 py-1.5 text-center">${badge}</td>
         <td class="px-2 py-1.5 text-xs font-semibold text-accent" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">${esc(item.sku)}</td>
         <td class="px-2 py-1.5 font-medium">${esc(item.name)}</td>
-        <td class="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">${esc(item.binCode || '—')}</td>
+        <td class="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">${binCell}</td>
         <td class="px-2 py-1.5 text-gray-500 dark:text-gray-400 hidden sm:table-cell">${esc(item.category || '—')}</td>
         <td class="px-2 py-1.5 text-center hidden lg:table-cell">
           ${item.datasheetUrl
@@ -1178,6 +1256,64 @@
     return text;
   }
 
+  // ─── Walking-Route Pick Sheet ───
+  function generatePickSheet() {
+    const items = State.items.filter(i => !i.archived && locStock(i, LOC_BUILDING) > 0);
+    if (!items.length) {
+      toast('No active building stock to pick', 'info');
+      return;
+    }
+
+    const sorted = sortByPickPath(items);
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    // Group by physical zone for section headers
+    let currentZone = null;
+    let rowsHtml = '';
+    sorted.forEach(item => {
+      const bc = item.binCode || 'UNASSIGNED';
+      const zone = bc.startsWith('GENERAL-') ? 'GENERAL ZONES' : (bc.split('-')[0] || 'UNASSIGNED');
+      if (zone !== currentZone) {
+        currentZone = zone;
+        rowsHtml += `<div class="pick-section">${esc(zone)}</div>`;
+      }
+      const qty = locStock(item, LOC_BUILDING);
+      rowsHtml += `
+        <div class="pick-row">
+          <div class="pick-loc">${esc(bc)}</div>
+          <div class="pick-item">
+            <span class="pick-qty">${qty}</span>
+            <span class="pick-sku">${esc(item.sku)}</span>
+            <span class="text-gray-600">${esc(item.name)}</span>
+          </div>
+        </div>`;
+    });
+
+    const container = $('#pick-sheet-print');
+    container.innerHTML = `
+      <div class="pick-header">
+        <h1>PICK SHEET — Walking Route</h1>
+      </div>
+      <div class="pick-meta">${dateStr} ${timeStr} • ${sorted.length} SKUs • Route: Room 1 → Aisle 1 → Aisle 2 → Room 2 → Aisle 3 → General Zones</div>
+      <div class="pick-row" style="border-bottom:2px solid #000;font-weight:900;">
+        <div class="pick-loc">LOCATION</div>
+        <div class="pick-item">QTY / SKU / DESCRIPTION</div>
+      </div>
+      ${rowsHtml}
+    `;
+
+    document.body.classList.add('printing-pick-sheet');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-pick-sheet');
+        container.innerHTML = '';
+      }, 500);
+    }, 200);
+  }
+
   // ─── Alert Detail Modal ───
   function openAlertDetail(type) {
     const items = type === 'carrier' ? getCarrierAlerts() : getProcureAlerts();
@@ -1501,7 +1637,9 @@
     stream: null,
     rafId: null,
     capturedSku: '',
-    capturedItem: null
+    capturedItem: null,
+    capturedLocation: '',
+    locationVerified: false
   };
 
   async function startScanCamera() {
@@ -1559,32 +1697,71 @@
   }
 
   function handleScanResult(scanData) {
-    // qr-source = sku → exact match; otherwise try lookup by sku
-    let sku = scanData;
-    // Match the first whitespace-separated token (sometimes scanners append counts)
-    if (sku.includes(' ')) sku = sku.split(/\s+/)[0];
-    sku = sku.toUpperCase();
+    let token = scanData;
+    if (token.includes(' ')) token = token.split(/\s+/)[0];
+    token = token.toUpperCase();
 
-    const item = State.items.find(i => i.sku && i.sku.toUpperCase() === sku && !i.archived);
+    // If we already captured an item, this scan is the location verification
+    if (ScanOut.capturedItem && !ScanOut.locationVerified) {
+      verifyScanOutLocation(token);
+      return;
+    }
+
+    // Otherwise treat as SKU scan
+    const item = State.items.find(i => i.sku && i.sku.toUpperCase() === token && !i.archived);
     if (!item) {
       const errEl = $('#scanout-error');
-      errEl.textContent = `No matching SKU found for "${sku}". Try again or type the SKU manually.`;
+      errEl.textContent = `No matching SKU found for "${token}". Try again or type the SKU manually.`;
       errEl.classList.remove('hidden');
-      // Try again next frame
       ScanOut.rafId = requestAnimationFrame(decodeFrame);
       return;
     }
-    // Stop camera, advance to step 2
     stopScanCamera();
     showScanOutStep2(item);
   }
 
+  function verifyScanOutLocation(scannedLoc) {
+    const item = ScanOut.capturedItem;
+    const expected = (item?.binCode || '').toUpperCase();
+    const errEl = $('#scanout-location-error');
+    const okPanel = $('#scanout-qty-panel');
+    const verifyPanel = $('#scanout-location-verify');
+
+    if (!expected) {
+      errEl.textContent = 'Item has no assigned bin location. Assign a bin before scanning out.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    if (scannedLoc !== expected) {
+      errEl.textContent = `LOCATION MISMATCH: scanned "${scannedLoc}" expected "${expected}". Check placement and rescan.`;
+      errEl.classList.remove('hidden');
+      ScanOut.capturedLocation = '';
+      ScanOut.locationVerified = false;
+      return;
+    }
+
+    ScanOut.capturedLocation = scannedLoc;
+    ScanOut.locationVerified = true;
+    errEl.classList.add('hidden');
+    verifyPanel.classList.add('hidden');
+    okPanel.classList.remove('hidden');
+    updateScanOutNewStock();
+  }
+
   function showScanOutStep2(item) {
     ScanOut.capturedItem = item;
+    ScanOut.capturedLocation = '';
+    ScanOut.locationVerified = false;
     $('#scanout-step1').classList.add('hidden');
     $('#scanout-step2').classList.remove('hidden');
     $('#scanout-success').classList.add('hidden');
     $('#scanout-error').classList.add('hidden');
+    $('#scanout-location-error').classList.add('hidden');
+    $('#scanout-location-verify').classList.remove('hidden');
+    $('#scanout-qty-panel').classList.add('hidden');
+    $('#scanout-location-input').value = '';
+    $('#scanout-location-expected').textContent = `Expected location: ${item.binCode || '— (not assigned)'}`;
     $('#scanout-item-sku').textContent = item.sku;
     $('#scanout-item-name').textContent = item.name;
     $('#scanout-current-stock').textContent = item.buildingStock;
@@ -1603,6 +1780,12 @@
   async function confirmScanOut() {
     const item = ScanOut.capturedItem;
     if (!item) return;
+    if (!ScanOut.locationVerified || !ScanOut.capturedLocation) {
+      const errEl = $('#scanout-location-error');
+      errEl.textContent = 'Location verification required before confirming stock removal.';
+      errEl.classList.remove('hidden');
+      return;
+    }
     const qty = Math.max(1, parseInt($('#scanout-qty').value, 10) || 1);
     const currentBuilding = locStock(item, LOC_BUILDING);
     if (qty > currentBuilding) {
@@ -1631,6 +1814,8 @@
         name: item.name,
         qtyOut: qty,
         remainingBuilding: item.buildingStock,
+        verifiedLocation: ScanOut.capturedLocation,
+        type: 'scan-out',
         user: auth.currentUser?.email || 'unknown',
         userId: auth.currentUser?.uid || null,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -1659,13 +1844,18 @@
     stopScanCamera();
     ScanOut.capturedItem = null;
     ScanOut.capturedSku = '';
+    ScanOut.capturedLocation = '';
+    ScanOut.locationVerified = false;
     $('#scanout-step1').classList.remove('hidden');
     $('#scanout-step2').classList.add('hidden');
     $('#scanout-success').classList.add('hidden');
     $('#scanout-error').classList.add('hidden');
+    $('#scanout-location-error').classList.add('hidden');
+    $('#scanout-location-verify').classList.remove('hidden');
+    $('#scanout-qty-panel').classList.add('hidden');
     $('#scanout-manual-sku').value = '';
+    $('#scanout-location-input').value = '';
     $('#scanout-qty').value = 1;
-    // Restart camera (modal is still open)
     startScanCamera();
   }
 
@@ -2362,6 +2552,7 @@
 
     // Manifest
     $('#btn-manifest').addEventListener('click', generateManifest);
+    $('#btn-pick-sheet').addEventListener('click', generatePickSheet);
     $('#btn-manifest-print').addEventListener('click', () => {
       const printWin = window.open('', '_blank', 'width=700,height=900');
       printWin.document.write(`<!DOCTYPE html><html><head><title>Carrier Manifest</title>
@@ -2558,6 +2749,19 @@
       }
     });
     $('#scanout-manual-go').addEventListener('click', lookupManualSku);
+
+    // Location verification
+    $('#scanout-location-go').addEventListener('click', () => {
+      const val = $('#scanout-location-input').value.trim().toUpperCase();
+      if (val) verifyScanOutLocation(val);
+    });
+    $('#scanout-location-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = $('#scanout-location-input').value.trim().toUpperCase();
+        if (val) verifyScanOutLocation(val);
+      }
+    });
 
     // Qty adjustments
     $('#scanout-qty').addEventListener('input', () => {

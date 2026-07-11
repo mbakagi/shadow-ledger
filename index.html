@@ -275,6 +275,7 @@
   body:not(.printing-label) nav,
   body:not(.printing-label) select,
   body:not(.printing-label) #btn-manifest,
+  body:not(.printing-label) #btn-pick-sheet,
   body:not(.printing-label) #btn-scan-out,
   body:not(.printing-label) #btn-history,
   body:not(.printing-label) #btn-locations,
@@ -295,6 +296,27 @@
   body:not(.printing-label) table { font-size: 10px !important; }
   body:not(.printing-label) td, body:not(.printing-label) th { padding: 2px 4px !important; }
   body:not(.printing-label) input { border: none !important; background: transparent !important; color: black !important; }
+
+  /* ── Pick Sheet Print ── */
+  body.printing-pick-sheet > * { display: none !important; }
+  body.printing-pick-sheet #pick-sheet-print,
+  body.printing-pick-sheet #pick-sheet-print * { display: block !important; }
+  #pick-sheet-print {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    color: #000;
+    background: #fff;
+    padding: 0.25in;
+  }
+  #pick-sheet-print .pick-header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+  #pick-sheet-print .pick-header h1 { font-size: 14pt; font-weight: 900; margin: 0; }
+  #pick-sheet-print .pick-meta { font-size: 8pt; text-align: center; margin-bottom: 10px; }
+  #pick-sheet-print .pick-row { display: flex; border-bottom: 1px solid #ccc; padding: 3px 0; page-break-inside: avoid; }
+  #pick-sheet-print .pick-loc { width: 45%; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #pick-sheet-print .pick-item { width: 55%; }
+  #pick-sheet-print .pick-sku { font-weight: 700; }
+  #pick-sheet-print .pick-qty { display: inline-block; background: #000; color: #fff; padding: 0 4px; border-radius: 2px; font-weight: 700; }
+  #pick-sheet-print .pick-section { font-size: 9pt; font-weight: 900; text-transform: uppercase; border-top: 2px solid #000; border-bottom: 1px solid #000; padding: 3px 0; margin-top: 6px; }
 
   /* Label Print Styles */
   body.printing-label > * { display: none !important; }
@@ -366,6 +388,10 @@
   font-size: 13px;
   line-height: 1.6;
 }
+/* ── Golden Zone warning row highlight ── */
+.row-golden-zone { background: rgba(239, 68, 68, 0.04); }
+.dark .row-golden-zone { background: rgba(239, 68, 68, 0.08); }
+
 /* ── Bin Setup ── */
 .bin-cell {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -559,6 +585,11 @@
         <option value="procure">🟡 Purchase Alerts</option>
         <option value="ok">✅ OK Items</option>
       </select>
+      <!-- Pick Sheet Button -->
+      <button id="btn-pick-sheet" title="Generate walking-route pick sheet" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+        <span class="text-sm font-semibold">Pick Sheet</span>
+      </button>
       <!-- Manifest Button -->
       <button id="btn-manifest" title="Generate Carrier Manifest" class="btn-accent whitespace-nowrap">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -622,7 +653,7 @@
               <th class="px-2 py-2 w-8 text-center" title="Status Badge"></th>
               <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors" data-sort="sku">SKU ↕</th>
               <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors" data-sort="name">Item Name ⇕</th>
-              <th class="px-2 py-2 hidden md:table-cell" title="Bin / Shelf Code" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">Bin</th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors hidden md:table-cell" data-sort="binCode" title="Bin / Shelf Code" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">Bin ↕</th>
               <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors hidden sm:table-cell" data-sort="category">Category ⇕</th>
               <th class="px-2 py-2 text-center hidden lg:table-cell">Datasheet</th>
               <th class="px-2 py-2 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="totalStock">Total ↕</th>
@@ -982,6 +1013,9 @@
   <!-- ═══════════════════ PRINT CONTAINER ═══════════════════ -->
   <div id="print-container" class="hidden"></div>
 
+  <!-- ═══════════════════ PICK SHEET PRINT CONTAINER ═══════════════════ -->
+  <div id="pick-sheet-print" class="hidden"></div>
+
   <!-- ═══════════════════ LOGIN OVERLAY ═══════════════════ -->
   <div id="login-overlay" class="fixed inset-0 z-[300] flex items-center justify-center"
        style="background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%)">
@@ -1220,7 +1254,7 @@
         <div id="scanout-error" class="hidden bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/40 rounded-xl p-3 text-sm text-red-600"></div>
       </div>
 
-      <!-- Step 2: Confirm qty -->
+      <!-- Step 2: Verify location -->
       <div id="scanout-step2" class="hidden space-y-4">
         <div class="bg-gray-50 dark:bg-surface-700/40 rounded-xl p-4">
           <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Item</p>
@@ -1229,21 +1263,33 @@
           <p class="text-xs text-gray-500 mt-2">Building stock: <span id="scanout-current-stock" class="font-bold"></span></p>
         </div>
 
-        <div>
-          <label class="label">Quantity to remove</label>
-          <div class="flex items-center gap-2">
-            <button id="scanout-qty-dec" class="adj-btn" title="−1">−</button>
-            <input id="scanout-qty" type="number" min="1" value="1" class="inline-input flex-1" style="width:80px;" />
-            <button id="scanout-qty-inc" class="adj-btn" title="+1">+</button>
+        <div id="scanout-location-verify" class="space-y-3">
+          <div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+            Double-scan verification required. Scan the location barcode where this item is stored.
           </div>
-          <p class="text-xs text-gray-400 mt-1">New building stock: <span id="scanout-new-stock" class="font-bold text-emerald-600"></span></p>
+          <input id="scanout-location-input" type="text" class="input-field w-full" placeholder="Scan location barcode (ROOM-AISLE-BAY-BIN-LEVEL-ACTION)" autocomplete="off" />
+          <button id="scanout-location-go" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">Verify Location</button>
+          <div id="scanout-location-error" class="hidden bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/40 rounded-xl p-3 text-sm text-red-600"></div>
+          <div id="scanout-location-expected" class="text-xs text-gray-500"></div>
         </div>
 
-        <div class="flex gap-2">
-          <button id="scanout-confirm" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5" style="background:linear-gradient(135deg,#10b981,#059669);">
-            Confirm — Remove <span id="scanout-confirm-qty">1</span>
-          </button>
-          <button id="scanout-cancel" class="btn-secondary justify-center text-sm font-semibold py-2.5 px-4">Back</button>
+        <div id="scanout-qty-panel" class="hidden space-y-3">
+          <div>
+            <label class="label">Quantity to remove</label>
+            <div class="flex items-center gap-2">
+              <button id="scanout-qty-dec" class="adj-btn" title="−1">−</button>
+              <input id="scanout-qty" type="number" min="1" value="1" class="inline-input flex-1" style="width:80px;" />
+              <button id="scanout-qty-inc" class="adj-btn" title="+1">+</button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">New building stock: <span id="scanout-new-stock" class="font-bold text-emerald-600"></span></p>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="scanout-confirm" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5" style="background:linear-gradient(135deg,#10b981,#059669);">
+              Confirm — Remove <span id="scanout-confirm-qty">1</span>
+            </button>
+            <button id="scanout-cancel" class="btn-secondary justify-center text-sm font-semibold py-2.5 px-4">Back</button>
+          </div>
         </div>
       </div>
 
@@ -1461,8 +1507,8 @@
             </div>
           </div>
           <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-            <p><strong>Assignment rule:</strong> Bins are auto-assigned in order to items that don't have one yet. Items with bins are kept.</p>
-            <p>Or click a bin in the grid to manually assign it to the next selected item.</p>
+            <p><strong>Chaotic storage:</strong> Any SKU can occupy any open coordinate — bins are auto-assigned in order to items without one. No product-type grouping enforced.</p>
+            <p>Click a free bin to manually assign it to the next unassigned item.</p>
           </div>
           <div id="bins-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[360px] overflow-y-auto scrollbar-thin p-1"></div>
           <div id="bins-stats" class="text-xs text-gray-500 dark:text-gray-400"></div>
