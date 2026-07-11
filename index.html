@@ -427,13 +427,18 @@
 .bin-inline-edit::placeholder { color: #9ca3af; }
 /* ── Bin Print Labels ── */
 .print-label-bin {
-  display: flex; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   width: 2.5in; height: 1.5in; border: 1px dashed #ccc; overflow: hidden;
   background: white; padding: 4px;
 }
 .bin-print-code {
-  font-family: 'Courier New', monospace; font-size: 28pt; font-weight: 900;
+  font-family: 'Courier New', monospace; font-size: 14pt; font-weight: 900;
   text-align: center; letter-spacing: .05em;
+}
+.bin-print-qr { background: white; }
+.bin-print-sub {
+  font-family: 'Courier New', monospace; font-size: 7pt; font-weight: 600;
+  color: #333; text-align: center; letter-spacing: .03em; word-break: break-all;
 }
   </style>
 </head>

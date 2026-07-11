@@ -3082,15 +3082,39 @@
       if (!labels.length) { toast('No bins to print', 'error'); return; }
       dom.printContainer.innerHTML = '';
       dom.printContainer.className = 'print-grid';
+      const qrTargets = [];
       labels.forEach(cell => {
         const code = cell.dataset.bincode;
         if (!code) return;
+        const parts = code.split('-');
+        const isGeneral = parts[0] === 'GENERAL';
+        const header = isGeneral ? parts[1] : `${parts[0]} · ${parts[1]}`;
+        const sub = isGeneral ? `${parts[2]}-${parts[3]}` : `${parts[2]}-${parts[3]}-${parts[4]}-${parts[5]}`;
         const div = document.createElement('div');
         div.className = 'print-label-bin';
-        div.innerHTML = `<div class="bin-print-code">${esc(code)}</div>`;
+        const qrId = 'binqr-' + Math.random().toString(36).slice(2, 9);
+        div.innerHTML = `
+          <div class="bin-print-code">${esc(header)}</div>
+          <div class="bin-print-qr" id="${qrId}"></div>
+          <div class="bin-print-sub">${esc(sub)}</div>
+        `;
         dom.printContainer.appendChild(div);
+        qrTargets.push({ id: qrId, code });
       });
       dom.printContainer.style.setProperty('--label-w', size === 'a4-grid' ? 'auto' : size === '2x1' ? '2in' : '4in');
+      qrTargets.forEach(({ id, code }) => {
+        try {
+          const el = dom.printContainer.querySelector('#' + id);
+          if (el) {
+            new QRCode(el, {
+              text: code,
+              width: 120, height: 120,
+              colorDark: '#000000', colorLight: '#ffffff',
+              correctLevel: QRCode.CorrectLevel.M
+            });
+          }
+        } catch (e) { console.warn('Bin QR render failed', e); }
+      });
       document.body.classList.add('printing-label');
       setTimeout(() => {
         window.print();
@@ -3099,8 +3123,8 @@
           dom.printContainer.innerHTML = '';
           dom.printContainer.className = '';
         }, 500);
-      }, 200);
-      toast(`Printed ${labels.length} bin labels`, 'success');
+      }, 300);
+      toast(`Printed ${labels.length} bin labels with QR barcodes`, 'success');
     });
 
     // Pareto tab switching
