@@ -1,37 +1,86 @@
 rules_version = '2';
 
 // ═══════════════════════════════════════════════════════
-// Shadow Ledger — Firestore Security Rules
+// St3s — Firestore Security Rules
 //
-// Only authenticated users may read or write inventory items.
-// Each user can only see/edit their own items (replace with
-// `request.auth != null` if you want all signed-in users
-// to share one inventory).
+// Auth-gated access for all collections. No timestamp
+// expiration — secured via request.auth checks instead.
+// Validates field types on writes to prevent schema abuse.
 // ═══════════════════════════════════════════════════════
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Inventory collection — any signed-in user can read & write (shared inventory)
-    // include self-created ownerId for transactions/log filtering; not required anymore
+    // ── Inventory ──
     match /inventory/{itemId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.sku is string
+        && request.resource.data.sku.matches('^[A-Za-z0-9\\-_.]{1,60}$')
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.totalStock is int
+        && request.resource.data.totalStock >= 0
+        && request.resource.data.carrierTrigger is int
+        && request.resource.data.carrierTrigger >= 0
+        && request.resource.data.maxCapacity is int
+        && request.resource.data.maxCapacity >= 0
+        && request.resource.data.purchasingTrigger is int
+        && request.resource.data.purchasingTrigger >= 0;
+
+      allow update: if request.auth != null
+        && request.resource.data.sku is string
+        && request.resource.data.totalStock is int
+        && request.resource.data.totalStock >= 0
+        && request.resource.data.carrierTrigger is int
+        && request.resource.data.carrierTrigger >= 0
+        && request.resource.data.maxCapacity is int
+        && request.resource.data.maxCapacity >= 0
+        && request.resource.data.purchasingTrigger is int
+        && request.resource.data.purchasingTrigger >= 0;
+
+      allow delete: if request.auth != null;
     }
 
-    // Locations — signed-in users can manage their list of warehouses/spaces
+    // ── Locations ──
     match /locations/{locId} {
-      allow read, write, delete: if request.auth != null;
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.order is int;
+
+      allow update: if request.auth != null
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 100;
+
+      allow delete: if request.auth != null;
     }
 
-    // Transactions log — signed-in users can write (scan-out/transfer) and read all
+    // ── Transactions (immutable audit ledger) ──
     match /transactions/{txId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow delete: if request.auth != null
-                    && resource.data.userId == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.itemId is string
+        && request.resource.data.itemId.size() > 0
+        && request.resource.data.sku is string
+        && request.resource.data.sku.size() > 0
+        && request.resource.data.qtyOut is int
+        && request.resource.data.qtyOut >= 0
+        && request.resource.data.type is string
+        && request.resource.data.type in ['scan-out', 'transfer', 'adjust'];
+
+      // Immutable: no updates or deletes allowed after creation
+      allow update: if false;
+      allow delete: if false;
     }
 
-    // Catch-all: anything else is denied
+    // ── Catch-all deny ──
     match /{document=**} {
       allow read, write: if false;
     }

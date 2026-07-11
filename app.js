@@ -29,6 +29,98 @@
     labelGenSelected: new Set() // SKUs chosen for bulk label print
   };
 
+  // ─── IndexedDB Offline Storage ───
+  const IDB_NAME = 'st3s_db';
+  const IDB_VERSION = 1;
+  const IDB_STORE = 'inventory';
+  const IDB_KEY = 'snapshot';
+
+  const Storage = {
+    _db: null,
+
+    open() {
+      return new Promise((resolve, reject) => {
+        if (this._db) return resolve(this._db);
+        if (!('indexedDB' in window)) return reject(new Error('IndexedDB unavailable'));
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+        req.onerror = (e) => reject(e.target.error);
+      });
+    },
+
+    async save(items) {
+      try {
+        const db = await this.open();
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        store.clear();
+        items.forEach(item => store.put({ id: IDB_KEY, data: item, ts: Date.now() }));
+        return new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve(items.length);
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (err) {
+        console.warn('IDB save failed:', err);
+        return 0;
+      }
+    },
+
+    async load() {
+      try {
+        const db = await this.open();
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const store = tx.objectStore(IDB_STORE);
+        const req = store.get(IDB_KEY);
+        return new Promise((resolve) => {
+          req.onsuccess = () => resolve(req.result ? [req.result.data] : []);
+          req.onerror = () => resolve([]);
+        });
+      } catch (err) {
+        console.warn('IDB load failed:', err);
+        return [];
+      }
+    },
+
+    async saveSnapshot(items) {
+      try {
+        const db = await this.open();
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        store.clear();
+        store.put({ id: IDB_KEY, items, ts: Date.now() });
+        return new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve(items.length);
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (err) {
+        console.warn('IDB snapshot save failed:', err);
+        return 0;
+      }
+    },
+
+    async loadSnapshot() {
+      try {
+        const db = await this.open();
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const store = tx.objectStore(IDB_STORE);
+        const req = store.get(IDB_KEY);
+        return new Promise((resolve) => {
+          req.onsuccess = () => resolve(req.result ? req.result.items : []);
+          req.onerror = () => resolve([]);
+        });
+      } catch (err) {
+        console.warn('IDB snapshot load failed:', err);
+        return [];
+      }
+    }
+  };
+
   // ─── Data Access Layer (DAL) — Firestore backend ───
   const DAL = {
     _unsub: null,
@@ -40,6 +132,7 @@
         .onSnapshot(snapshot => {
           const items = [];
           snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+          Storage.saveSnapshot(items);
           onUpdate(items);
         }, err => {
           console.error('Firestore sync error:', err);
@@ -49,6 +142,48 @@
 
     stopSync() {
       if (this._unsub) { this._unsub(); this._unsub = null; }
+    },
+
+    // Atomic stock adjustment via Firestore runTransaction
+    adjustStockAtomic(id, delta, locId) {
+      const itemRef = db.collection('inventory').doc(id);
+      const txRef = db.collection('transactions').doc();
+
+      return db.runTransaction(async (tx) => {
+        const doc = await tx.get(itemRef);
+        if (!doc.exists) throw new Error('Item not found: ' + id);
+
+        const data = doc.data();
+        const ls = { ...(data.locationStock || {}) };
+        const currentVal = ls[locId] || 0;
+        const newVal = Math.max(0, currentVal + delta);
+        ls[locId] = newVal;
+
+        const updatedData = {
+          locationStock: ls,
+          buildingStock: ls['building'] || 0,
+          totalStock: Object.values(ls).reduce((s, v) => s + (v || 0), 0),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        tx.set(itemRef, updatedData, { merge: true });
+
+        tx.set(txRef, {
+          itemId: id,
+          sku: data.sku || '',
+          name: data.name || '',
+          qtyOut: Math.abs(delta),
+          type: 'adjust',
+          locationId: locId,
+          direction: delta < 0 ? 'out' : 'in',
+          remainingMap: ls,
+          user: auth.currentUser?.email || 'unknown',
+          userId: auth.currentUser?.uid || null,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { locationStock: ls, buildingStock: updatedData.buildingStock, totalStock: updatedData.totalStock };
+      });
     },
 
     // Write a single item; returns a Promise so callers can surface errors
@@ -835,19 +970,33 @@
     }
   }
 
-  function adjustStock(id, delta) {
+  async function adjustStock(id, delta) {
     const item = State.items.find(i => i.id === id);
     if (!item) return;
-    const newQty = Math.max(0, locStock(item, LOC_BUILDING) + delta);
-    item.locationStock = { ...(item.locationStock || {}), [LOC_BUILDING]: newQty };
-    item.buildingStock = newQty;
-    DAL.saveOne(item);
-    renderDashboard();
-    const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
-    if (row) {
-      const temp = document.createElement('tbody');
-      temp.innerHTML = renderRow(item);
-      row.replaceWith(temp.firstElementChild);
+
+    try {
+      const result = await DAL.adjustStockAtomic(id, delta, LOC_BUILDING);
+      item.locationStock = result.locationStock;
+      item.buildingStock = result.buildingStock;
+      item.totalStock = result.totalStock;
+      renderDashboard();
+      const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
+      if (row) {
+        const temp = document.createElement('tbody');
+        temp.innerHTML = renderRow(item);
+        row.replaceWith(temp.firstElementChild);
+      }
+    } catch (err) {
+      console.error('Atomic adjustStock failed:', err);
+      const cached = await Storage.loadSnapshot();
+      if (cached.length) {
+        State.items = cached;
+        applyFilters();
+        renderDashboard();
+        toast('Connection error — loaded cached snapshot', 'info');
+      } else {
+        toast('Stock adjustment failed: ' + (err.message || err.code), 'error');
+      }
     }
   }
 
