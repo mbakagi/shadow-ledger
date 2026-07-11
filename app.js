@@ -1338,14 +1338,17 @@
           <div class="shelf-label-name" style="font-size:${nameFont}pt;">${esc(finalName)}</div>
           ${finalExtra ? `<div style="font-size:${fontSize-2}pt; color:#444; margin-top:2px;">${esc(finalExtra)}</div>` : ''}
         </div>
-        <div style="display:flex; gap:0.1in; flex-shrink:0;">
-          ${qrContent ? `<div class="shelf-label-sku-qr" id="${qrId}" style="width:${Math.min(1.1, h*0.7)}in; height:${Math.min(1.1, h*0.7)}in;"></div>` : ''}
-          ${hasDatasheetQR ? `<div class="shelf-label-url-qr" id="${dsQrId}" style="width:${Math.min(0.9, h*0.55)}in; height:${Math.min(0.9, h*0.55)}in;"></div>` : ''}
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0; flex-shrink:0;">
+          <div style="display:flex; gap:0.08in; align-items:flex-end;">
+            ${qrContent ? `<div class="shelf-label-sku-qr" id="${qrId}" style="width:${Math.min(1.1, h*0.7)}in; height:${Math.min(1.1, h*0.7)}in;"></div>` : ''}
+            ${hasDatasheetQR ? `<div class="shelf-label-url-qr" id="${dsQrId}" style="width:${Math.min(0.9, h*0.55)}in; height:${Math.min(0.9, h*0.55)}in;"></div>` : ''}
+          </div>
+          ${item?.binCode ? `<span class="shelf-label-bin" style="margin-top:1px; font-size:${Math.max(7, h*4)}pt;">${esc(item.binCode)}</span>` : ''}
         </div>
       </div>
       <div class="shelf-label-footer">
         <span>${esc(item?.category || '')}</span>
-        ${item?.binCode ? `<span class="shelf-label-bin">${esc(item.binCode)}</span>` : ''}
+        <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:7pt;letter-spacing:0.05em;">${esc(item?.binCode || '')}</span>
       </div>
     `;
 
@@ -2897,18 +2900,20 @@
   //  BIN SETUP
   // ═══════════════════════════════════════════════════════
   function openBinsModal() {
+    const room    = ($('#bins-room')?.value || '').trim().toUpperCase() || 'WH';
     const aisle   = ($('#bins-aisle')?.value || '').trim().toUpperCase() || 'A';
-    const shelf   = parseInt($('#bins-shelf')?.value, 10) || 1;
+    const bay     = parseInt($('#bins-bay')?.value, 10) || 1;
     const start   = parseInt($('#bins-start')?.value, 10) || 1;
     const count   = parseInt($('#bins-count')?.value, 10) || 12;
+    const level   = ($('#bins-level')?.value || '1').toUpperCase();
     const action  = ($('#bins-action')?.value || 'STOCK').toUpperCase();
     const existingBins = new Set(State.items.filter(i => i.binCode).map(i => i.binCode));
 
     const codes = [];
     for (let i = 0; i < count; i++) {
       const binNum = String(start + i).padStart(2, '0');
-      const shelfNum = String(shelf).padStart(2, '0');
-      codes.push(`${aisle}-${shelfNum}-${binNum}-${action}`);
+      const bayNum = String(bay).padStart(2, '0');
+      codes.push(`${room}-${aisle}-${bayNum}-${binNum}-${level}-${action}`);
     }
 
     // Items without bins (for auto-assignment)
@@ -2919,10 +2924,11 @@
     grid.innerHTML = codes.map((code, idx) => {
       const taken = existingBins.has(code);
       const parts = code.split('-');
-      const [aisle, shelfNum, binNum, act] = parts;
+      const [rm, aisle, bayNum, binNum, lvl, act] = parts;
       return `<div class="bin-cell ${taken ? 'bin-taken' : 'bin-free'}" data-bincode="${esc(code)}" title="${taken ? 'Already assigned' : 'Free bin — click to assign'}">
-        <span class="text-[10px] opacity-60">Aisle ${esc(aisle)} Shelf ${esc(shelfNum)}</span>
-        <span class="font-mono text-xs font-bold">${esc(binNum)}-${esc(act)}</span>
+        <span class="text-[9px] opacity-50">${esc(rm)} · Aisle ${esc(aisle)} · Bay ${esc(bayNum)}</span>
+        <span class="font-mono text-xs font-bold">Bin ${esc(binNum)} Lvl ${esc(lvl)}</span>
+        <span class="text-[9px] opacity-60">${esc(act)}</span>
         <span class="text-[10px] opacity-70">${taken ? 'in use' : 'free'}</span>
       </div>`;
     }).join('') + (codes.length === 0 ? '<p class="col-span-full text-gray-400 text-xs">No codes generated</p>' : '');

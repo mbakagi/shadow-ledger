@@ -358,7 +358,7 @@
 .shelf-label-sku-qr { flex-shrink: 0; width: 1.1in; height: 1.1in; background: white; }
 .shelf-label-url-qr { flex-shrink: 0; width: 0.9in; height: 0.9in; background: white; border: 1px dashed #ccc; padding: 1px; }
 .shelf-label-footer { font-size: 8pt; display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-top: 4px; border-top: 1px dashed #ccc; padding-top: 3px; }
-.shelf-label-bin { font-size: 8pt; font-weight: 900; background: #000; color: #fff; padding: 1px 4px; border-radius: 2px; letter-spacing: 0.03em; flex-shrink: 0; margin-left: 4px; }
+.shelf-label-bin { font-size: 8pt; font-weight: 900; background: #000; color: #fff; padding: 1px 4px; border-radius: 2px; letter-spacing: 0.05em; flex-shrink: 0; margin: 0; display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 /* ── Manifest Print ── */
 .manifest-print-area {
@@ -437,8 +437,8 @@
           <span class="hidden sm:inline text-sm">Import</span>
         </button>
         <!-- Export -->
-        <button id="btn-export-csv" title="Export CSV" class="nav-btn group">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l4 4m0 0l4-4m-4 4V4"/></svg>
+        <button id="btn-export-csv" title="Export CSV" class="nav-btn group" style="padding:0;margin:0;">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 001 1h4"/><path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/><path d="M12 11v6"/><path d="M9 14l3 3 3-3"/></svg>
           <span class="hidden sm:inline text-sm">Export</span>
         </button>
         <!-- Label Generator -->
@@ -1344,16 +1344,22 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- Bulk bin creator -->
         <div class="lg:col-span-1 space-y-3">
-          <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Industrial Bin Generator</h3>
-          <div>
-            <label class="label">Aisle</label>
-            <input id="bins-aisle" type="text" class="input-field w-full" placeholder="A" maxlength="3" />
-          </div>
-          <div>
-            <label class="label">Shelf</label>
-            <input id="bins-shelf" type="number" min="1" class="input-field w-full" value="1" />
-          </div>
+          <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Five-Tier Bin Generator</h3>
           <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Room</label>
+              <input id="bins-room" type="text" class="input-field w-full" placeholder="WH" maxlength="4" />
+            </div>
+            <div>
+              <label class="label">Aisle</label>
+              <input id="bins-aisle" type="text" class="input-field w-full" placeholder="A" maxlength="3" />
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="label">Bay</label>
+              <input id="bins-bay" type="number" min="1" class="input-field w-full" value="1" />
+            </div>
             <div>
               <label class="label">Bin Start #</label>
               <input id="bins-start" type="number" min="1" class="input-field w-full" value="1" />
@@ -1363,22 +1369,34 @@
               <input id="bins-count" type="number" min="1" max="500" class="input-field w-full" value="12" />
             </div>
           </div>
-          <div>
-            <label class="label">Action Code</label>
-            <select id="bins-action" class="input-field w-full">
-              <option value="STOCK">STOCK (default storage)</option>
-              <option value="PICK">PICK (high-frequency pick)</option>
-              <option value="BULK">BULK (overflow storage)</option>
-              <option value="STAGE">STAGE (staging area)</option>
-              <option value="QC">QC (quality check)</option>
-              <option value="RET">RET (returns processing)</option>
-            </select>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Level (Shelf Height)</label>
+              <select id="bins-level" class="input-field w-full">
+                <option value="F">F (Floor)</option>
+                <option value="1" selected>1 (Waist)</option>
+                <option value="2">2 (Chest)</option>
+                <option value="3">3 (Overhead)</option>
+                <option value="4">4 (High Rack)</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Action Code</label>
+              <select id="bins-action" class="input-field w-full">
+                <option value="STOCK">STOCK</option>
+                <option value="PICK">PICK</option>
+                <option value="BULK">BULK</option>
+                <option value="STAGE">STAGE</option>
+                <option value="QC">QC</option>
+                <option value="RET">RET</option>
+              </select>
+            </div>
           </div>
           <button id="bins-generate" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">
             <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             Generate Bin Codes
           </button>
-          <p class="text-xs text-gray-500 dark:text-gray-400">Generates structural bin codes like <code class="font-mono">A-01-03-STOCK</code> (Aisle-Shelf-Bin-Action). Scan-ready for warehouse barcode readers.</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Generates structural bin codes like <code class="font-mono">WH-A-01-03-1-STOCK</code> (Room-Aisle-Bay-Bin-Level-Action). Scan-ready for warehouse barcode readers.</p>
         </div>
 
         <!-- List preview + assignments -->
