@@ -1,1 +1,0 @@
-Vanilla ES6+ (no bundler); Tailwind CSS v3 loaded from CDN with custom dark-mode palette; Firebase JS SDK v9 compat (`firebase-app-compat`, `firebase-auth-compat`, `firebase-firestore-compat`) with offline persistence; SheetJS for Excel import; qrcodejs + jsQR for QR generation/scanning; Google Fonts (Inter).

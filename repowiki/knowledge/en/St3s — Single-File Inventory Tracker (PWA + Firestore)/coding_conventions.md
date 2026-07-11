@@ -1,6 +1,0 @@
-- All persistent mutations go through the `DAL` object (`saveOne`, `saveMany`, `deleteOne`, `startSync`) rather than direct `db.collection(...)` calls, keeping the rest of the codebase backend-agnostic.
-- Computed fields are derived at render time (`depotStock`, `needsCarrier`, `needsProcurement`, `totalStockFromLocs`) instead of stored as redundant properties, so alerts stay consistent with the source-of-truth `locationStock` map.
-- Inline edits use `saveFieldSilently` to mutate the in-memory item, persist via `DAL.saveOne`, then patch only the affected cells/gauge/badge in the row — never full re-render — to keep input focus intact.
-- User-facing strings and error messages are surfaced through a `toast()` helper rather than `alert()`, and Firestore errors are mapped to friendly toast text based on `err.code` (`permission-denied`, `unavailable`).
-- Modal dialogs follow a uniform open/close contract: `openModal(el)` removes `hidden` and locks body scroll, `closeModal(el)` restores it; each modal has a close button wired to `closeModal(dom.modalXxx)`.
-- Firebase config is isolated in `firebase-config.js` which bootstraps `firebase.initializeApp` and attaches `db`/`auth` as globals consumed by `app.js`, keeping credentials out of the main script.
