@@ -491,9 +491,11 @@
   const LOC_BUILDING  = 'building'; // fixed id for "Company Building"
 
   // ─── Guest Checkout URL builder ───
+  // QR codes must encode a URL that any phone camera can open natively.
+  // Uses the live GitHub Pages deployment as the canonical base.
+  const GUEST_BASE_URL = 'https://mbakagi.github.io/shadow-ledger';
   function guestUrl(itemId, loc) {
-    const base = location.origin || (location.protocol + '//' + location.host);
-    return `${base}/guest-out.html?id=${encodeURIComponent(itemId)}&loc=${encodeURIComponent(loc || '')}`;
+    return `${GUEST_BASE_URL}/guest-out.html?id=${encodeURIComponent(itemId)}&loc=${encodeURIComponent(loc || '')}`;
   }
 
   // Convert legacy items (only totalStock + buildingStock) to per-location map
