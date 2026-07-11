@@ -155,14 +155,26 @@
 
         const data = doc.data();
         const ls = { ...(data.locationStock || {}) };
+        const ceiling = Object.values(ls).reduce((s, v) => s + (v || 0), 0);
         const currentVal = ls[locId] || 0;
-        const newVal = Math.max(0, currentVal + delta);
-        ls[locId] = newVal;
+        const rawNew = Math.max(0, currentVal + delta);
+        const newVal = Math.min(rawNew, ceiling);
+
+        if (locId === 'building') {
+          ls['building'] = newVal;
+          ls['depot'] = Math.max(0, ceiling - newVal);
+        } else if (locId === 'depot') {
+          ls['depot'] = newVal;
+          ls['building'] = Math.max(0, ceiling - newVal);
+        } else {
+          ls[locId] = newVal;
+        }
 
         const updatedData = {
           locationStock: ls,
           buildingStock: ls['building'] || 0,
-          totalStock: Object.values(ls).reduce((s, v) => s + (v || 0), 0),
+          depotStock: ls['depot'] || 0,
+          totalStock: ceiling,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -690,58 +702,66 @@
     const pAlert  = needsProcurement(item);
     const rowClass = [cAlert ? 'row-carrier' : '', pAlert ? 'row-procure' : ''].join(' ').trim();
 
-    // Building stock gauge (percentage of max capacity)
     const buildingNow = locStock(item, LOC_BUILDING);
+    const totalNow = totalStockFromLocs(item);
     const gaugePercent = item.maxCapacity > 0 ? Math.min(100, (buildingNow / item.maxCapacity) * 100) : 0;
     const gaugeColor   = gaugePercent <= 25 ? 'bg-red-500' : gaugePercent <= 50 ? 'bg-amber-500' : 'bg-emerald-500';
 
-    // Status badge
     let badge = '<span class="badge badge-ok">OK</span>';
     if (cAlert && pAlert) badge = '<span class="badge badge-carrier">CARRIER</span> <span class="badge badge-procure">ORDER</span>';
     else if (cAlert) badge = '<span class="badge badge-carrier">CARRIER</span>';
     else if (pAlert) badge = '<span class="badge badge-procure">ORDER</span>';
 
+    const stockColor = (val, trigger) =>
+      val <= 0 ? 'text-red-600 dark:text-red-400'
+      : (trigger !== undefined && val <= trigger) ? 'text-amber-600 dark:text-amber-400'
+      : 'text-emerald-600 dark:text-emerald-400';
+
+    const totalCls   = stockColor(totalNow, item.purchasingTrigger);
+    const bldgCls    = stockColor(buildingNow, item.carrierTrigger);
+    const depotCls   = stockColor(depot, undefined);
+
     return `
       <tr class="group hover:bg-gray-50/80 dark:hover:bg-surface-700/30 transition-colors ${rowClass}" data-id="${item.id}">
-        <td class="px-3 py-2.5 text-center"><input type="checkbox" class="row-checkbox w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent" data-id="${item.id}" ${State.selectedIds.has(item.id) ? 'checked' : ''}></td>
-        <td class="px-3 py-2.5 text-center">${badge}</td>
-        <td class="px-3 py-2.5 font-mono text-xs font-semibold text-accent">${esc(item.sku)}</td>
-        <td class="px-3 py-2.5 font-medium">${esc(item.name)}</td>
-        <td class="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell font-mono">${esc(item.binCode || '—')}</td>
-        <td class="px-3 py-2.5 text-gray-500 dark:text-gray-400 hidden sm:table-cell">${esc(item.category || '—')}</td>
-        <td class="px-3 py-2.5 text-center hidden lg:table-cell">
+        <td class="px-2 py-1.5 text-center"><input type="checkbox" class="row-checkbox w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent" data-id="${item.id}" ${State.selectedIds.has(item.id) ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center">${badge}</td>
+        <td class="px-2 py-1.5 text-xs font-semibold text-accent" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">${esc(item.sku)}</td>
+        <td class="px-2 py-1.5 font-medium">${esc(item.name)}</td>
+        <td class="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">${esc(item.binCode || '—')}</td>
+        <td class="px-2 py-1.5 text-gray-500 dark:text-gray-400 hidden sm:table-cell">${esc(item.category || '—')}</td>
+        <td class="px-2 py-1.5 text-center hidden lg:table-cell">
           ${item.datasheetUrl
             ? `<a href="${esc(item.datasheetUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center text-accent hover:text-accent-dark transition" title="${esc(item.datasheetUrl)}">
                  <svg class="w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                </a>`
             : '<span class="text-gray-300 dark:text-gray-600">—</span>'}
         </td>
-        <td class="px-3 py-2.5 text-center">
-          <input type="number" inputmode="numeric" min="0" class="inline-input" value="${totalStockFromLocs(item)}" data-field="totalStock" data-id="${item.id}" title="Sum across all locations — edits adjust Main Depot" />
+        <td class="px-2 py-1.5 text-center">
+          <input type="number" inputmode="numeric" min="0" class="inline-input ${totalCls}" value="${totalNow}" data-field="totalStock" data-id="${item.id}" title="Sum across all locations — edits adjust Main Depot" />
         </td>
-        <td class="px-3 py-2.5">
+        <td class="px-2 py-1.5">
           <div class="flex items-center justify-center gap-1.5">
             <button class="adj-btn" data-action="dec" data-id="${item.id}" title="−1">−</button>
-            <input type="number" inputmode="numeric" min="0" class="inline-input" value="${locStock(item, LOC_BUILDING)}" data-field="buildingStock" data-id="${item.id}" />
+            <input type="number" inputmode="numeric" min="0" class="inline-input ${bldgCls}" value="${buildingNow}" data-field="buildingStock" data-id="${item.id}" />
             <button class="adj-btn" data-action="inc" data-id="${item.id}" title="+1">+</button>
           </div>
           <div class="mt-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden" title="${Math.round(gaugePercent)}% of max capacity">
             <div class="gauge-bar ${gaugeColor}" style="width:${gaugePercent}%"></div>
           </div>
         </td>
-        <td class="px-3 py-2.5 text-center font-semibold tabular-nums ${depot <= 0 ? 'text-red-500' : ''}">
-          <input type="number" inputmode="numeric" min="0" class="inline-input ${depot <= 0 ? 'text-red-500 font-bold' : ''}" value="${depot}" data-field="depotStock" data-id="${item.id}" />
+        <td class="px-2 py-1.5 text-center font-semibold tabular-nums ${depotCls}">
+          <input type="number" inputmode="numeric" min="0" class="inline-input ${depotCls}" value="${depot}" data-field="depotStock" data-id="${item.id}" />
         </td>
-        <td class="px-3 py-2.5 text-center hidden lg:table-cell">
+        <td class="px-2 py-1.5 text-center hidden lg:table-cell">
           <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.carrierTrigger}" data-field="carrierTrigger" data-id="${item.id}" />
         </td>
-        <td class="px-3 py-2.5 text-center hidden lg:table-cell">
+        <td class="px-2 py-1.5 text-center hidden lg:table-cell">
           <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.maxCapacity}" data-field="maxCapacity" data-id="${item.id}" />
         </td>
-        <td class="px-3 py-2.5 text-center hidden lg:table-cell">
+        <td class="px-2 py-1.5 text-center hidden lg:table-cell">
           <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.purchasingTrigger}" data-field="purchasingTrigger" data-id="${item.id}" />
         </td>
-        <td class="px-3 py-2.5 text-center">
+        <td class="px-2 py-1.5 text-center">
           <div class="action-btns flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button class="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition" data-action="print" data-id="${item.id}" title="Print Label">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
@@ -849,27 +869,35 @@
       const ls = { ...(item.locationStock || {}) };
       const cur = locStock(item, LOC_BUILDING);
       if (cur === num) return;
-      ls[LOC_BUILDING] = num;
+      const ceiling = totalStockFromLocs(item);
+      const clampedBuilding = Math.min(num, ceiling);
+      const newDepot = Math.max(0, ceiling - clampedBuilding);
+      ls[LOC_BUILDING] = clampedBuilding;
+      ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
-      item.buildingStock = num;
+      item.buildingStock = clampedBuilding;
+      item.depotStock = newDepot;
     } else if (field === 'depotStock') {
       const ls = { ...(item.locationStock || {}) };
       const cur = locStock(item, LOC_DEPOT);
       if (cur === num) return;
-      ls[LOC_DEPOT] = num;
+      const ceiling = totalStockFromLocs(item);
+      const clampedDepot = Math.min(num, ceiling);
+      const newBuilding = Math.max(0, ceiling - clampedDepot);
+      ls[LOC_DEPOT] = clampedDepot;
+      ls[LOC_BUILDING] = newBuilding;
       item.locationStock = ls;
+      item.depotStock = clampedDepot;
+      item.buildingStock = newBuilding;
     } else if (field === 'totalStock') {
-      // Editing total adjusts depot so that new total = user input, keeping building stable
       const currentTotal = totalStockFromLocs(item);
       if (currentTotal === num) return;
-      const currentDepot = depotStock(item);
       const currentBuilding = locStock(item, LOC_BUILDING);
-      // Sum of locations other than depot and building (e.g. showroom, vans)
-      const otherTotal = currentTotal - currentDepot - currentBuilding;
-      const newDepot = Math.max(0, num - currentBuilding - Math.max(0, otherTotal));
+      const newDepot = Math.max(0, num - currentBuilding);
       const ls = { ...(item.locationStock || {}) };
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
+      item.depotStock = newDepot;
     } else {
       if (item[field] === num) return;
       item[field] = num;
@@ -887,8 +915,7 @@
         const inp = depotCell.querySelector('input.inline-input');
         if (inp && document.activeElement !== inp) {
           inp.value = depot;
-          if (depot <= 0) inp.classList.add('text-red-500', 'font-bold');
-          else inp.classList.remove('text-red-500', 'font-bold');
+          inp.className = `inline-input ${depot <= 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`;
         }
       }
 
@@ -942,20 +969,21 @@
 
     if (field === 'buildingStock') {
       const ls = { ...(item.locationStock || {}) };
-      ls[LOC_BUILDING] = num;
+      const ceiling = totalStockFromLocs(item);
+      const clampedBuilding = Math.min(num, ceiling);
+      const newDepot = Math.max(0, ceiling - clampedBuilding);
+      ls[LOC_BUILDING] = clampedBuilding;
+      ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
-      item.buildingStock = num;
-      item.totalStock = totalStockFromLocs(item);
+      item.buildingStock = clampedBuilding;
+      item.depotStock = newDepot;
     } else if (field === 'totalStock') {
-      const currentTotal = totalStockFromLocs(item);
-      const currentDepot = depotStock(item);
       const currentBuilding = locStock(item, LOC_BUILDING);
-      const otherTotal = currentTotal - currentDepot - currentBuilding;
-      const newDepot = Math.max(0, num - currentBuilding - Math.max(0, otherTotal));
+      const newDepot = Math.max(0, num - currentBuilding);
       const ls = { ...(item.locationStock || {}) };
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
-      item.totalStock = totalStockFromLocs(item);
+      item.depotStock = newDepot;
     } else {
       item[field] = num;
     }

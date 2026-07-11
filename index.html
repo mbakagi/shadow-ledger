@@ -271,10 +271,30 @@
   body:not(.printing-label) td:last-child,
   body:not(.printing-label) #toast-container,
   body:not(.printing-label) .modal-overlay,
-  body:not(.printing-label) #bulk-actions-bar { display: none !important; }
+  body:not(.printing-label) #bulk-actions-bar,
+  body:not(.printing-label) nav,
+  body:not(.printing-label) select,
+  body:not(.printing-label) #btn-manifest,
+  body:not(.printing-label) #btn-scan-out,
+  body:not(.printing-label) #btn-history,
+  body:not(.printing-label) #btn-locations,
+  body:not(.printing-label) #btn-bins,
+  body:not(.printing-label) #btn-pareto,
+  body:not(.printing-label) #btn-add-item,
+  body:not(.printing-label) #btn-import,
+  body:not(.printing-label) #btn-export-csv,
+  body:not(.printing-label) #btn-labelgen,
+  body:not(.printing-label) #btn-theme,
+  body:not(.printing-label) .modal-overlay input,
+  body:not(.printing-label) .modal-overlay select,
+  body:not(.printing-label) .modal-overlay textarea,
+  body:not(.printing-label) .modal-overlay button { display: none !important; }
   
   body:not(.printing-label) { background: white !important; color: black !important; }
   body:not(.printing-label) .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  body:not(.printing-label) table { font-size: 10px !important; }
+  body:not(.printing-label) td, body:not(.printing-label) th { padding: 2px 4px !important; }
+  body:not(.printing-label) input { border: none !important; background: transparent !important; color: black !important; }
 
   /* Label Print Styles */
   body.printing-label > * { display: none !important; }
@@ -586,20 +606,20 @@
         <table id="inventory-table" class="w-full text-sm">
           <thead>
             <tr class="bg-gray-50 dark:bg-surface-700/60 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              <th class="px-3 py-3 w-10 text-center"><input type="checkbox" id="check-all" class="w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent"></th>
-              <th class="px-3 py-3 w-8 text-center" title="Status Badge"></th>
-              <th class="px-3 py-3 cursor-pointer select-none hover:text-accent transition-colors" data-sort="sku">SKU ↕</th>
-              <th class="px-3 py-3 cursor-pointer select-none hover:text-accent transition-colors" data-sort="name">Item Name ⇕</th>
-              <th class="px-3 py-3 hidden md:table-cell font-mono" title="Bin / Shelf Code">Bin</th>
-              <th class="px-3 py-3 cursor-pointer select-none hover:text-accent transition-colors hidden sm:table-cell" data-sort="category">Category ⇕</th>
-              <th class="px-3 py-3 text-center hidden lg:table-cell">Datasheet</th>
-              <th class="px-3 py-3 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="totalStock">Total ↕</th>
-              <th class="px-3 py-3 text-center" data-sort="buildingStock">Building ↕</th>
-              <th class="px-3 py-3 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="depotStock">Depot ↕</th>
-              <th class="px-3 py-3 text-center hidden lg:table-cell">Carrier Trig.</th>
-              <th class="px-3 py-3 text-center hidden lg:table-cell">Max Cap.</th>
-              <th class="px-3 py-3 text-center hidden lg:table-cell">Purch. Trig.</th>
-              <th class="px-3 py-3 text-center w-20">Actions</th>
+              <th class="px-2 py-2 w-10 text-center"><input type="checkbox" id="check-all" class="w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent"></th>
+              <th class="px-2 py-2 w-8 text-center" title="Status Badge"></th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors" data-sort="sku">SKU ↕</th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors" data-sort="name">Item Name ⇕</th>
+              <th class="px-2 py-2 hidden md:table-cell" title="Bin / Shelf Code" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">Bin</th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors hidden sm:table-cell" data-sort="category">Category ⇕</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Datasheet</th>
+              <th class="px-2 py-2 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="totalStock">Total ↕</th>
+              <th class="px-2 py-2 text-center" data-sort="buildingStock">Building ↕</th>
+              <th class="px-2 py-2 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="depotStock">Depot ↕</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Carrier Trig.</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Max Cap.</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Purch. Trig.</th>
+              <th class="px-2 py-2 text-center w-20">Actions</th>
             </tr>
           </thead>
           <tbody id="table-body" class="divide-y divide-gray-100 dark:divide-gray-700/50">
