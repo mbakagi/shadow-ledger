@@ -190,6 +190,18 @@
   @apply text-gray-700 dark:text-gray-200;
 }
 
+/* ── Pareto mode tab ── */
+.pareto-tab {
+  @apply px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 dark:text-gray-400
+         border border-gray-200 dark:border-gray-700 cursor-pointer transition-all duration-200;
+}
+.pareto-tab.active {
+  @apply bg-accent text-white border-accent shadow-sm;
+}
+.pareto-tab:not(.active):hover {
+  @apply text-gray-700 dark:text-gray-200;
+}
+
 /* ── Modal ── */
 .modal-overlay {
   @apply fixed inset-0 z-[90] flex items-center justify-center p-4;
@@ -333,6 +345,37 @@
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   line-height: 1.6;
+}
+/* ── Bin Setup ── */
+.bin-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 8px 4px; border-radius: 8px; cursor: default; border: 2px solid transparent;
+  font-size: 11px; line-height: 1.3; transition: all .15s;
+}
+.bin-free {
+  background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3); cursor: pointer;
+}
+.bin-free:hover { background: rgba(16,185,129,.18); border-color: #10b981; }
+.bin-taken {
+  background: rgba(107,114,128,.08); border-color: rgba(107,114,128,.2); opacity: .65;
+}
+/* ── Pareto ── */
+.bin-inline-edit {
+  width: 72px; font-size: 11px; font-family: 'Courier New', monospace;
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  padding: 1px 4px; color: inherit; outline: none;
+}
+.bin-inline-edit:focus { border-color: #3b82f6; background: rgba(59,130,246,.06); }
+.bin-inline-edit::placeholder { color: #9ca3af; }
+/* ── Bin Print Labels ── */
+.print-label-bin {
+  display: flex; align-items: center; justify-content: center;
+  width: 2.5in; height: 1.5in; border: 1px dashed #ccc; overflow: hidden;
+  background: white; padding: 4px;
+}
+.bin-print-code {
+  font-family: 'Courier New', monospace; font-size: 28pt; font-weight: 900;
+  text-align: center; letter-spacing: .05em;
 }
   </style>
 </head>
@@ -503,6 +546,16 @@
       <button id="btn-locations" title="Manage stock locations / warehouses" class="btn-secondary whitespace-nowrap">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         <span class="text-sm font-semibold hidden lg:inline">Locations</span>
+      </button>
+      <!-- Bins Manager -->
+      <button id="btn-bins" title="Bin / Shelf setup — assign + print bin labels" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v4H4zM4 12h16v8H4zM8 16h2M8 8h0"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">Bins</span>
+      </button>
+      <!-- Pareto Insights -->
+      <button id="btn-pareto" title="Pareto dashboard — see top movers (80/20)" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">Pareto</span>
       </button>
     </section>
 
@@ -1252,6 +1305,129 @@
           Transfer Stock
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ BINS MANAGER MODAL ═══════════════════ -->
+  <div id="modal-bins" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-4xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold flex items-center gap-2">
+          <svg class="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v4H4zM4 12h16v8H4z"/></svg>
+          Bin Setup & Labels
+        </h2>
+        <button id="modal-bins-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <!-- Bulk bin creator -->
+        <div class="lg:col-span-1 space-y-3">
+          <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Bulk assign bins</h3>
+          <div>
+            <label class="label">Prefix</label>
+            <input id="bins-prefix" type="text" class="input-field w-full" placeholder="A" maxlength="3" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Start #</label>
+              <input id="bins-start" type="number" min="1" class="input-field w-full" value="1" />
+            </div>
+            <div>
+              <label class="label">Count</label>
+              <input id="bins-count" type="number" min="1" max="500" class="input-field w-full" value="12" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Suffix (optional)</label>
+            <input id="bins-suffix" type="text" class="input-field w-full" placeholder="-L1, -B2…" maxlength="6" />
+          </div>
+          <button id="bins-generate" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">
+            <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Generate Bin Codes
+          </button>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Generates codes like <code class="font-mono">A01-L1</code> ready to print and stick on shelves. Unassigned bins are also kept so you can reuse them.</p>
+        </div>
+
+        <!-- List preview + assignments -->
+        <div class="lg:col-span-2 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Preview & assignment</h3>
+            <div class="flex gap-2">
+              <select id="bins-label-size" class="select-field text-xs py-1.5">
+                <option value="4x2">4×2 in</option>
+                <option value="2x1">2×1 in</option>
+                <option value="a4-grid" selected>A4 grid (24)</option>
+              </select>
+              <button id="bins-print" class="btn-secondary text-xs py-1.5">
+                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                Print Sheet
+              </button>
+            </div>
+          </div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <p><strong>Assignment rule:</strong> Bins are auto-assigned in order to items that don't have one yet. Items with bins are kept.</p>
+            <p>Or click a bin in the grid to manually assign it to the next selected item.</p>
+          </div>
+          <div id="bins-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[360px] overflow-y-auto scrollbar-thin p-1"></div>
+          <div id="bins-stats" class="text-xs text-gray-500 dark:text-gray-400"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ PARETO DASHBOARD MODAL ═══════════════════ -->
+  <div id="modal-pareto" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-5xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold flex items-center gap-2">
+          <svg class="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
+          Pareto Insights — Top Movers
+        </h2>
+        <button id="modal-pareto-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Mode ribbon -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button class="pareto-tab active" data-pareto-mode="transactions">By Scan-out Activity</button>
+        <button class="pareto-tab" data-pareto-mode="lowstock">By Reorder Urgency</button>
+        <button class="pareto-tab" data-pareto-mode="value">By Stock Value (BS Comm)</button>
+      </div>
+
+      <!-- Summary -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Total SKUs</p><p class="text-xl font-extrabold" id="pareto-total-skus">0</p></div>
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Top 20% movers</p><p class="text-xl font-extrabold text-accent" id="pareto-top20c">0%</p></div>
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Share of activity</p><p class="text-xl font-extrabold text-emerald-500" id="pareto-coverage">0%</p></div>
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Vital few (count)</p><p class="text-xl font-extrabold" id="pareto-vital">0</p></div>
+      </div>
+
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-2" id="pareto-explainer"></p>
+
+      <!-- Chart bars -->
+      <div id="pareto-chart" class="h-56 w-full bg-gray-50 dark:bg-surface-700/40 rounded-xl p-3 flex items-end gap-1 overflow-x-auto scrollbar-thin"></div>
+
+      <!-- Table -->
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+              <th class="py-2 pr-3">#</th>
+              <th class="py-2 pr-3">SKU</th>
+              <th class="py-2 pr-3">Item</th>
+              <th class="py-2 pr-3 text-right">Measure</th>
+              <th class="py-2 pr-3 text-right">% of total</th>
+              <th class="py-2 pr-3 text-right">Cumulative</th>
+              <th class="py-2 pr-3 text-center">Vision tier</th>
+            </tr>
+          </thead>
+          <tbody id="pareto-body"></tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-xs text-gray-500 dark:text-gray-400"><strong>Vision tier A</strong> = items in the vital few (top 80% of activity). Move them to eye-level / aisle-end bins. <strong>Tier B</strong> = next 15%. <strong>Tier C</strong> = bottom 5% — push to back shelves.</p>
     </div>
   </div>
 

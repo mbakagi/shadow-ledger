@@ -192,6 +192,9 @@
     userInfo:         document.getElementById('user-info'),
     currentUserEmail: document.getElementById('current-user-email'),
     btnLogout:        document.getElementById('btn-logout'),
+    // Bin / Pareto modals
+    modalBins:        $('#modal-bins'),
+    modalPareto:      $('#modal-pareto'),
   };
 
   // ═══════════════════════════════════════════════════════
@@ -475,14 +478,16 @@
     else if (alert === 'procure') results = results.filter(needsProcurement);
     else if (alert === 'ok') results = results.filter(i => !needsCarrier(i) && !needsProcurement(i));
 
-    if (stock === 'in_stock') results = results.filter(i => i.totalStock > 0);
-    else if (stock === 'in_building') results = results.filter(i => i.buildingStock > 0);
+    if (stock === 'in_stock') results = results.filter(i => totalStockFromLocs(i) > 0);
+    else if (stock === 'in_building') results = results.filter(i => locStock(i, LOC_BUILDING) > 0);
 
     // Sort
     results.sort((a, b) => {
-      let av = a[State.sortField];
-      let bv = b[State.sortField];
+      let av, bv;
       if (State.sortField === 'depotStock') { av = depotStock(a); bv = depotStock(b); }
+      else if (State.sortField === 'totalStock') { av = totalStockFromLocs(a); bv = totalStockFromLocs(b); }
+      else if (State.sortField === 'buildingStock') { av = locStock(a, LOC_BUILDING); bv = locStock(b, LOC_BUILDING); }
+      else { av = a[State.sortField]; bv = b[State.sortField]; }
       if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
       if (av < bv) return State.sortAsc ? -1 : 1;
       if (av > bv) return State.sortAsc ? 1 : -1;
@@ -589,7 +594,9 @@
             <div class="gauge-bar ${gaugeColor}" style="width:${gaugePercent}%"></div>
           </div>
         </td>
-        <td class="px-3 py-2.5 text-center font-semibold tabular-nums ${depot <= 0 ? 'text-red-500' : ''}">${depot}</td>
+        <td class="px-3 py-2.5 text-center font-semibold tabular-nums ${depot <= 0 ? 'text-red-500' : ''}">
+          <input type="number" inputmode="numeric" min="0" class="inline-input ${depot <= 0 ? 'text-red-500 font-bold' : ''}" value="${depot}" data-field="depotStock" data-id="${item.id}" />
+        </td>
         <td class="px-3 py-2.5 text-center hidden lg:table-cell">
           <input type="number" inputmode="numeric" min="0" class="inline-input" value="${item.carrierTrigger}" data-field="carrierTrigger" data-id="${item.id}" />
         </td>
@@ -710,7 +717,12 @@
       ls[LOC_BUILDING] = num;
       item.locationStock = ls;
       item.buildingStock = num;
-      item.totalStock = totalStockFromLocs(item);
+    } else if (field === 'depotStock') {
+      const ls = { ...(item.locationStock || {}) };
+      const cur = locStock(item, LOC_DEPOT);
+      if (cur === num) return;
+      ls[LOC_DEPOT] = num;
+      item.locationStock = ls;
     } else if (field === 'totalStock') {
       // Editing total adjusts depot so that new total = user input, keeping building stable
       const currentTotal = totalStockFromLocs(item);
@@ -723,7 +735,6 @@
       const ls = { ...(item.locationStock || {}) };
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
-      item.totalStock = totalStockFromLocs(item);
     } else {
       if (item[field] === num) return;
       item[field] = num;
@@ -732,11 +743,18 @@
 
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
-      const depot = depotStock(item);
-      const depotCell = row.cells[8];
+      // Layout reminder (renderRow cells):
+      // 0=checkbox 1=badge 2=SKU 3=Name 4=Bin 5=Category 6=Datasheet
+      // 7=TotalInput 8=BuildingInput 9=DepotInput 10=CarrierTrig 11=MaxCap 12=PurchTrig 13=Actions
+      const depotCell = row.cells[9];
       if (depotCell) {
-        depotCell.textContent = depot;
-        depotCell.className = `px-3 py-2.5 text-center font-semibold tabular-nums ${depot <= 0 ? 'text-red-500' : ''}`;
+        const depot = depotStock(item);
+        const inp = depotCell.querySelector('input.inline-input');
+        if (inp && document.activeElement !== inp) {
+          inp.value = depot;
+          if (depot <= 0) inp.classList.add('text-red-500', 'font-bold');
+          else inp.classList.remove('text-red-500', 'font-bold');
+        }
       }
 
       const buildingNow = locStock(item, LOC_BUILDING);
@@ -762,10 +780,20 @@
         badgeCell.innerHTML = badge;
       }
 
-      const totalCell = row.cells[6];
+      // Update the Total INPUT (cells[7]) without touching the focused element.
+      // Only update the cell the user is NOT editing.
+      const totalCell = row.cells[7];
       if (totalCell) {
         const inp = totalCell.querySelector('input.inline-input');
         if (inp && document.activeElement !== inp) inp.value = totalStockFromLocs(item);
+      }
+      // Same defensive update for Building cell (cells[8])
+      const bldgCell = row.cells[8];
+      if (bldgCell) {
+        const inp = bldgCell.querySelector('input.inline-input');
+        if (inp && document.activeElement !== inp && field !== 'buildingStock') {
+          inp.value = buildingNow;
+        }
       }
     }
 
@@ -2088,7 +2116,7 @@
     $('#modal-alerts-close').addEventListener('click', () => closeModal(dom.modalAlerts));
 
     // Close modals on overlay click (includes new modals)
-    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history')].forEach(modal => {
+    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), dom.modalBins, dom.modalPareto].forEach(modal => {
       if (!modal) return;
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -2102,7 +2130,7 @@
     // Close modals on Escape
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history')].forEach(m => {
+        [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), dom.modalBins, dom.modalPareto].forEach(m => {
           if (m && !m.classList.contains('hidden')) {
             if (m.id === 'modal-scanout') stopScanCamera();
             closeModal(m);
@@ -2619,6 +2647,224 @@
       const total = selected.length * qty;
       toast(`Generated ${total} label${total === 1 ? '' : 's'}`, 'success');
     };
+
+    // ════════════════════════════════════════
+    //  Bins & Pareto
+    // ════════════════════════════════════════
+    $('#btn-bins').addEventListener('click', openBinsModal);
+    $('#btn-pareto').addEventListener('click', () => openPareto('transactions'));
+    $('#modal-bins-close').addEventListener('click', () => closeModal(dom.modalBins));
+    $('#modal-pareto-close').addEventListener('click', () => closeModal(dom.modalPareto));
+
+    // Bin: generate button
+    $('#bins-generate').addEventListener('click', openBinsModal);
+
+    // Bin: print sheet
+    $('#bins-print').addEventListener('click', () => {
+      const size = $('#bins-label-size').value;
+      const grid = $('#bins-grid');
+      const labels = grid.querySelectorAll('.bin-cell');
+      if (!labels.length) { toast('No bins to print', 'error'); return; }
+      dom.printContainer.innerHTML = '';
+      dom.printContainer.className = 'print-grid';
+      labels.forEach(cell => {
+        const code = cell.dataset.bincode;
+        if (!code) return;
+        const div = document.createElement('div');
+        div.className = 'print-label-bin';
+        div.innerHTML = `<div class="bin-print-code">${esc(code)}</div>`;
+        dom.printContainer.appendChild(div);
+      });
+      dom.printContainer.style.setProperty('--label-w', size === 'a4-grid' ? 'auto' : size === '2x1' ? '2in' : '4in');
+      document.body.classList.add('printing-label');
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => {
+          document.body.classList.remove('printing-label');
+          dom.printContainer.innerHTML = '';
+          dom.printContainer.className = '';
+        }, 500);
+      }, 200);
+      toast(`Printed ${labels.length} bin labels`, 'success');
+    });
+
+    // Pareto tab switching
+    $$('.pareto-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        $$('.pareto-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        renderPareto(tab.dataset.paretoMode);
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  BIN SETUP
+  // ═══════════════════════════════════════════════════════
+  function openBinsModal() {
+    const prefix  = $('#bins-prefix').value.trim().toUpperCase() || 'A';
+    const start   = parseInt($('#bins-start').value, 10) || 1;
+    const count   = parseInt($('#bins-count').value, 10) || 12;
+    const suffix  = $('#bins-suffix').value.trim().toUpperCase() || '';
+    const existingBins = new Set(State.items.filter(i => i.binCode).map(i => i.binCode));
+
+    // Generate bin codes
+    const codes = [];
+    for (let i = 0; i < count; i++) {
+      const num = String(start + i).padStart(2, '0');
+      codes.push(`${prefix}${num}${suffix}`);
+    }
+
+    // Items without bins (for auto-assignment)
+    const unassigned = State.items.filter(i => !i.binCode && !i.archived);
+
+    // Render grid
+    const grid = $('#bins-grid');
+    grid.innerHTML = codes.map((code, idx) => {
+      const taken = existingBins.has(code);
+      return `<div class="bin-cell ${taken ? 'bin-taken' : 'bin-free'}" data-bincode="${esc(code)}" title="${taken ? 'Already assigned' : 'Free bin — click to assign'}">
+        <span class="font-mono text-xs font-bold">${esc(code)}</span>
+        <span class="text-[10px] opacity-70">${taken ? 'in use' : 'free'}</span>
+      </div>`;
+    }).join('') + (codes.length === 0 ? '<p class="col-span-full text-gray-400 text-xs">No codes generated</p>' : '');
+
+    // Stats
+    const free = codes.filter(c => !existingBins.has(c));
+    $('#bins-stats').textContent = `${free.length} free · ${codes.length - free.length} taken · ${unassigned.length} items without bins`;
+
+    // Click to assign
+    grid.querySelectorAll('.bin-cell.bin-free').forEach(cell => {
+      cell.addEventListener('click', async () => {
+        if (unassigned.length === 0) { toast('No items without bins', 'info'); return; }
+        const item = unassigned.shift();
+        item.binCode = cell.dataset.bincode;
+        await DAL.saveOne(item);
+        cell.classList.remove('bin-free');
+        cell.classList.add('bin-taken');
+        cell.querySelector('span:last-child').textContent = 'assigned';
+        toast(`${item.sku} → ${item.binCode}`, 'success');
+        $('#bins-stats').textContent = `${free.length - 1 ? 'more' : 'no more'} free · ${unassigned.length} items without bins`;
+      });
+    });
+
+    openModal(dom.modalBins);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  PARETO DASHBOARD
+  // ═══════════════════════════════════════════════════════
+  function openPareto(mode) {
+    renderPareto(mode || 'transactions');
+    openModal(dom.modalPareto);
+  }
+
+  function renderPareto(mode) {
+    const items = State.items.filter(i => !i.archived);
+    if (items.length === 0) {
+      $('#pareto-total-skus').textContent = '0';
+      $('#pareto-top20c').textContent = '0%';
+      $('#pareto-coverage').textContent = '0%';
+      $('#pareto-vital').textContent = '0';
+      $('#pareto-body').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No items yet.</td></tr>';
+      $('#pareto-chart').innerHTML = '';
+      $('#pareto-explainer').textContent = '';
+      return;
+    }
+
+    // Compute a "movement" score per item based on mode
+    let scored;
+    if (mode === 'lowstock') {
+      // Items closest to needing reorder = lowest building stock as % of capacity
+      scored = items.map(i => {
+        const measure = Math.max(0, (i.maxCapacity || 20) - locStock(i, LOC_BUILDING));
+        return { ...i, measure };
+      });
+    } else if (mode === 'value') {
+      // By total stock value (BS Comm quantity)
+      scored = items.map(i => {
+        const measure = totalStockFromLocs(i);
+        return { ...i, measure };
+      });
+    } else {
+      // Default: transactions mode — count from Firestore transactions, or fallback to totalStock
+      scored = items.map(i => {
+        const measure = totalStockFromLocs(i); // simplified proxy for active items
+        return { ...i, measure };
+      });
+    }
+
+    // Sort descending by measure
+    scored.sort((a, b) => b.measure - a.measure);
+
+    const totalMeasure = scored.reduce((s, i) => s + i.measure, 0) || 1;
+    let cum = 0;
+    let vitalCount = 0;
+    const tableRows = scored.map((i, idx) => {
+      const pct = totalMeasure > 0 ? (i.measure / totalMeasure) * 100 : 0;
+      cum += pct;
+      const tier = cum <= 80 ? 'A' : cum <= 95 ? 'B' : 'C';
+      if (cum <= 80) vitalCount = idx + 1;
+      return { idx: idx + 1, item: i, pct, cum: Math.min(cum, 100), tier };
+    });
+
+    const top20Cum = tableRows.slice(0, Math.max(1, Math.ceil(tableRows.length * 0.2))).reduce((s, r) => s + r.pct, 0);
+
+    // Summary cards
+    $('#pareto-total-skus').textContent = scored.length;
+    $('#pareto-top20c').textContent = Math.round(top20Cum) + '%';
+    $('#pareto-coverage').textContent = Math.round(tableRows.filter(r => r.tier === 'A').reduce((s, r) => s + r.pct, 0)) + '%';
+    $('#pareto-vital').textContent = vitalCount;
+
+    // Explainer
+    const modeLabels = { transactions: 'Scan-out activity (proxy: total stock)', lowstock: 'Distance from carrier trigger', value: 'Total stock value' };
+    $('#pareto-explainer').textContent = `Mode: ${modeLabels[mode] || mode}. Sorting by most active → least active.`;
+
+    // Table
+    $('#pareto-body').innerHTML = tableRows.map(r => `
+      <tr class="border-b border-gray-100 dark:border-gray-700/30 text-sm hover:bg-gray-50 dark:hover:bg-surface-700/30 transition-colors">
+        <td class="py-2 pr-3 text-xs text-gray-400 font-mono">${r.idx}</td>
+        <td class="py-2 pr-3 font-mono text-xs font-semibold text-accent">${esc(r.item.sku)}</td>
+        <td class="py-2 pr-3 text-gray-700 dark:text-gray-200">${esc(r.item.name)}</td>
+        <td class="py-2 pr-3 text-right font-semibold tabular-nums">${r.item.measure}</td>
+        <td class="py-2 pr-3 text-right text-xs text-gray-500 tabular-nums">${r.pct.toFixed(1)}%</td>
+        <td class="py-2 pr-3 text-right text-xs font-semibold tabular-nums" style="color:${r.cum <= 80 ? '#10b981' : r.cum <= 95 ? '#f59e0b' : '#ef4444'}">${r.cum.toFixed(1)}%</td>
+        <td class="py-2 pr-3 text-center">
+          <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
+            ${r.tier === 'A' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
+              r.tier === 'B' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' :
+              'bg-red-100 dark:bg-red-900/30 text-red-500'}">${r.tier}
+          </span>
+          <span class="ml-1 text-xs text-gray-400">
+            <input type="text" class="bin-inline-edit" value="${esc(r.item.binCode || '')}"
+              placeholder="Bin…" maxlength="20"
+              data-sku="${esc(r.item.sku)}" title="Click to edit bin code" />
+          </span>
+        </td>
+      </tr>
+    `).join('');
+
+    // Inline bin edit saves
+    $('#pareto-body').querySelectorAll('.bin-inline-edit').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const item = State.items.find(i => i.sku === inp.dataset.sku);
+        if (!item) return;
+        item.binCode = inp.value.trim() || '';
+        await DAL.saveOne(item);
+        toast(`Bin for ${item.sku}: ${item.binCode || '—'}`, 'success');
+      });
+    });
+
+    // Chart bars (top 30 items)
+    const chart = $('#pareto-chart');
+    const topN = tableRows.slice(0, 30);
+    const maxMeasure = topN.length ? Math.max(...topN.map(r => r.item.measure), 1) : 1;
+    chart.innerHTML = topN.map(r => {
+      const h = Math.max(4, (r.item.measure / maxMeasure) * 100);
+      return `<div class="flex flex-col items-center justify-end h-full min-w-[24px]" title="#${r.idx} ${esc(r.item.sku)}: ${r.item.measure}">
+        <div class="w-5 rounded-t-sm transition-all duration-300 hover:opacity-80 cursor-pointer"
+             style="height:${h.toFixed(0)}%;background:${r.tier === 'A' ? '#10b981' : r.tier === 'B' ? '#f59e0b' : '#ef4444'}"></div>
+      </div>`;
+    }).join('') + (topN.length === 0 ? '<p class="text-gray-400 text-xs self-center w-full text-center">No data</p>' : '');
   }
 
   // ═══════════════════════════════════════════════════════
