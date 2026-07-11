@@ -2854,6 +2854,19 @@
     $('#modal-bins-close').addEventListener('click', () => closeModal(dom.modalBins));
     $('#modal-pareto-close').addEventListener('click', () => closeModal(dom.modalPareto));
 
+    // Bin mode toggle (Structured / General)
+    $$('.bin-mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        $$('.bin-mode-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const mode = tab.dataset.binMode;
+        const structured = $('#bins-structured-panel');
+        const general = $('#bins-general-panel');
+        if (structured) structured.classList.toggle('hidden', mode !== 'structured');
+        if (general) general.classList.toggle('hidden', mode !== 'general');
+      });
+    });
+
     // Bin: generate button
     $('#bins-generate').addEventListener('click', openBinsModal);
 
@@ -2899,45 +2912,73 @@
   // ═══════════════════════════════════════════════════════
   //  BIN SETUP
   // ═══════════════════════════════════════════════════════
-  function openBinsModal() {
-    const room    = ($('#bins-room')?.value || '').trim().toUpperCase() || 'WH';
-    const aisle   = ($('#bins-aisle')?.value || '').trim().toUpperCase() || 'A';
-    const bay     = parseInt($('#bins-bay')?.value, 10) || 1;
-    const start   = parseInt($('#bins-start')?.value, 10) || 1;
-    const count   = parseInt($('#bins-count')?.value, 10) || 12;
-    const level   = ($('#bins-level')?.value || '1').toUpperCase();
-    const action  = ($('#bins-action')?.value || 'STOCK').toUpperCase();
-    const existingBins = new Set(State.items.filter(i => i.binCode).map(i => i.binCode));
+  function getBinMode() {
+    const active = document.querySelector('.bin-mode-tab.active');
+    return active?.dataset?.binMode || 'structured';
+  }
 
-    const codes = [];
-    for (let i = 0; i < count; i++) {
-      const binNum = String(start + i).padStart(2, '0');
-      const bayNum = String(bay).padStart(2, '0');
-      codes.push(`${room}-${aisle}-${bayNum}-${binNum}-${level}-${action}`);
+  function openBinsModal() {
+    const mode = getBinMode();
+    const existingBins = new Set(State.items.filter(i => i.binCode).map(i => i.binCode));
+    let codes = [];
+
+    if (mode === 'general') {
+      const zone     = ($('#bins-zone')?.value || 'STAGING').toUpperCase();
+      const label    = ($('#bins-zone-label')?.value || '').trim().toUpperCase() || 'AREA_1';
+      const count    = parseInt($('#bins-zone-count')?.value, 10) || 6;
+      const action   = ($('#bins-action')?.value || 'STOCK').toUpperCase();
+
+      for (let i = 0; i < count; i++) {
+        const suffix = count > 1 ? `_${String(i + 1).padStart(2, '0')}` : '';
+        codes.push(`GENERAL-${zone}-${label}${suffix}-${action}`);
+      }
+    } else {
+      const room    = ($('#bins-room')?.value || '').trim().toUpperCase() || 'WH';
+      const aisle   = ($('#bins-aisle')?.value || '').trim().toUpperCase() || 'A';
+      const bay     = parseInt($('#bins-bay')?.value, 10) || 1;
+      const start   = parseInt($('#bins-start')?.value, 10) || 1;
+      const count   = parseInt($('#bins-count')?.value, 10) || 12;
+      const level   = ($('#bins-level')?.value || '1').toUpperCase();
+      const action  = ($('#bins-action')?.value || 'STOCK').toUpperCase();
+
+      for (let i = 0; i < count; i++) {
+        const binNum = String(start + i).padStart(2, '0');
+        const bayNum = String(bay).padStart(2, '0');
+        codes.push(`${room}-${aisle}-${bayNum}-${binNum}-${level}-${action}`);
+      }
     }
 
-    // Items without bins (for auto-assignment)
     const unassigned = State.items.filter(i => !i.binCode && !i.archived);
 
-    // Render grid
     const grid = $('#bins-grid');
     grid.innerHTML = codes.map((code, idx) => {
       const taken = existingBins.has(code);
-      const parts = code.split('-');
-      const [rm, aisle, bayNum, binNum, lvl, act] = parts;
+      const isGeneral = code.startsWith('GENERAL-');
+      let sub1 = '', sub2 = '', sub3 = '';
+
+      if (isGeneral) {
+        const parts = code.split('-');
+        sub1 = parts[1] || '';
+        sub2 = parts[2] || '';
+        sub3 = parts[3] || '';
+      } else {
+        const parts = code.split('-');
+        sub1 = `${parts[0] || ''} · Aisle ${parts[1] || ''} · Bay ${parts[2] || ''}`;
+        sub2 = `Bin ${parts[3] || ''} Lvl ${parts[4] || ''}`;
+        sub3 = parts[5] || '';
+      }
+
       return `<div class="bin-cell ${taken ? 'bin-taken' : 'bin-free'}" data-bincode="${esc(code)}" title="${taken ? 'Already assigned' : 'Free bin — click to assign'}">
-        <span class="text-[9px] opacity-50">${esc(rm)} · Aisle ${esc(aisle)} · Bay ${esc(bayNum)}</span>
-        <span class="font-mono text-xs font-bold">Bin ${esc(binNum)} Lvl ${esc(lvl)}</span>
-        <span class="text-[9px] opacity-60">${esc(act)}</span>
+        <span class="text-[9px] opacity-50">${isGeneral ? 'ZONE' : esc(sub1)}</span>
+        <span class="font-mono text-xs font-bold">${isGeneral ? esc(sub1) + ' · ' + esc(sub2) : esc(sub2)}</span>
+        <span class="text-[9px] opacity-60">${esc(sub3)}</span>
         <span class="text-[10px] opacity-70">${taken ? 'in use' : 'free'}</span>
       </div>`;
     }).join('') + (codes.length === 0 ? '<p class="col-span-full text-gray-400 text-xs">No codes generated</p>' : '');
 
-    // Stats
     const free = codes.filter(c => !existingBins.has(c));
     $('#bins-stats').textContent = `${free.length} free · ${codes.length - free.length} taken · ${unassigned.length} items without bins`;
 
-    // Click to assign
     grid.querySelectorAll('.bin-cell.bin-free').forEach(cell => {
       cell.addEventListener('click', async () => {
         if (unassigned.length === 0) { toast('No items without bins', 'info'); return; }
