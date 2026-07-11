@@ -1375,11 +1375,11 @@
       try {
         new QRCode(document.getElementById(`sku-qr-${item.id}`), {
           text: item.sku,
-          width: 140,
-          height: 140,
+          width: 200,
+          height: 200,
           colorDark: '#000000',
           colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
+          correctLevel: QRCode.CorrectLevel.H
         });
       } catch (e) {
         console.warn('Could not generate SKU QR for:', item.sku);
@@ -1390,11 +1390,11 @@
         try {
           new QRCode(document.getElementById(`url-qr-${item.id}`), {
             text: item.datasheetUrl,
-            width: 115,
-            height: 115,
+            width: 160,
+            height: 160,
             colorDark: '#000000',
             colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
+            correctLevel: QRCode.CorrectLevel.H
           });
         } catch (e) {
           console.warn('Could not generate URL QR for:', item.datasheetUrl);
@@ -1490,24 +1490,24 @@
 
     if (qrContent) {
       try {
-        const qrSize = Math.min(1.1, h*0.7) * 144;
+        const qrSize = Math.max(200, Math.min(1.1, h*0.7) * 144);
         new QRCode(label.querySelector('#' + qrId), {
           text: qrContent,
           width: qrSize, height: qrSize,
           colorDark: '#000000', colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
+          correctLevel: QRCode.CorrectLevel.H
         });
       } catch (e) { console.warn('QR render failed', e); }
     }
 
     if (hasDatasheetQR) {
       try {
-        const dsSize = Math.min(0.9, h*0.55) * 144;
+        const dsSize = Math.max(160, Math.min(0.9, h*0.55) * 144);
         new QRCode(label.querySelector('#' + dsQrId), {
           text: item.datasheetUrl,
           width: dsSize, height: dsSize,
           colorDark: '#000000', colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
+          correctLevel: QRCode.CorrectLevel.H
         });
       } catch (e) { console.warn('Datasheet QR render failed', e); }
     }
@@ -3108,9 +3108,9 @@
           if (el) {
             new QRCode(el, {
               text: code,
-              width: 120, height: 120,
+              width: 200, height: 200,
               colorDark: '#000000', colorLight: '#ffffff',
-              correctLevel: QRCode.CorrectLevel.M
+              correctLevel: QRCode.CorrectLevel.H
             });
           }
         } catch (e) { console.warn('Bin QR render failed', e); }
