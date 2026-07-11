@@ -1,0 +1,1 @@
+Run locally with `npx serve . -l 3000`. Deploy to Firebase Hosting by running `firebase deploy --only hosting` after configuring `firebase.json` and uploading `firestore.rules` to the project. The app ships with a pre-seeded sample dataset that auto-inserts into Firestore on first empty login.

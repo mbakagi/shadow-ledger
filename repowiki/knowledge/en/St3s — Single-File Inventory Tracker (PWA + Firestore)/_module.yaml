@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: ""
+title: St3s — Single-File Inventory Tracker (PWA + Firestore)
+scope:
+    - README.md
+    - app.js
+    - firebase-config.js
+    - firebase.json
+    - firestore.rules
+    - index.html
+    - manifest.json
+    - sw.js
+    - test.csv
+    - icon.svg
+source_files: []
+depends_on: []
+related_to: []

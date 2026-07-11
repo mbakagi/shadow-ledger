@@ -1,0 +1,25 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: main
+nodes_managed: true
+exported_at: "2026-07-09T21:09:53Z"
+modules:
+    "":
+        dir_name: St3s — Single-File Inventory Tracker (PWA + Firestore)
+        title: St3s — Single-File Inventory Tracker (PWA + Firestore)
+        scope:
+            - README.md
+            - app.js
+            - firebase-config.js
+            - firebase.json
+            - firestore.rules
+            - index.html
+            - manifest.json
+            - sw.js
+            - test.csv
+            - icon.svg
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

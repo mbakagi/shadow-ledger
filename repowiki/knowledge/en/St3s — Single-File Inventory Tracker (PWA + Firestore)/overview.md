@@ -1,0 +1,1 @@
+A zero-build, single-page PWA that tracks stock across a Main Depot and Company Building with real-time Firestore sync, QR scanning, CSV/Excel import, and label printing.
