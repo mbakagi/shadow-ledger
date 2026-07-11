@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>St3s — Guest Scan Out</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .pulse-border { animation: pulseBorder 2s ease-in-out infinite; }
+    @keyframes pulseBorder {
+      0%, 100% { border-color: rgba(239, 68, 68, 0.4); }
+      50% { border-color: rgba(239, 68, 68, 0.9); }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-gray-100 min-h-screen flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-xs text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Public Guest Checkout
+      </div>
+    </div>
+
+    <div id="card-loading" class="bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center">
+      <svg class="w-8 h-8 mx-auto mb-3 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <p class="text-sm text-slate-400">Authenticating guest session…</p>
+    </div>
+
+    <div id="card-error" class="hidden bg-red-900/20 border border-red-500/40 rounded-2xl p-6 text-center">
+      <svg class="w-10 h-10 mx-auto mb-3 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <p class="font-semibold text-red-300 mb-1" id="error-title">Access Denied</p>
+      <p class="text-sm text-red-200" id="error-msg">Invalid or missing scan parameters.</p>
+    </div>
+
+    <div id="card-checkout" class="hidden bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-700 bg-slate-800/60">
+        <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Item</p>
+        <p class="mono font-bold text-accent text-xl" id="co-sku" style="color:#a78bfa">—</p>
+        <p class="text-sm text-slate-300" id="co-name">—</p>
+      </div>
+
+      <div class="p-5 border-b border-slate-700">
+        <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Scanned Location</p>
+        <p class="mono font-bold text-lg text-slate-100" id="co-loc">—</p>
+        <p class="text-xs text-slate-500 mt-1">Building stock on hand: <span id="co-current" class="font-bold text-slate-300">—</span></p>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1.5">Quantity Out</label>
+          <input id="co-qty" type="number" min="1" value="1"
+            class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-2xl font-bold text-center mono focus:outline-none focus:border-accent" />
+        </div>
+
+        <div>
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1.5">Master Authorization Code</label>
+          <input id="co-code" type="password" autocomplete="off" placeholder="••••••••"
+            class="w-full bg-slate-900 border-2 border-slate-600 rounded-lg px-4 py-3 mono tracking-widest focus:outline-none pulse-border" />
+          <p class="text-[10px] text-slate-500 mt-1">Required to commit. Contact your warehouse manager.</p>
+        </div>
+
+        <div id="co-error" class="hidden bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-sm text-red-300"></div>
+
+        <button id="co-submit" class="w-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 text-white font-bold py-3.5 rounded-lg transition-all">
+          Confirm Checkout
+        </button>
+        <p class="text-center text-[10px] text-slate-500 mt-2">By submitting you confirm stock was physically removed.</p>
+      </div>
+    </div>
+
+    <div id="card-success" class="hidden bg-slate-800 border border-emerald-500/50 rounded-2xl p-6 text-center">
+      <svg class="w-14 h-14 mx-auto mb-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <p class="font-bold text-lg text-emerald-300 mb-1">Stock Checked Out</p>
+      <p class="text-sm text-slate-300" id="success-msg">—</p>
+      <button id="success-another" class="mt-5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold px-4 py-2 rounded-lg">New Scan</button>
+    </div>
+
+    <p class="text-center text-[10px] text-slate-600 mt-6">St3s Guest Checkout · No login required</p>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script>
+    /* ═══════════════════════════════════════════════════════
+       Guest Checkout — St3s
+       Public unauthenticated scan-out endpoint
+       ═══════════════════════════════════════════════════════ */
+
+    const firebaseConfig = {
+      apiKey:            "AIzaSyDBPAF8LeDCfywbFiWSMHeu01inc_uxSk0",
+      authDomain:        "ledger-d57da.firebaseapp.com",
+      projectId:         "ledger-d57da",
+      storageBucket:     "ledger-d57da.firebasestorage.app",
+      messagingSenderId: "713000868232",
+      appId:             "1:713000868232:web:b979ddfaa854ea80d5023d"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db   = firebase.firestore();
+    const auth = firebase.auth();
+
+    const MASTER_CODE = 'ST3S-MASTER-2024';
+
+    const LOC_DEPOT   = 'depot';
+    const LOC_BUILDING = 'building';
+
+    function locStock(item, locId) {
+      if (!item.locationStock) return 0;
+      return Math.max(0, Number(item.locationStock[locId]) || 0);
+    }
+    function totalStockFromLocs(item) {
+      if (!item.locationStock) return item.totalStock || 0;
+      return Object.values(item.locationStock).reduce((s, v) => s + (Number(v) || 0), 0);
+    }
+
+    const params = new URLSearchParams(location.search);
+    const itemId = params.get('id') || '';
+    const loc    = (params.get('loc') || '').toUpperCase();
+
+    function show(id) {
+      ['card-loading','card-error','card-checkout','card-success'].forEach(c => {
+        document.getElementById(c).classList.add('hidden');
+      });
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function showError(title, msg) {
+      document.getElementById('error-title').textContent = title;
+      document.getElementById('error-msg').textContent = msg;
+      show('card-error');
+    }
+
+    async function init() {
+      if (!itemId || !loc) {
+        showError('Invalid Scan', 'Missing item ID or location in the URL. Re-scan the label.');
+        return;
+      }
+
+      try {
+        await auth.signInAnonymously();
+      } catch (err) {
+        showError('Connection Failed', err.message || 'Could not start guest session.');
+        return;
+      }
+
+      try {
+        const doc = await db.collection('inventory').doc(itemId).get();
+        if (!doc.exists) {
+          showError('Item Not Found', 'This SKU was deleted or the ID is wrong.');
+          return;
+        }
+        const item = { id: doc.id, ...doc.data() };
+        const expected = (item.binCode || '').toUpperCase();
+        if (expected && expected !== loc) {
+          showError('Location Mismatch',
+            `Label says "${loc}" but item is stored at "${expected || '—'}". Cannot proceed.`);
+          return;
+        }
+        renderCheckout(item);
+        show('card-checkout');
+      } catch (err) {
+        showError('Load Failed', err.message || 'Could not load item.');
+      }
+    }
+
+    function renderCheckout(item) {
+      document.getElementById('co-sku').textContent = item.sku;
+      document.getElementById('co-name').textContent = item.name;
+      document.getElementById('co-loc').textContent = item.binCode || '—';
+      document.getElementById('co-current').textContent = locStock(item, LOC_BUILDING);
+
+      const qtyInput = document.getElementById('co-qty');
+      qtyInput.max = locStock(item, LOC_BUILDING) || 1;
+
+      document.getElementById('co-submit').onclick = () => processCheckout(item);
+      document.getElementById('co-code').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') processCheckout(item);
+      });
+    }
+
+    async function processCheckout(item) {
+      const errEl = document.getElementById('co-error');
+      errEl.classList.add('hidden');
+
+      const code = document.getElementById('co-code').value.trim();
+      if (!code) { showCheckoutError('Master code is required.'); return; }
+      if (code !== MASTER_CODE) { showCheckoutError('Invalid master code.'); return; }
+
+      const qty = Math.max(1, parseInt(document.getElementById('co-qty').value, 10) || 1);
+      const currentBuilding = locStock(item, LOC_BUILDING);
+      if (qty > currentBuilding) {
+        showCheckoutError(`Only ${currentBuilding} on hand. Reduce quantity.`);
+        return;
+      }
+
+      const submitBtn = document.getElementById('co-submit');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Processing…';
+
+      try {
+        const itemRef = db.collection('inventory').doc(item.id);
+        const txRef = db.collection('transactions').doc();
+
+        const result = await db.runTransaction(async (tx) => {
+          const doc = await tx.get(itemRef);
+          if (!doc.exists) throw new Error('Item removed from inventory.');
+          const data = doc.data();
+          const ls = { ...(data.locationStock || {}) };
+          const ceiling = totalStockFromLocs(data);
+          const cur = ls[LOC_BUILDING] || 0;
+          const newBuilding = Math.max(0, cur - qty);
+          ls[LOC_BUILDING] = newBuilding;
+          ls[LOC_DEPOT]   = Math.max(0, ceiling - newBuilding);
+
+          const updatedData = {
+            locationStock: ls,
+            buildingStock: newBuilding,
+            depotStock:    ls[LOC_DEPOT] || 0,
+            totalStock:    ceiling,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          tx.set(itemRef, updatedData, { merge: true });
+
+          tx.set(txRef, {
+            itemId: item.id,
+            sku: item.sku,
+            name: item.name,
+            qtyOut: qty,
+            type: 'scan-out',
+            source: 'guest-checkout',
+            locationCode: loc,
+            remainingBuilding: newBuilding,
+            user: 'guest-anonymous',
+            userId: 'guest-anonymous',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          return { newBuilding, newDepot: ls[LOC_DEPOT] };
+        });
+
+        document.getElementById('success-msg').textContent =
+          `Removed ${qty} of ${item.sku}. Building stock: ${result.newBuilding}. Depot: ${result.newDepot}.`;
+        show('card-success');
+      } catch (err) {
+        showCheckoutError(err.message || 'Checkout failed.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Confirm Checkout';
+      }
+    }
+
+    function showCheckoutError(msg) {
+      const errEl = document.getElementById('co-error');
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+    }
+
+    document.getElementById('success-another').addEventListener('click', () => {
+      document.getElementById('co-qty').value = 1;
+      document.getElementById('co-code').value = '';
+      document.getElementById('co-submit').disabled = false;
+      document.getElementById('co-submit').textContent = 'Confirm Checkout';
+      init();
+    });
+
+    init();
+  </script>
+</body>
+</html>

@@ -490,6 +490,12 @@
   const LOC_DEPOT    = 'depot';     // fixed id for "Main Depot"
   const LOC_BUILDING  = 'building'; // fixed id for "Company Building"
 
+  // ─── Guest Checkout URL builder ───
+  function guestUrl(itemId, loc) {
+    const base = location.origin || (location.protocol + '//' + location.host);
+    return `${base}/guest-out.html?id=${encodeURIComponent(itemId)}&loc=${encodeURIComponent(loc || '')}`;
+  }
+
   // Convert legacy items (only totalStock + buildingStock) to per-location map
   function migrateItemLocations(item) {
     if (item.locationStock && typeof item.locationStock === 'object') {
@@ -1371,10 +1377,10 @@
       `;
       dom.printContainer.appendChild(wrapper);
       
-      // Render SKU QR Code
+      // Render SKU QR Code — encodes the public guest checkout URL
       try {
         new QRCode(document.getElementById(`sku-qr-${item.id}`), {
-          text: item.sku,
+          text: guestUrl(item.id, item.binCode),
           width: 200,
           height: 200,
           colorDark: '#000000',
@@ -1458,7 +1464,7 @@
     const nameFont  = Math.max(8, Math.min(14, h * 7));
 
     let qrContent = '';
-    if (qrSource === 'sku' && finalSku) qrContent = finalSku;
+    if (qrSource === 'sku' && item) qrContent = guestUrl(item.id, item.binCode);
     else if (qrSource === 'datasheet' && item?.datasheetUrl) qrContent = item.datasheetUrl;
     else if (qrSource === 'custom' && qrCustom) qrContent = qrCustom;
     const qrId = 'lg-qr-' + Math.random().toString(36).slice(2, 9);
@@ -3099,15 +3105,18 @@
           <div class="bin-print-sub">${esc(sub)}</div>
         `;
         dom.printContainer.appendChild(div);
-        qrTargets.push({ id: qrId, code });
+        // Find item assigned to this bin so the QR links to the right item
+        const assignedItem = State.items.find(i => (i.binCode || '').toUpperCase() === code);
+        qrTargets.push({ id: qrId, code, itemId: assignedItem?.id || '' });
       });
       dom.printContainer.style.setProperty('--label-w', size === 'a4-grid' ? 'auto' : size === '2x1' ? '2in' : '4in');
-      qrTargets.forEach(({ id, code }) => {
+      qrTargets.forEach(({ id, code, itemId }) => {
         try {
           const el = dom.printContainer.querySelector('#' + id);
           if (el) {
+            const url = itemId ? guestUrl(itemId, code) : `${location.origin}/guest-out.html?loc=${encodeURIComponent(code)}`;
             new QRCode(el, {
-              text: code,
+              text: url,
               width: 200, height: 200,
               colorDark: '#000000', colorLight: '#ffffff',
               correctLevel: QRCode.CorrectLevel.H
