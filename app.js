@@ -152,6 +152,8 @@
                 _aggBuilding: 0,
                 _aggDepot: 0,
                 _aggTotal: 0,
+                _bestAggTs: 0,
+                _bestAggDocId: null,
                 _hasPerBinDocs: false,
                 binCode: d.binCode || ''
               });
@@ -169,9 +171,22 @@
                // aggregated doc become irrelevant (they double-count per-bin qty).
                item._hasPerBinDocs = true;
             } else {
-               // Aggregated / legacy doc (from main page) — ALWAYS store scalars;
-               // reconcileStock() decides at the end whether to honor them based
-               // on whether any per-bin docs exist for this SKU.
+               // Aggregated / legacy doc (from main page) — pick the LATEST doc
+               // (by updatedAt) as the source of truth. Older duplicate docs
+               // (caused by random id generators + SKU collisions) MUST be
+               // ignored or stock will inflate.
+               const ts = d.updatedAt && typeof d.updatedAt.toMillis === 'function'
+                 ? d.updatedAt.toMillis()
+                 : 0;
+               if (ts > (item._bestAggTs || 0)) {
+                 // Reset accumulators — this newer doc supersedes all older ones.
+                 item._aggBuilding = 0;
+                 item._aggDepot    = 0;
+                 item._aggTotal    = 0;
+                 item._bestAggTs   = ts;
+                 item._bestAggDocId = d.id;
+               }
+
                let b = Math.max(0, Number(d.buildingStock) || 0);
                let dp = Math.max(0, Number(d.depotStock) || 0);
                let t = Math.max(0, Number(d.totalStock) || (b + dp));
@@ -190,9 +205,13 @@
                  }
                }
 
-               item._aggBuilding += b;
-               item._aggDepot    += dp;
-               item._aggTotal    += t;
+               // Only accumulate scalars from the BEST (most recent) doc to
+               // avoid summing duplicate SKU rows into one over-inflated value.
+               if (d.id === item._bestAggDocId) {
+                 item._aggBuilding += b;
+                 item._aggDepot    += dp;
+                 item._aggTotal    += t;
+               }
                // If the doc has a scalar binCode, track it
                if (d.binCode) item._bins.add(d.binCode);
             }
@@ -225,11 +244,13 @@ items.forEach(item => {
              if (item._bins.size > 0) {
                item.binCode = Array.from(item._bins).join(', ');
              }
-             delete item._bins;
-             delete item._aggBuilding;
-             delete item._aggDepot;
-             delete item._aggTotal;
-             delete item._hasPerBinDocs;
+              delete item._bins;
+              delete item._aggBuilding;
+              delete item._aggDepot;
+              delete item._aggTotal;
+              delete item._bestAggTs;
+              delete item._bestAggDocId;
+              delete item._hasPerBinDocs;
 
              // Enforce invariant: total = building + depot (always)
              reconcileStock(item);
@@ -348,7 +369,12 @@ items.forEach(item => {
       return batch.commit();
     },
 
-    generateId() {
+// Deterministic SKU-as-id: same SKU in two writes → same Firestore doc id.
+// This GUARANTEES one-doc-per-SKU aggregation so stock values never double.
+    generateId(sku) {
+      if (sku && typeof sku === 'string' && sku.trim()) {
+        return 'sl_' + sku.trim().toUpperCase().replace(/[^A-Z0-9_\-]/g, '_');
+      }
       return 'sl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
     },
 
@@ -698,7 +724,7 @@ items.forEach(item => {
       { sku: 'SF-GG-CLR',   name: 'Clear Safety Goggles',   category: 'Vidéosurveillance',            datasheetUrl: '', totalStock: 60,   buildingStock: 4,   carrierTrigger: 8,   maxCapacity: 25,  purchasingTrigger: 15 },
       { sku: 'GN-TAPE-BK',  name: 'Black Electrical Tape',  category: 'Alimentations',                datasheetUrl: '',   totalStock: 300,  buildingStock: 50,  carrierTrigger: 20,  maxCapacity: 80,  purchasingTrigger: 50 },
     ];
-    const items = samples.map(s => ({ id: DAL.generateId(), ...s }));
+    const items = samples.map(s => ({ id: DAL.generateId(s.sku), ...s }));
     DAL.saveMany(items).then(() => toast('Sample data loaded', 'success'));
   }
 
@@ -1385,7 +1411,7 @@ items.forEach(item => {
         item = State.items[idx];
       }
     } else {
-      item = { id: DAL.generateId(), ...data };
+      item = { id: DAL.generateId(data.sku || ''), ...data };
       State.items.push(item);
     }
     if (item) {
@@ -2607,7 +2633,7 @@ const buildingStock = parseNum(cols[colMap.buildingStock], 0);
 
     if (mode === 'replace') {
       const oldIds = State.items.map(i => i.id);
-      State.items = State.importParsedData.map(d => ({ id: DAL.generateId(), ...d }));
+      State.items = State.importParsedData.map(d => ({ id: DAL.generateId(d.sku || ''), ...d }));
       DAL.deleteMany(oldIds);
       DAL.saveMany(State.items);
       closeModal(dom.modalImport);
@@ -2620,7 +2646,7 @@ const buildingStock = parseNum(cols[colMap.buildingStock], 0);
     }
 
     // Merge mode
-    const newItems = State.importParsedData.map(d => ({ id: DAL.generateId(), ...d }));
+    const newItems = State.importParsedData.map(d => ({ id: DAL.generateId(d.sku || ''), ...d }));
     const toWrite = [];
     let updated = 0, added = 0;
     newItems.forEach(ni => {
