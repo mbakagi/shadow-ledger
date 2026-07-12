@@ -224,6 +224,36 @@
       return `${data.room || '-'}/${data.aisle || '-'}/${data.bay || '-'}/${data.bin || '-'}`;
     }
 
+    // Populate Autocomplete
+    async function populateAutocomplete() {
+      try {
+        const snap = await getDocs(collection(db, 'inventory'));
+        const skus = new Set();
+        snap.forEach(d => { if(d.data().sku) skus.add(d.data().sku); });
+        
+        let datalist = document.getElementById('sku-list');
+        if (!datalist) {
+          datalist = document.createElement('datalist');
+          datalist.id = 'sku-list';
+          document.body.appendChild(datalist);
+        }
+        datalist.innerHTML = '';
+        skus.forEach(sku => {
+          const opt = document.createElement('option');
+          opt.value = sku;
+          datalist.appendChild(opt);
+        });
+
+        // Attach list to all SKU inputs
+        ['search-sku', 'put-sku', 'mv-sku'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.setAttribute('list', 'sku-list');
+        });
+      } catch (e) {
+        console.error("Failed to load autocomplete:", e);
+      }
+    }
+
     // --- AUTH GATEWAY ---
     document.getElementById('btn-google-login').addEventListener('click', async () => {
       const btn = document.getElementById('btn-google-login');
@@ -255,14 +285,16 @@
           const role = (userDoc.exists() && userDoc.data().role) ? userDoc.data().role : 'worker';
           currentUser = { uid: user.uid, role: role, email: user.email };
           document.getElementById('user-role-badge').textContent = currentUser.role.toUpperCase();
-          document.getElementById('auth-gateway').classList.add('hidden');
         } catch(e) {
-          console.error(e);
+          console.error("Role fetch error:", e);
           // Fallback if users collection is inaccessible
           currentUser = { uid: user.uid, role: 'worker', email: user.email };
           document.getElementById('user-role-badge').textContent = 'WORKER';
-          document.getElementById('auth-gateway').classList.add('hidden');
         }
+        
+        document.getElementById('auth-gateway').classList.add('hidden');
+        populateAutocomplete(); // Load SKUs into datalist
+        
       } else {
         currentUser = null;
         document.getElementById('auth-gateway').classList.remove('hidden');
