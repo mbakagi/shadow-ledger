@@ -130,8 +130,61 @@
       if (this._unsub) this._unsub();
       this._unsub = db.collection('inventory')
         .onSnapshot(snapshot => {
-          const items = [];
-          snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+          const itemMap = new Map();
+
+          snapshot.forEach(doc => {
+            const d = doc.data();
+            const sku = (d.sku || d.id || 'UNKNOWN').toUpperCase();
+            
+            if (!itemMap.has(sku)) {
+              itemMap.set(sku, {
+                id: sku,
+                sku: sku,
+                name: d.item_name || d.name || 'Unknown Item',
+                category: d.category || '',
+                totalStock: 0,
+                buildingStock: 0,
+                depotStock: 0,
+                carrierTrigger: d.carrierTrigger || d.carrier_trigger || 0,
+                maxCapacity: d.maxCap || d.maxCapacity || 0,
+                purchasingTrigger: d.purchaseTrigger || d.purchasingTrigger || 0,
+                locationStock: {},
+                _explicitLocs: [] // temporary array for concatenated string
+              });
+            }
+            const item = itemMap.get(sku);
+            const qty = parseFloat(d.quantity || 0);
+            
+            if (d.room !== undefined || d.bin !== undefined) {
+               // New explicit 4-field schema
+               const locStr = `${d.room || '-'}-${d.aisle || '-'}-${d.bay || '-'}-${d.bin || '-'}`;
+               item.locationStock[locStr] = (item.locationStock[locStr] || 0) + qty;
+               item.totalStock += qty;
+               item.buildingStock += qty; // Assume explicit bins are in Building
+               item._explicitLocs.push({ str: locStr, qty: qty });
+            } else {
+               // Legacy flat document schema
+               item.totalStock = d.totalStock || 0;
+               item.buildingStock = d.buildingStock || 0;
+               item.depotStock = d.depotStock || 0;
+               item.locationStock = d.locationStock || {};
+               Object.keys(item.locationStock).forEach(k => {
+                 item._explicitLocs.push({ str: k, qty: item.locationStock[k] });
+               });
+            }
+          });
+
+          const items = Array.from(itemMap.values());
+          
+          // Generate the concatenated 'Added to Bin' string
+          items.forEach(item => {
+             item.binCode = item._explicitLocs
+               .sort((a,b) => b.qty - a.qty)
+               .map(l => `${l.str} (Qty: ${l.qty})`)
+               .join(' | ');
+             delete item._explicitLocs;
+          });
+
           Storage.saveSnapshot(items);
           onUpdate(items);
         }, err => {

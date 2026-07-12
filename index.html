@@ -1,172 +1,1657 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WMS Master Dashboard</title>
-  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
-  <style>
-    body { font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    .loc-badge { font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 0.25rem; white-space: nowrap; margin-right: 0.25rem; margin-bottom: 0.25rem; display: inline-block; background-color: #334155; color: #cbd5e1; border: 1px solid #475569; }
-    .loc-badge .qty { color: #38bdf8; font-weight: bold; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#6366f1" />
+  <title>St3s — Inventory Tracker</title>
+  <meta name="description" content="Track stock across Main Depot and Company Building. Instantly calculate depot stock, trigger carrier transfers, and manage purchase orders." />
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="St3s" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Content-Security-Policy (hardening; adjust origins for your hosting) -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline'
+                            https://cdn.tailwindcss.com
+                            https://www.gstatic.com
+                            https://cdn.jsdelivr.net
+                            https://cdn.sheetjs.com
+                            https://apis.google.com;
+                 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+                 font-src 'self' https://fonts.gstatic.com;
+                 img-src 'self' data: blob: https://*.googleusercontent.com;
+                 connect-src 'self'
+                             https://firestore.googleapis.com
+                             https://*.firebaseio.com
+                             https://identitytoolkit.googleapis.com
+                             https://securetoken.googleapis.com
+                             https://www.googleapis.com
+                             https://token.googleapis.com
+                             https://oauth2.googleapis.com
+                             https://accounts.google.com;
+                 frame-src https://accounts.google.com
+                           https://*.firebaseapp.com;
+                 media-src 'self' blob:;
+                 worker-src 'self';">
+
+  <!-- Preconnect to external origins (saves ~200ms on first load) -->
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://cdn.sheetjs.com" crossorigin />
+
+  <!-- Tailwind CSS v3 CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase SDKs (compat — no bundler needed) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  
+  <!-- QR Code Library (replaces JsBarcode) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- jsQR — pure-JS QR decoder for camera scan-out (offline, no API) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            surface: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 700: '#1e293b', 800: '#0f172a', 900: '#020617' },
+            accent: { DEFAULT: '#6366f1', light: '#818cf8', dark: '#4f46e5' },
+            carrier: { DEFAULT: '#ef4444', light: '#fca5a5', dark: '#dc2626', bg: 'rgba(239,68,68,0.12)' },
+            procure: { DEFAULT: '#f59e0b', light: '#fcd34d', dark: '#d97706', bg: 'rgba(245,158,11,0.12)' },
+          },
+          keyframes: {
+            'fade-in':    { from: { opacity: 0, transform: 'translateY(8px)' }, to: { opacity: 1, transform: 'translateY(0)' } },
+            'slide-up':   { from: { opacity: 0, transform: 'translateY(24px)' }, to: { opacity: 1, transform: 'translateY(0)' } },
+            'pulse-ring': { '0%': { transform: 'scale(0.9)', opacity: 1 }, '100%': { transform: 'scale(1.5)', opacity: 0 } },
+            'shake':      { '0%,100%': { transform: 'translateX(0)' }, '25%': { transform: 'translateX(-4px)' }, '75%': { transform: 'translateX(4px)' } },
+          },
+          animation: {
+            'fade-in':    'fade-in 0.35s ease-out both',
+            'slide-up':   'slide-up 0.4s ease-out both',
+            'pulse-ring': 'pulse-ring 1.5s ease-out infinite',
+            'shake':      'shake 0.4s ease-in-out',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- SheetJS for Excel import -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <style type="text/tailwindcss">
+/* ═══════════════════════════════════════════════════════
+   Shadow Ledger — Custom Styles
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Scrollbar ── */
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.5); }
+
+/* ── Card ── */
+.card {
+  @apply bg-white dark:bg-surface-800 rounded-2xl border border-gray-200/60 dark:border-gray-700/40 shadow-sm;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+/* ── Input Fields ── */
+.input-field {
+  @apply px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-700
+         text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
+         focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent
+         transition-all duration-200 text-sm;
+}
+
+/* ── Labels ── */
+.label {
+  @apply block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider;
+}
+
+/* ── Nav Buttons ── */
+.nav-btn {
+  @apply flex items-center gap-1.5 px-3 py-2 rounded-xl text-gray-600 dark:text-gray-300
+         hover:bg-gray-100 dark:hover:bg-surface-700 transition-all duration-200;
+}
+.nav-btn-accent {
+  @apply flex items-center gap-1.5 px-3 py-2 rounded-xl text-white
+         bg-gradient-to-r from-accent to-purple-600 hover:from-accent-dark hover:to-purple-700
+         shadow-md shadow-accent/20 hover:shadow-lg hover:shadow-accent/30
+         transition-all duration-200 active:scale-95;
+}
+
+/* ── Buttons ── */
+.btn-accent {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium
+         bg-gradient-to-r from-accent to-purple-600 hover:from-accent-dark hover:to-purple-700
+         shadow-md shadow-accent/20 hover:shadow-lg hover:shadow-accent/30
+         transition-all duration-200 active:scale-95;
+}
+.btn-secondary {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium
+         border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300
+         hover:bg-gray-50 dark:hover:bg-surface-700
+         transition-all duration-200 active:scale-95;
+}
+
+/* ── Quick Adjust Buttons (±1) ── */
+.adj-btn {
+  @apply w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold
+         border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300
+         hover:bg-accent hover:text-white hover:border-accent
+         active:scale-90 transition-all duration-150 select-none;
+}
+
+/* ── Inline Edit Fields — KEYBOARD-FRIENDLY ── */
+.inline-input {
+  @apply w-[72px] text-center px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600
+         bg-gray-50 dark:bg-surface-700
+         focus:border-accent focus:ring-2 focus:ring-accent/30 focus:bg-white dark:focus:bg-surface-800
+         outline-none transition-all duration-200 text-sm tabular-nums;
+  -moz-appearance: textfield;
+}
+.inline-input::-webkit-outer-spin-button,
+.inline-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.inline-input:focus {
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
+}
+
+/* ── Import Tabs ── */
+.import-tab {
+  @apply flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold
+         text-gray-500 dark:text-gray-400 transition-all duration-200 cursor-pointer;
+}
+.import-tab.active {
+  @apply bg-white dark:bg-surface-800 text-accent shadow-sm;
+}
+.import-tab:not(.active):hover {
+  @apply text-gray-700 dark:text-gray-200;
+}
+
+/* ── Pareto mode tab ── */
+.pareto-tab {
+  @apply px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 dark:text-gray-400
+         border border-gray-200 dark:border-gray-700 cursor-pointer transition-all duration-200;
+}
+.pareto-tab.active {
+  @apply bg-accent text-white border-accent shadow-sm;
+}
+.pareto-tab:not(.active):hover {
+  @apply text-gray-700 dark:text-gray-200;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  @apply fixed inset-0 z-[90] flex items-center justify-center p-4;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.modal-overlay.hidden { display: none; }
+.modal-content {
+  @apply bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-2xl
+         border border-gray-200/60 dark:border-gray-700/40;
+  animation: fade-in 0.25s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ── Row Status Indicators ── */
+.row-carrier {
+  background: linear-gradient(90deg, rgba(239,68,68,0.08) 0%, transparent 40%) !important;
+  border-left: 3px solid #ef4444;
+}
+.row-procure {
+  background: linear-gradient(90deg, rgba(245,158,11,0.08) 0%, transparent 40%) !important;
+  border-left: 3px solid #f59e0b;
+}
+.row-carrier.row-procure {
+  background: linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(245,158,11,0.06) 30%, transparent 50%) !important;
+  border-left: 3px solid #ef4444;
+}
+
+/* ── Status Badge ── */
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider;
+}
+.badge-ok      { @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400; }
+.badge-carrier { @apply bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400; animation: shake 0.5s ease-in-out; }
+.badge-procure { @apply bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400; }
+
+/* ── Toast ── */
+.toast {
+  @apply pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2;
+  animation: fade-in 0.3s ease-out;
+}
+.toast-success { @apply bg-emerald-500 text-white; }
+.toast-error   { @apply bg-red-500 text-white; }
+.toast-info    { @apply bg-accent text-white; }
+
+/* ── Building Stock Gauge ── */
+.gauge-bar {
+  @apply h-1.5 rounded-full transition-all duration-500;
+}
+
+/* ── Mobile: always show action buttons ── */
+@media (max-width: 1023px) {
+  .action-btns {
+    opacity: 1 !important;
+  }
+}
+
+/* ── Print Styles ── */
+@media print {
+  body:not(.printing-label) header,
+  body:not(.printing-label) #dashboard,
+  body:not(.printing-label) section:has(#input-search),
+  body:not(.printing-label) .adj-btn,
+  body:not(.printing-label) th:last-child,
+  body:not(.printing-label) td:last-child,
+  body:not(.printing-label) #toast-container,
+  body:not(.printing-label) .modal-overlay,
+  body:not(.printing-label) #bulk-actions-bar,
+  body:not(.printing-label) nav,
+  body:not(.printing-label) select,
+  body:not(.printing-label) #btn-manifest,
+  body:not(.printing-label) #btn-pick-sheet,
+  body:not(.printing-label) #btn-scan-out,
+  body:not(.printing-label) #btn-history,
+  body:not(.printing-label) #btn-locations,
+  body:not(.printing-label) #btn-bins,
+  body:not(.printing-label) #btn-pareto,
+  body:not(.printing-label) #btn-add-item,
+  body:not(.printing-label) #btn-import,
+  body:not(.printing-label) #btn-export-csv,
+  body:not(.printing-label) #btn-labelgen,
+  body:not(.printing-label) #btn-theme,
+  body:not(.printing-label) .modal-overlay input,
+  body:not(.printing-label) .modal-overlay select,
+  body:not(.printing-label) .modal-overlay textarea,
+  body:not(.printing-label) .modal-overlay button { display: none !important; }
+  
+  body:not(.printing-label) { background: white !important; color: black !important; }
+  body:not(.printing-label) .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  body:not(.printing-label) table { font-size: 10px !important; }
+  body:not(.printing-label) td, body:not(.printing-label) th { padding: 2px 4px !important; }
+  body:not(.printing-label) input { border: none !important; background: transparent !important; color: black !important; }
+
+  /* ── Pick Sheet Print ── */
+  body.printing-pick-sheet > * { display: none !important; }
+  body.printing-pick-sheet #pick-sheet-print,
+  body.printing-pick-sheet #pick-sheet-print * { display: block !important; }
+  #pick-sheet-print {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    color: #000;
+    background: #fff;
+    padding: 0.25in;
+  }
+  #pick-sheet-print .pick-header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+  #pick-sheet-print .pick-header h1 { font-size: 14pt; font-weight: 900; margin: 0; }
+  #pick-sheet-print .pick-meta { font-size: 8pt; text-align: center; margin-bottom: 10px; }
+  #pick-sheet-print .pick-row { display: flex; border-bottom: 1px solid #ccc; padding: 3px 0; page-break-inside: avoid; }
+  #pick-sheet-print .pick-loc { width: 45%; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #pick-sheet-print .pick-item { width: 55%; }
+  #pick-sheet-print .pick-sku { font-weight: 700; }
+  #pick-sheet-print .pick-qty { display: inline-block; background: #000; color: #fff; padding: 0 4px; border-radius: 2px; font-weight: 700; }
+  #pick-sheet-print .pick-section { font-size: 9pt; font-weight: 900; text-transform: uppercase; border-top: 2px solid #000; border-bottom: 1px solid #000; padding: 3px 0; margin-top: 6px; }
+
+  /* Label Print Styles */
+  body.printing-label > * { display: none !important; }
+  body.printing-label #print-container {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 0.1in;
+    align-content: flex-start;
+    justify-content: flex-start;
+    background: white;
+    margin: 0;
+    padding: 0.15in;
+  }
+
+  /* A4 Landscape 4×2 grid mode */
+  body.printing-label.print-a4-landscape #print-container {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.12in;
+    width: calc(11.69in - 0.3in);
+    padding: 0.15in;
+    box-sizing: border-box;
+  }
+
+  @page { size: auto; margin: 0.2in; }
+  body.printing-label.print-a4-landscape { }
+}
+
+@media print and (orientation: landscape) {
+  body.printing-label.print-a4-landscape #print-container {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ── A4 Landscape label grid preview ── */
+.a4-landscape-mode {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.12in;
+}
+
+/* ── Shelf Label UI ── */
+.shelf-label {
+  width: 4in;
+  height: 2in;
+  border: 1.5px solid #000;
+  padding: 0.15in 0.2in;
+  background: white;
+  color: black;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  page-break-inside: avoid;
+  font-family: 'Courier New', Courier, monospace;
+}
+.shelf-label-top { display: flex; gap: 0.15in; align-items: flex-start; }
+.shelf-label-info { flex: 1; }
+.shelf-label-sku { font-size: 18pt; font-weight: 900; line-height: 1; margin-bottom: 1px; }
+.shelf-label-name { font-size: 10pt; font-weight: 700; max-height: 2.6em; overflow: hidden; line-height: 1.2; margin-bottom: 2px; }
+.shelf-label-sku-qr { flex-shrink: 0; width: 1.1in; height: 1.1in; background: white; padding: 4px; box-sizing: content-box; }
+.shelf-label-url-qr { flex-shrink: 0; width: 0.9in; height: 0.9in; background: white; border: 1px dashed #ccc; padding: 4px; box-sizing: content-box; }
+.shelf-label-footer { font-size: 8pt; display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-top: 4px; border-top: 1px dashed #ccc; padding-top: 3px; }
+.shelf-label-bin { font-size: 8pt; font-weight: 900; background: #000; color: #fff; padding: 1px 4px; border-radius: 2px; letter-spacing: 0.05em; flex-shrink: 0; margin: 0; display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* ── Manifest Print ── */
+.manifest-print-area {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+/* ── Golden Zone warning row highlight ── */
+.row-golden-zone { background: rgba(239, 68, 68, 0.04); }
+.dark .row-golden-zone { background: rgba(239, 68, 68, 0.08); }
+
+/* ── Bin Setup ── */
+.bin-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 8px 4px; border-radius: 8px; cursor: default; border: 2px solid transparent;
+  font-size: 11px; line-height: 1.3; transition: all .15s;
+}
+.bin-free {
+  background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3); cursor: pointer;
+}
+.bin-free:hover { background: rgba(16,185,129,.18); border-color: #10b981; }
+.bin-taken {
+  background: rgba(107,114,128,.08); border-color: rgba(107,114,128,.2); opacity: .65;
+}
+/* ── Bin Mode Tabs ── */
+.bin-mode-tab {
+  flex: 1; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  text-align: center; cursor: pointer; transition: all .15s;
+  background: transparent; color: #6b7280; border: none;
+}
+.bin-mode-tab.active {
+  background: white; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+.dark .bin-mode-tab.active { background: #1f2937; color: #f9fafb; }
+.bin-mode-tab:not(.active):hover { color: #111827; }
+.dark .bin-mode-tab:not(.active):hover { color: #e5e7eb; }
+/* ── Pareto ── */
+.bin-inline-edit {
+  width: 72px; font-size: 11px; font-family: 'Courier New', monospace;
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  padding: 1px 4px; color: inherit; outline: none;
+}
+.bin-inline-edit:focus { border-color: #3b82f6; background: rgba(59,130,246,.06); }
+.bin-inline-edit::placeholder { color: #9ca3af; }
+/* ── Bin Print Labels ── */
+.print-label-bin {
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  width: 2.5in; height: 1.8in; border: 1px dashed #ccc;
+  background: white; padding: 4px; box-sizing: border-box;
+}
+.bin-print-code {
+  font-family: 'Courier New', monospace; font-size: 14pt; font-weight: 900;
+  text-align: center; letter-spacing: .05em;
+}
+.bin-print-qr { background: white; padding: 6px; box-sizing: content-box; }
+.bin-print-sub {
+  font-family: 'Courier New', monospace; font-size: 7pt; font-weight: 600;
+  color: #333; text-align: center; letter-spacing: .03em; word-break: break-all;
+}
   </style>
 </head>
-<body class="bg-slate-900 text-slate-300 min-h-screen">
 
-  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-      <div>
-        <h1 class="text-2xl font-bold text-white flex items-center gap-2">
-          <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
-          Live Inventory Dashboard
-        </h1>
-        <p class="text-sm text-slate-400 mt-1">Real-time Chaotic Storage view.</p>
-      </div>
-      <div class="flex items-center gap-4">
-        <a href="mobile.html" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded shadow transition text-sm">Launch Mobile Scanner</a>
-        <div class="text-xs text-right">
-          <p class="text-slate-500">Live Connection</p>
-          <div class="flex items-center gap-1 justify-end">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span class="text-emerald-400 font-mono" id="status-indicator">Connected</span>
-          </div>
+<body class="font-sans bg-surface-100 text-gray-800 dark:bg-surface-900 dark:text-gray-100 transition-colors duration-300 min-h-screen">
+
+  <!-- ═══════════════════ HEADER / NAVBAR ═══════════════════ -->
+  <header class="sticky top-0 z-50 backdrop-blur-xl bg-white/70 dark:bg-surface-800/70 border-b border-gray-200/60 dark:border-gray-700/40 shadow-sm">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center shadow-lg shadow-accent/25">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
         </div>
+        <div>
+          <h1 class="text-lg font-bold leading-none tracking-tight">St3s</h1>
+          <p class="text-[11px] text-gray-400 dark:text-gray-500 font-medium tracking-wide uppercase">Inventory Tracker</p>
+        </div>
+      </div>
+
+      <!-- Right controls -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- User Info -->
+        <div id="user-info" class="hidden items-center gap-2">
+          <span id="current-user-email" class="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-medium max-w-[120px] truncate"></span>
+          <button id="btn-logout" title="Sign Out" class="nav-btn group">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            <span class="hidden sm:inline text-sm">Logout</span>
+          </button>
+        </div>
+        <!-- Archive Toggle -->
+        <button id="btn-toggle-archive" title="View Archive" class="nav-btn group relative">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+          <span class="hidden sm:inline text-sm">Archive</span>
+        </button>
+        <!-- Import -->
+        <button id="btn-import" title="Import Data" class="nav-btn group">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span class="hidden sm:inline text-sm">Import</span>
+        </button>
+        <!-- Export -->
+        <button id="btn-export-csv" title="Export CSV" class="nav-btn group" style="padding:0;margin:0;">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 001 1h4"/><path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/><path d="M12 11v6"/><path d="M9 14l3 3 3-3"/></svg>
+          <span class="hidden sm:inline text-sm">Export</span>
+        </button>
+        <!-- Label Generator -->
+        <button id="btn-labelgen" title="Label Generator" class="nav-btn group">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5a1.99 1.99 0 011 .28L19.72 9a1.99 1.99 0 01.28 1v5a1.99 1.99 0 01-.28 1L13 21.72a1.99 1.99 0 01-1 .28H7a1.99 1.99 0 01-1-.28L2.28 17a1.99 1.99 0 01-.28-1v-5a1.99 1.99 0 01.28-1L6 3.28A1.99 1.99 0 017 3z"/></svg>
+          <span class="hidden sm:inline text-sm">Labels</span>
+        </button>
+        <!-- Add Item -->
+        <button id="btn-add-item" title="Add Item" class="nav-btn-accent group">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          <span class="hidden sm:inline text-sm font-semibold">Add Item</span>
+        </button>
+        <!-- Theme Toggle -->
+        <button id="btn-theme" title="Toggle theme" class="nav-btn">
+          <svg id="icon-sun" class="w-5 h-5 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><path stroke-linecap="round" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg id="icon-moon" class="w-5 h-5 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
       </div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-8">
-    <div class="flex justify-between items-end mb-4">
-      <div>
-        <h2 class="text-xl font-bold text-white">Master Stock Table</h2>
-        <p class="text-sm text-slate-400">Total Unique SKUs: <span id="total-skus" class="font-bold text-slate-200">0</span></p>
-      </div>
-      <div class="w-64">
-        <input type="text" id="table-search" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500" placeholder="Filter SKU or Name...">
-      </div>
-    </div>
+  <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
-      <div class="overflow-x-auto max-h-[70vh]">
-        <table class="w-full text-left text-sm whitespace-nowrap">
-          <thead class="bg-slate-900/80 text-slate-400 uppercase text-xs tracking-wider sticky top-0 z-10 backdrop-blur-sm">
-            <tr>
-              <th class="px-6 py-4 font-semibold w-48">SKU</th>
-              <th class="px-6 py-4 font-semibold">Item Name</th>
-              <th class="px-6 py-4 font-semibold text-right w-32">Total Qty</th>
-              <th class="px-6 py-4 font-semibold">Added to Bin (Locations)</th>
+    <!-- ═══════════════════ DASHBOARD CARDS ═══════════════════ -->
+    <section id="dashboard" class="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
+
+      <!-- Summary Card -->
+      <div class="card p-5">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-xl bg-accent/10 dark:bg-accent/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          </div>
+          <div>
+            <p class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Inventory Overview</p>
+            <p class="text-2xl font-extrabold leading-tight" id="stat-total-items">0</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div class="rounded-lg bg-gray-50 dark:bg-surface-700/50 p-2.5 text-center">
+            <p class="text-xs text-gray-400 mb-0.5">Categories</p>
+            <p class="font-bold text-base" id="stat-categories">0</p>
+          </div>
+          <div class="rounded-lg bg-gray-50 dark:bg-surface-700/50 p-2.5 text-center">
+            <p class="text-xs text-gray-400 mb-0.5">Total Units</p>
+            <p class="font-bold text-base" id="stat-total-units">0</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Carrier Alerts Card -->
+      <div id="card-carrier" class="card p-5 border-l-4 border-carrier cursor-pointer hover:shadow-lg transition-shadow" role="button" tabindex="0">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="relative w-10 h-10 rounded-xl bg-carrier-bg flex items-center justify-center">
+            <svg class="w-5 h-5 text-carrier" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2-1 2 1 2-1 2 1zm6 0V9a1 1 0 00-1-1h-2l-3 3h3v5l2-1z"/></svg>
+            <span id="carrier-pulse" class="absolute inset-0 rounded-xl bg-carrier/30 animate-pulse-ring hidden"></span>
+          </div>
+          <div>
+            <p class="text-xs font-semibold text-carrier uppercase tracking-wider">Carrier Alerts</p>
+            <p class="text-2xl font-extrabold leading-tight" id="stat-carrier-count">0</p>
+          </div>
+        </div>
+        <ul id="carrier-quicklist" class="space-y-1 text-sm max-h-28 overflow-y-auto scrollbar-thin">
+          <li class="text-gray-400 italic text-xs">No alerts</li>
+        </ul>
+      </div>
+
+      <!-- Procurement Alerts Card -->
+      <div id="card-procure" class="card p-5 border-l-4 border-procure cursor-pointer hover:shadow-lg transition-shadow" role="button" tabindex="0">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="relative w-10 h-10 rounded-xl bg-procure-bg flex items-center justify-center">
+            <svg class="w-5 h-5 text-procure" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+            <span id="procure-pulse" class="absolute inset-0 rounded-xl bg-procure/30 animate-pulse-ring hidden"></span>
+          </div>
+          <div>
+            <p class="text-xs font-semibold text-procure uppercase tracking-wider">Purchase Alerts</p>
+            <p class="text-2xl font-extrabold leading-tight" id="stat-procure-count">0</p>
+          </div>
+        </div>
+        <ul id="procure-quicklist" class="space-y-1 text-sm max-h-28 overflow-y-auto scrollbar-thin">
+          <li class="text-gray-400 italic text-xs">No alerts</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ SEARCH / FILTER BAR ═══════════════════ -->
+    <section class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center animate-fade-in" style="animation-delay:.1s">
+      <!-- Search -->
+      <div class="relative flex-1">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+        <input id="input-search" type="text" placeholder="Search by SKU, name, or category…" class="input-field pl-10 w-full" />
+      </div>
+      <!-- Stock Filter -->
+      <select id="filter-stock" class="input-field w-full sm:w-40">
+        <option value="all">All Stock</option>
+        <option value="in_stock">Hide Out of Stock (Total=0)</option>
+        <option value="in_building">Hide Empty Bldg (On-Hand=0)</option>
+      </select>
+      <!-- Category Filter -->
+      <select id="select-category" class="input-field w-full sm:w-48">
+        <option value="">All Categories</option>
+      </select>
+      <!-- Alert Filter -->
+      <select id="select-alert" class="input-field w-full sm:w-40">
+        <option value="">All Items</option>
+        <option value="carrier">🔴 Carrier Alerts</option>
+        <option value="procure">🟡 Purchase Alerts</option>
+        <option value="ok">✅ OK Items</option>
+      </select>
+      <!-- Pick Sheet Button -->
+      <button id="btn-pick-sheet" title="Generate walking-route pick sheet" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+        <span class="text-sm font-semibold">Pick Sheet</span>
+      </button>
+      <!-- 3D Route Button -->
+      <button id="btn-3d-route" title="Generate 3D Visual Pick Route" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#0284c7,#2563eb);">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+        <span class="text-sm font-semibold">3D Route</span>
+      </button>
+      <!-- Manifest Button -->
+      <button id="btn-manifest" title="Generate Carrier Manifest" class="btn-accent whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span class="text-sm font-semibold">Manifest</span>
+      </button>
+      <!-- Scan Out Button -->
+      <button id="btn-scan-out" title="Scan QR / Enter SKU to remove stock" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#10b981,#059669);">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7V5a2 2 0 012-2h2M3 17v2a2 2 0 002 2h2m10-16h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2M7 12h10"/></svg>
+        <span class="text-sm font-semibold">Scan Out</span>
+      </button>
+      <!-- History Button -->
+      <button id="btn-history" title="View scan-out transaction history" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">History</span>
+      </button>
+      <!-- Locations Button -->
+      <button id="btn-locations" title="Manage stock locations / warehouses" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">Locations</span>
+      </button>
+      <!-- Bins Manager -->
+      <button id="btn-bins" title="Bin / Shelf setup — assign + print bin labels" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v4H4zM4 12h16v8H4zM8 16h2M8 8h0"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">Bins</span>
+      </button>
+      <!-- Pareto Insights -->
+      <button id="btn-pareto" title="Pareto dashboard — see top movers (80/20)" class="btn-secondary whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
+        <span class="text-sm font-semibold hidden lg:inline">Pareto</span>
+      </button>
+      <!-- 3D Warehouse -->
+      <a href="warehouse-3d.html" target="_blank" rel="noopener" title="3D warehouse view — explore rooms, aisles, bays, bins" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        <span class="text-sm font-semibold">3D View</span>
+      </a>
+    </section>
+
+    <!-- ═══════════════════ BULK ACTIONS BAR ═══════════════════ -->
+    <section id="bulk-actions-bar" class="hidden animate-slide-up flex items-center justify-between p-3 rounded-xl bg-accent/10 border border-accent/20">
+      <div class="flex items-center gap-3">
+        <span class="text-accent font-semibold text-sm ml-2"><span id="bulk-count">0</span> items selected</span>
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-bulk-print" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg> Print Labels
+        </button>
+        <button id="btn-bulk-archive" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg> Archive
+        </button>
+        <button id="btn-bulk-restore" class="hidden px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-surface-800 text-emerald-600 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Restore
+        </button>
+        <button id="btn-bulk-delete" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition">
+          <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Delete
+        </button>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ INVENTORY TABLE ═══════════════════ -->
+    <section class="card overflow-hidden animate-slide-up" style="animation-delay:.15s">
+      <div class="overflow-x-auto">
+        <table id="inventory-table" class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-surface-700/60 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-2 w-10 text-center"><input type="checkbox" id="check-all" class="w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent"></th>
+              <th class="px-2 py-2 w-8 text-center" title="Status Badge"></th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors" data-sort="sku">SKU ↕</th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors" data-sort="name">Item Name ⇕</th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors hidden md:table-cell" data-sort="binCode" title="Bin / Shelf Code" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">Added to Bin (Locations)</th>
+              <th class="px-2 py-2 cursor-pointer select-none hover:text-accent transition-colors hidden sm:table-cell" data-sort="category">Category ⇕</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Datasheet</th>
+              <th class="px-2 py-2 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="totalStock">Total ↕</th>
+              <th class="px-2 py-2 text-center" data-sort="buildingStock">Building ↕</th>
+              <th class="px-2 py-2 text-center cursor-pointer select-none hover:text-accent transition-colors" data-sort="depotStock">Depot ↕</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Carrier Trig.</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Max Cap.</th>
+              <th class="px-2 py-2 text-center hidden lg:table-cell">Purch. Trig.</th>
+              <th class="px-2 py-2 text-center w-20">Actions</th>
             </tr>
           </thead>
-          <tbody id="inventory-tbody" class="divide-y divide-slate-700/50">
-            <tr>
-              <td colspan="4" class="px-6 py-12 text-center text-slate-500">
-                <svg class="animate-spin h-8 w-8 mx-auto mb-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Listening to Firestore...
-              </td>
-            </tr>
+          <tbody id="table-body" class="divide-y divide-gray-100 dark:divide-gray-700/50">
+            <!-- Dynamic rows -->
           </tbody>
         </table>
       </div>
-    </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="py-16 text-center hidden">
+        <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        <p class="text-gray-400 dark:text-gray-500 font-medium mb-1">No inventory items yet</p>
+        <p class="text-gray-400 dark:text-gray-600 text-sm">Click <strong>"Add Item"</strong> or <strong>"Import"</strong> to get started.</p>
+      </div>
+
+      <!-- Pagination / Count -->
+      <div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700/40 text-xs text-gray-400">
+        <span id="table-count">Showing 0 items</span>
+        <div class="flex gap-1">
+          <button id="btn-prev-page" class="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-surface-700 disabled:opacity-30 transition" disabled>← Prev</button>
+          <span id="page-indicator" class="px-2 py-1">1 / 1</span>
+          <button id="btn-next-page" class="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-surface-700 disabled:opacity-30 transition" disabled>Next →</button>
+        </div>
+      </div>
+    </section>
   </main>
 
+  <!-- ═══════════════════ ADD / EDIT ITEM MODAL ═══════════════════ -->
+  <div id="modal-item" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h2 id="modal-item-title" class="text-xl font-bold">Add New Item</h2>
+        <button id="modal-item-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="form-item" class="space-y-4">
+        <input type="hidden" id="field-id" />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="label">SKU <span class="text-carrier">*</span></label>
+            <input id="field-sku" type="text" class="input-field w-full" required placeholder="e.g. WH-001" />
+          </div>
+          <div>
+            <label class="label">Category</label>
+            <select id="field-category" class="input-field w-full">
+              <option value="">-- Select Category --</option>
+              <optgroup label="Détection Incendie: Conventionnel">
+                <option value="Détection Incendie - Conventionnel - Centrales">Centrales</option>
+                <option value="Détection Incendie - Conventionnel - Détecteurs">Détecteurs</option>
+                <option value="Détection Incendie - Conventionnel - Détecteurs spéciaux">Détecteurs spéciaux</option>
+                <option value="Détection Incendie - Conventionnel - Déclencheurs manuels">Déclencheurs manuels</option>
+                <option value="Détection Incendie - Conventionnel - Avertisseurs sonores">Avertisseurs sonores</option>
+              </optgroup>
+              <optgroup label="Détection Incendie: Adressable">
+                <option value="Détection Incendie - Adressable - Centrales">Centrales</option>
+                <option value="Détection Incendie - Adressable - Détecteurs">Détecteurs</option>
+                <option value="Détection Incendie - Adressable - Déclencheurs manuels">Déclencheurs manuels</option>
+                <option value="Détection Incendie - Adressable - Avertisseurs sonores">Avertisseurs sonores</option>
+                <option value="Détection Incendie - Adressable - Modules">Modules</option>
+              </optgroup>
+              <optgroup label="Détection gaz">
+                <option value="Détection gaz - Centrale Gaz">Centrale Gaz</option>
+                <option value="Détection gaz - Détecteur gaz">Détecteur gaz</option>
+                <option value="Détection gaz - Électrovanne">Électrovanne</option>
+                <option value="Détection gaz - Accessoires">Accessoires</option>
+              </optgroup>
+              <optgroup label="Extinction automatique">
+                <option value="Extinction automatique - Centrale extinction">Centrale extinction</option>
+                <option value="Extinction automatique - Gaz d'extinction">Gaz d'extinction</option>
+                <option value="Extinction automatique - Accessoires">Accessoires</option>
+              </optgroup>
+              <optgroup label="Alarme: Filaire">
+                <option value="Alarme - Filaire - Centrale">Centrale</option>
+                <option value="Alarme - Filaire - Clavier">Clavier</option>
+                <option value="Alarme - Filaire - Détecteurs">Détecteurs</option>
+                <option value="Alarme - Filaire - Sirènes">Sirènes</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Contrôle d'accès">
+                <option value="Contrôle D'accès Pointage - Contrôle d'accès - Contrôleurs">Contrôleurs</option>
+                <option value="Contrôle D'accès Pointage - Contrôle d'accès - Lecteurs">Lecteurs</option>
+                <option value="Contrôle D'accès Pointage - Contrôle d'accès - Lecteurs autonomes">Lecteurs autonomes</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Pointage">
+                <option value="Contrôle D'accès Pointage - Pointage - Empreintes">Empreintes</option>
+                <option value="Contrôle D'accès Pointage - Pointage - Palm-vein">Palm-vein</option>
+                <option value="Contrôle D'accès Pointage - Pointage - Reconnaissance">Reconnaissance</option>
+                <option value="Contrôle D'accès Pointage - Pointage - Proximité">Proximité</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Logiciels">
+                <option value="Contrôle D'accès Pointage - Logiciels - Contrôle d'accès">Contrôle d'accès</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Pointage">Pointage</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Gestion des visiteurs">Gestion des visiteurs</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Gestion des travailleurs">Gestion des travailleurs</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Service libre des employés">Service libre des employés</option>
+                <option value="Contrôle D'accès Pointage - Logiciels - Gestion des visites">Gestion des visites</option>
+              </optgroup>
+              <optgroup label="Contrôle D'accès Pointage: Accessoires">
+                <option value="Contrôle D'accès Pointage - Accessoires - Ventouse">Ventouse</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Serrure électrique">Serrure électrique</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Gâche Electrique">Gâche Electrique</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Armature">Armature</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Bouton de sortie">Bouton de sortie</option>
+                <option value="Contrôle D'accès Pointage - Accessoires - Flexible">Flexible</option>
+              </optgroup>
+              <optgroup label="Vidéosurveillance & Alimentations">
+                <option value="Vidéosurveillance">Vidéosurveillance</option>
+                <option value="Alimentations">Alimentations</option>
+              </optgroup>
+              <optgroup label="Réseau">
+                <option value="Réseau - Switch">Switch</option>
+                <option value="Réseau - Panneaux de brassage">Panneaux de brassage</option>
+                <option value="Réseau - Armoires">Armoires</option>
+                <option value="Réseau - Onduleurs">Onduleurs</option>
+                <option value="Réseau - Alimentations">Alimentations</option>
+                <option value="Réseau - Accessoires">Accessoires</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="label">Item Name <span class="text-carrier">*</span></label>
+          <input id="field-name" type="text" class="input-field w-full" required placeholder="e.g. M8 Hex Bolt" />
+        </div>
+        <div>
+          <label class="label">Bin / Shelf Code</label>
+          <input id="field-binCode" type="text" class="input-field w-full" placeholder="e.g. A1-B3, Shelf 2, Row C" />
+        </div>
+        <div>
+          <label class="label">Datasheet / Product URL</label>
+          <input id="field-datasheetUrl" type="url" class="input-field w-full" placeholder="https://st3s.com/produit/..." />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="label">Total Stock (BS Comm)</label>
+            <input id="field-totalStock" type="number" min="0" class="input-field w-full" value="0" />
+          </div>
+          <div>
+            <label class="label">Building Stock (On-Hand)</label>
+            <input id="field-buildingStock" type="number" min="0" class="input-field w-full" value="0" />
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="label">Carrier Trigger</label>
+            <input id="field-carrierTrigger" type="number" min="0" class="input-field w-full" value="5" />
+          </div>
+          <div>
+            <label class="label">Max Bldg Cap.</label>
+            <input id="field-maxCapacity" type="number" min="0" class="input-field w-full" value="20" />
+          </div>
+          <div>
+            <label class="label">Purch. Trigger</label>
+            <input id="field-purchasingTrigger" type="number" min="0" class="input-field w-full" value="10" />
+          </div>
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5">Save Item</button>
+          <button type="button" id="btn-cancel-item" class="btn-secondary flex-1 justify-center text-sm font-semibold py-2.5">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ IMPORT MODAL (Multi-format) ═══════════════════ -->
+  <div id="modal-import" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-xl">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold">Import Data</h2>
+        <button id="modal-import-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <!-- Format selector tabs -->
+        <div class="flex rounded-xl bg-gray-100 dark:bg-surface-700/60 p-1 gap-1">
+          <button class="import-tab active" data-format="csv">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            CSV
+          </button>
+          <button class="import-tab" data-format="excel">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            Excel
+          </button>
+          <button class="import-tab" data-format="json">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+            JSON
+          </button>
+          <button class="import-tab" data-format="tsv">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+            TSV
+          </button>
+        </div>
+
+        <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center hover:border-accent dark:hover:border-accent transition-colors cursor-pointer" id="import-drop-zone">
+          <svg class="w-10 h-10 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+          <p id="import-drop-text" class="text-sm text-gray-500 dark:text-gray-400">Drag & drop a <strong>.csv</strong> file here, or <span class="text-accent font-semibold cursor-pointer underline">click to browse</span></p>
+          <input id="import-file-input" type="file" accept=".csv,.tsv,.json,.xlsx,.xls" class="hidden" />
+        </div>
+
+        <!-- Format-specific help -->
+        <div id="import-help-csv" class="import-help bg-gray-50 dark:bg-surface-700/50 rounded-lg p-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          <p class="font-semibold text-gray-600 dark:text-gray-300">Expected CSV columns:</p>
+          <code class="block bg-gray-100 dark:bg-surface-800 rounded p-2 text-[11px] overflow-x-auto">sku, name, category, datasheetUrl, totalStock, buildingStock, carrierTrigger, maxCapacity, purchasingTrigger</code>
+          <p>Columns are case-insensitive. Extra columns are ignored. Missing numeric values default to 0.</p>
+        </div>
+        <div id="import-help-excel" class="import-help hidden bg-gray-50 dark:bg-surface-700/50 rounded-lg p-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          <p class="font-semibold text-gray-600 dark:text-gray-300">Excel Import (.xlsx / .xls):</p>
+          <p>The first sheet will be read. The first row must contain column headers matching the same names as CSV.</p>
+          <p>Supports files exported from <strong>BS Comm</strong>, SAP, or any ERP with standard column names.</p>
+        </div>
+        <div id="import-help-json" class="import-help hidden bg-gray-50 dark:bg-surface-700/50 rounded-lg p-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          <p class="font-semibold text-gray-600 dark:text-gray-300">JSON Import:</p>
+          <code class="block bg-gray-100 dark:bg-surface-800 rounded p-2 text-[11px] overflow-x-auto">[{"sku":"WH-001","name":"M8 Bolt","totalStock":100, ...}]</code>
+          <p>Expects an array of objects. Each object should have <code>sku</code> and/or <code>name</code> fields.</p>
+        </div>
+        <div id="import-help-tsv" class="import-help hidden bg-gray-50 dark:bg-surface-700/50 rounded-lg p-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          <p class="font-semibold text-gray-600 dark:text-gray-300">TSV (Tab-Separated Values):</p>
+          <p>Same as CSV but uses <strong>tabs</strong> as delimiters. Common when pasting from spreadsheets or clipboard.</p>
+        </div>
+
+        <div id="import-mapping" class="hidden animate-fade-in">
+          <p class="text-sm font-semibold mb-3">Map Columns</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 max-h-[40vh] overflow-y-auto px-1 scrollbar-thin">
+            <!-- Shadow Ledger fields vs Dropdowns -->
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">SKU <span class="text-carrier">*</span></label>
+              <select id="map-sku" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Name <span class="text-carrier">*</span></label>
+              <select id="map-name" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Category</label>
+              <select id="map-category" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Datasheet URL</label>
+              <select id="map-datasheetUrl" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Total Stock</label>
+              <select id="map-totalStock" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Building Stock</label>
+              <select id="map-buildingStock" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Carrier Trig.</label>
+              <select id="map-carrierTrigger" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Max Capacity</label>
+              <select id="map-maxCapacity" class="input-field flex-1"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="w-1/3 text-xs font-semibold text-gray-600 dark:text-gray-300">Purch. Trig.</label>
+              <select id="map-purchasingTrigger" class="input-field flex-1"></select>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button id="btn-import-mapping-confirm" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5">Preview Import</button>
+            <button id="btn-import-mapping-cancel" class="btn-secondary flex-1 justify-center text-sm font-semibold py-2.5">Cancel</button>
+          </div>
+        </div>
+
+        <div id="import-preview" class="hidden animate-fade-in">
+          <p class="text-sm font-semibold mb-2">Preview (<span id="import-preview-count">0</span> items):</p>
+          <div class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 dark:bg-surface-700/60 sticky top-0">
+                <tr>
+                  <th class="px-2 py-1.5 text-left">SKU</th>
+                  <th class="px-2 py-1.5 text-left">Name</th>
+                  <th class="px-2 py-1.5 text-left">Category</th>
+                  <th class="px-2 py-1.5 text-right">Total</th>
+                  <th class="px-2 py-1.5 text-right">Building</th>
+                </tr>
+              </thead>
+              <tbody id="import-preview-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Import mode selector -->
+        <div class="flex items-center gap-4 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="import-mode" value="merge" checked class="accent-accent" />
+            <span>Merge (update existing SKUs)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="import-mode" value="replace" class="accent-accent" />
+            <span>Replace all data</span>
+          </label>
+        </div>
+
+        <div class="flex gap-3">
+          <button id="btn-import-confirm" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5 disabled:opacity-40" disabled>Import Data</button>
+          <button id="btn-import-cancel" class="btn-secondary flex-1 justify-center text-sm font-semibold py-2.5">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ CARRIER MANIFEST MODAL ═══════════════════ -->
+  <div id="modal-manifest" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold">🚚 Carrier Manifest</h2>
+        <button id="modal-manifest-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="manifest-content" class="space-y-3 max-h-[60vh] overflow-y-auto">
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button id="btn-manifest-print" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Print
+        </button>
+        <button id="btn-manifest-copy" class="btn-secondary flex-1 justify-center text-sm font-semibold py-2.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+          Copy
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ ALERT DETAIL MODAL ═══════════════════ -->
+  <div id="modal-alerts" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h2 id="modal-alerts-title" class="text-xl font-bold">Alert Details</h2>
+        <button id="modal-alerts-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="modal-alerts-list" class="space-y-2 max-h-[60vh] overflow-y-auto">
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ ITEM HISTORY MODAL ═══════════════════ -->
+  <div id="modal-item-history" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-2xl">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-bold flex items-center gap-2">
+            <svg class="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span id="item-history-title">Item History</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-1">Double-click any row in the inventory table to view its full stock movement timeline.</p>
+        </div>
+        <button id="modal-item-history-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="card p-3 text-center">
+          <p class="text-xs text-gray-400">Current Building</p>
+          <p class="text-xl font-extrabold text-emerald-500" id="ih-current-bldg">—</p>
+        </div>
+        <div class="card p-3 text-center">
+          <p class="text-xs text-gray-400">Total Removed</p>
+          <p class="text-xl font-extrabold text-red-500" id="ih-total-out">—</p>
+        </div>
+        <div class="card p-3 text-center">
+          <p class="text-xs text-gray-400">Movements</p>
+          <p class="text-xl font-extrabold text-accent" id="ih-count">—</p>
+        </div>
+      </div>
+      <div id="item-history-list" class="space-y-2 max-h-[50vh] overflow-y-auto scrollbar-thin">
+        <p class="text-center text-gray-400 py-6">Loading…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TOAST CONTAINER ═══════════════════ -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ═══════════════════ PRINT CONTAINER ═══════════════════ -->
+  <div id="print-container" class="hidden"></div>
+
+  <!-- ═══════════════════ PICK SHEET PRINT CONTAINER ═══════════════════ -->
+  <div id="pick-sheet-print" class="hidden"></div>
+
+  <!-- ═══════════════════ LOGIN OVERLAY ═══════════════════ -->
+  <div id="login-overlay" class="fixed inset-0 z-[300] flex items-center justify-center"
+       style="background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%)">
+    <div style="background:rgba(15,23,42,0.85); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+                border:1.5px solid rgba(99,102,241,0.25); border-radius:24px; padding:48px 40px;
+                width:100%; max-width:420px; box-shadow:0 30px 60px rgba(0,0,0,0.6); margin:16px;">
+
+      <!-- Logo -->
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:36px;">
+        <div style="width:52px; height:52px; border-radius:14px;
+                    background:linear-gradient(135deg,#6366f1,#9333ea);
+                    display:flex; align-items:center; justify-content:center;
+                    box-shadow:0 8px 24px rgba(99,102,241,0.45); flex-shrink:0;">
+          <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+          </svg>
+        </div>
+        <div>
+          <h2 style="font-size:24px; font-weight:800; color:white; margin:0; line-height:1;">St3s</h2>
+          <p style="font-size:11px; color:#64748b; margin:4px 0 0; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;">Inventory</p>
+        </div>
+      </div>
+
+      <!-- Form -->
+      <form id="login-form">
+        <div style="margin-bottom:14px;">
+          <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.08em;">Email Address</label>
+          <input id="login-email" type="email" placeholder="yourname@company.com" required autocomplete="email"
+            style="width:100%; padding:13px 16px; background:rgba(30,41,59,0.9); border:1.5px solid rgba(99,102,241,0.2);
+                   border-radius:12px; color:white; font-size:15px; outline:none; box-sizing:border-box;
+                   transition:border-color 0.2s, box-shadow 0.2s; font-family:inherit;"
+            onfocus="this.style.borderColor='#6366f1'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.2)';"
+            onblur="this.style.borderColor='rgba(99,102,241,0.2)'; this.style.boxShadow='none';">
+        </div>
+        <div style="margin-bottom:24px;">
+          <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.08em;">Password</label>
+          <input id="login-password" type="password" placeholder="••••••••" required autocomplete="current-password"
+            style="width:100%; padding:13px 16px; background:rgba(30,41,59,0.9); border:1.5px solid rgba(99,102,241,0.2);
+                   border-radius:12px; color:white; font-size:15px; outline:none; box-sizing:border-box;
+                   transition:border-color 0.2s, box-shadow 0.2s; font-family:inherit;"
+            onfocus="this.style.borderColor='#6366f1'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.2)';"
+            onblur="this.style.borderColor='rgba(99,102,241,0.2)'; this.style.boxShadow='none';">
+        </div>
+
+        <div id="login-error" style="display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);
+             border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:#fca5a5;"></div>
+
+        <button type="submit" id="login-btn"
+          style="width:100%; padding:15px; background:linear-gradient(135deg,#6366f1,#9333ea); border:none;
+                 border-radius:12px; color:white; font-size:15px; font-weight:700; cursor:pointer;
+                 transition:opacity 0.2s, transform 0.1s; box-shadow:0 4px 20px rgba(99,102,241,0.4);
+                 font-family:inherit; letter-spacing:0.01em;"
+          onmouseover="this.style.opacity='0.92'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.opacity='1'; this.style.transform='translateY(0)';">
+          Sign In to St3s
+        </button>
+      </form>
+
+      <!-- Divider -->
+      <div style="display:flex; align-items:center; gap:12px; margin:20px 0 16px;">
+        <div style="flex:1; height:1px; background:rgba(99,102,241,0.15);"></div>
+        <span style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;">Or</span>
+        <div style="flex:1; height:1px; background:rgba(99,102,241,0.15);"></div>
+      </div>
+
+      <!-- Google Sign-In -->
+      <button type="button" id="btn-google-signin"
+        style="width:100%; padding:13px; background:white; color:#1f2937; border:1.5px solid rgba(99,102,241,0.2);
+               border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center;
+               justify-content:center; gap:10px; transition:background 0.2s, transform 0.1s; font-family:inherit;"
+        onmouseover="this.style.background='#f3f4f6'; this.style.transform='translateY(-1px)';"
+        onmouseout="this.style.background='white'; this.style.transform='translateY(0)';">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign in with Google
+      </button>
+
+      <p id="login-footer" style="text-align:center; margin-top:22px; font-size:12px; color:#334155; line-height:1.5;">
+        Access is restricted. Contact your administrator to get login credentials.
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ LABEL GENERATOR MODAL ═══════════════════ -->
+  <div id="modal-labelgen" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-3xl">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold">Label Generator</h2>
+        <button id="modal-labelgen-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- LEFT: Configuration panel -->
+        <div class="space-y-4">
+          <!-- Logo -->
+          <div>
+            <label class="label">Logo (saved for reuse on this device)</label>
+            <div class="flex items-center gap-3">
+              <div id="labelgen-logo-preview" class="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center bg-white overflow-hidden shrink-0">
+                <span class="text-[10px] text-gray-400">No logo</span>
+              </div>
+              <div class="flex-1 space-y-2">
+                <input id="labelgen-logo-input" type="file" accept="image/png,image/jpeg,image/svg+xml" class="input-field w-full text-xs py-1.5" />
+                <button id="labelgen-logo-clear" class="btn-secondary text-xs py-1 px-2 w-full">Remove logo</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Size preset -->
+          <div>
+            <label class="label">Label Size</label>
+            <select id="labelgen-size" class="input-field w-full">
+              <option value="4x2">4×2 in (single shelf label)</option>
+              <option value="2x1">2×1 in (small label)</option>
+              <option value="a4-land" selected>A4 Landscape — 8 labels/sheet (4×2 grid)</option>
+              <option value="custom">Custom (set below)</option>
+            </select>
+          </div>
+
+          <!-- Custom dimensions -->
+          <div id="labelgen-custom-dims" class="hidden grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Width (in)</label>
+              <input id="labelgen-w" type="number" min="0.5" max="11" step="0.1" value="4" class="input-field w-full" />
+            </div>
+            <div>
+              <label class="label">Height (in)</label>
+              <input id="labelgen-h" type="number" min="0.3" max="8" step="0.1" value="2" class="input-field w-full" />
+            </div>
+          </div>
+
+          <!-- Source: single-item or multi-search -->
+          <div>
+            <label class="label">Source</label>
+            <div class="flex gap-3">
+              <label class="flex items-center gap-2 cursor-pointer text-sm">
+                <input type="radio" name="labelgen-source" value="single" checked class="accent-accent" />
+                <span>Single item</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer text-sm">
+                <input type="radio" name="labelgen-source" value="bulk" class="accent-accent" />
+                <span>Multi-select</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Item picker (single mode) -->
+          <div id="labelgen-single">
+            <label class="label">Search &amp; pick items
+              <span class="text-gray-400 font-normal text-xs ml-1">(click to add, supports multiple)</span>
+            </label>
+            <select id="labelgen-item" class="input-field w-full hidden"></select>
+          </div>
+
+          <!-- Qty per label -->
+          <div class="flex items-center gap-3">
+            <label class="label mb-0 whitespace-nowrap">Copies per label</label>
+            <div class="flex items-center gap-1">
+              <button type="button" id="labelgen-qty-dec" class="adj-btn" title="-1">−</button>
+              <input id="labelgen-qty" type="number" min="1" max="20" value="1" class="inline-input w-12 text-center" />
+              <button type="button" id="labelgen-qty-inc" class="adj-btn" title="+1">+</button>
+            </div>
+          </div>
+
+          <!-- Custom fields (shown for "custom" option or to override item text) -->
+          <div class="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Custom label text (optional — overrides item data)</p>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="labelgen-sku" type="text" class="input-field w-full text-sm" placeholder="SKU (auto-filled)" />
+              <input id="labelgen-name" type="text" class="input-field w-full text-sm" placeholder="Name (auto-filled)" />
+            </div>
+            <input id="labelgen-extra" type="text" class="input-field w-full text-sm" placeholder="Extra line (e.g. location, bin, date)" />
+          </div>
+
+          <!-- QR code source -->
+          <div>
+            <label class="label">QR Code encodes</label>
+            <select id="labelgen-qr-source" class="input-field w-full">
+              <option value="sku">SKU only</option>
+              <option value="datasheet">Datasheet URL (if set)</option>
+              <option value="custom">Custom URL/text</option>
+              <option value="none">No QR code</option>
+            </select>
+            <input id="labelgen-qr-custom" type="text" class="input-field w-full text-sm mt-2 hidden" placeholder="https://… or text" />
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button id="btn-labelgen-print" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              Print Labels
+            </button>
+            <button id="btn-labelgen-clear" class="btn-secondary text-sm font-semibold py-2.5 px-4">Reset</button>
+          </div>
+        </div>
+
+        <!-- RIGHT: Preview -->
+        <div>
+          <label class="label">Live Preview</label>
+          <div class="bg-white rounded-lg border border-gray-200 dark:border-gray-700 p-4 min-h-[300px] flex items-center justify-center overflow-auto">
+            <div id="labelgen-preview"></div>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Preview is approximate. Printer scaling may differ slightly. Use browser print dialog to confirm actual size on your label stock.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ SCAN-OUT MODAL ═══════════════════ -->
+  <div id="modal-scanout" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-emerald-600">Scan Out — Remove Stock</h2>
+        <button id="modal-scanout-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Step 1: Scan / enter SKU -->
+      <div id="scanout-step1" class="space-y-4">
+        <div class="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/40 rounded-xl p-3 text-xs text-emerald-700 dark:text-emerald-400">
+          Scan a QR with the camera, or type the SKU and press Enter. Default qty will be 1 — you can change it before confirming.
+        </div>
+
+        <div class="relative">
+          <video id="scanout-video" class="w-full rounded-xl bg-black aspect-video object-cover" autoplay playsinline muted></video>
+          <canvas id="scanout-canvas" class="hidden"></canvas>
+          <button id="scanout-camera-toggle" class="absolute bottom-3 left-3 bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-lg backdrop-blur">Stop camera</button>
+        </div>
+
+        <div class="flex gap-2">
+          <input id="scanout-manual-sku" type="text" class="input-field flex-1" placeholder="Or type SKU here + press Enter" autocomplete="off" />
+          <button id="scanout-manual-go" class="btn-accent justify-center px-4">Find</button>
+        </div>
+
+        <div id="scanout-error" class="hidden bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/40 rounded-xl p-3 text-sm text-red-600"></div>
+      </div>
+
+      <!-- Step 2: Verify location -->
+      <div id="scanout-step2" class="hidden space-y-4">
+        <div class="bg-gray-50 dark:bg-surface-700/40 rounded-xl p-4">
+          <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Item</p>
+          <p id="scanout-item-sku" class="font-mono font-bold text-accent text-lg"></p>
+          <p id="scanout-item-name" class="text-sm"></p>
+          <p class="text-xs text-gray-500 mt-2">Building stock: <span id="scanout-current-stock" class="font-bold"></span></p>
+        </div>
+
+        <div id="scanout-location-verify" class="space-y-3">
+          <div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+            Double-scan verification required. Scan the location barcode where this item is stored.
+          </div>
+          <input id="scanout-location-input" type="text" class="input-field w-full" placeholder="Scan location barcode (ROOM-AISLE-BAY-BIN-LEVEL-ACTION)" autocomplete="off" />
+          <button id="scanout-location-go" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">Verify Location</button>
+          <div id="scanout-location-error" class="hidden bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/40 rounded-xl p-3 text-sm text-red-600"></div>
+          <div id="scanout-location-expected" class="text-xs text-gray-500"></div>
+        </div>
+
+        <div id="scanout-qty-panel" class="hidden space-y-3">
+          <div>
+            <label class="label">Quantity to remove</label>
+            <div class="flex items-center gap-2">
+              <button id="scanout-qty-dec" class="adj-btn" title="−1">−</button>
+              <input id="scanout-qty" type="number" min="1" value="1" class="inline-input flex-1" style="width:80px;" />
+              <button id="scanout-qty-inc" class="adj-btn" title="+1">+</button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">New building stock: <span id="scanout-new-stock" class="font-bold text-emerald-600"></span></p>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="scanout-confirm" class="btn-accent flex-1 justify-center text-sm font-semibold py-2.5" style="background:linear-gradient(135deg,#10b981,#059669);">
+              Confirm — Remove <span id="scanout-confirm-qty">1</span>
+            </button>
+            <button id="scanout-cancel" class="btn-secondary justify-center text-sm font-semibold py-2.5 px-4">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success state -->
+      <div id="scanout-success" class="hidden text-center py-8">
+        <svg class="w-12 h-12 mx-auto mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+        <p class="font-semibold">Stock updated ✓</p>
+        <p id="scanout-success-msg" class="text-sm text-gray-500 mt-1"></p>
+        <button id="scanout-again" class="btn-secondary mt-4 text-sm font-semibold py-2 px-4">Scan next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TRANSACTION HISTORY MODAL ═══════════════════ -->
+  <div id="modal-history" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-2xl">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold">Transaction History</h2>
+        <button id="modal-history-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="history-list" class="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
+        <p class="text-center text-gray-400 py-6">Loading…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ LOCATIONS MANAGER MODAL ═══════════════════ -->
+  <div id="modal-locations" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold">Stock Locations</h2>
+        <button id="modal-locations-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Track stock at each location (main depot, building, showroom, vans). Each item's total stock = sum across all locations.</p>
+
+      <div id="locations-list" class="space-y-2 mb-4 max-h-[40vh] overflow-y-auto scrollbar-thin">
+        <p class="text-center text-gray-400 py-6">Loading…</p>
+      </div>
+
+      <form id="add-location-form" class="flex gap-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <input id="new-location-name" type="text" placeholder="New location name (e.g. 'Showroom A')" class="input-field flex-1" required />
+        <button type="submit" class="btn-accent px-4 text-sm font-semibold">Add</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TRANSFER MODAL ═══════════════════ -->
+  <div id="modal-transfer" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-md">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-accent">Transfer Stock</h2>
+        <button id="modal-transfer-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div class="bg-gray-50 dark:bg-surface-700/40 rounded-xl p-4">
+          <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Item</p>
+          <p id="transfer-item-sku" class="font-mono font-bold text-accent text-lg"></p>
+          <p id="transfer-item-name" class="text-sm"></p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">From location</label>
+            <select id="transfer-from" class="input-field w-full"></select>
+          </div>
+          <div>
+            <label class="label">To location</label>
+            <select id="transfer-to" class="input-field w-full"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="label">Quantity</label>
+          <div class="flex items-center gap-2">
+            <button id="transfer-qty-dec" class="adj-btn" title="−1">−</button>
+            <input id="transfer-qty" type="number" min="1" value="1" class="inline-input flex-1" style="width:80px;" />
+            <button id="transfer-qty-inc" class="adj-btn" title="+1">+</button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1" id="transfer-avail-text"></p>
+        </div>
+
+        <button id="transfer-confirm" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">
+          Transfer Stock
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ BINS MANAGER MODAL ═══════════════════ -->
+  <!-- Searchable SKU Assignment Modal -->
+  <div id="modal-sku-search" class="modal-overlay hidden" style="z-index: 100;" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-sm">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold">Assign Item to <span id="assign-target-bin" class="text-accent font-mono"></span></h2>
+        <button id="modal-sku-search-close" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="form-sku-search">
+        <label class="block text-sm font-semibold mb-2">Search SKU or Item Name</label>
+        <input id="input-sku-search" type="text" list="sku-datalist" autocomplete="off" required
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-surface-700 text-gray-900 dark:text-gray-100 mb-4 outline-none focus:ring-2 focus:ring-accent"
+          placeholder="Start typing...">
+        <datalist id="sku-datalist"></datalist>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" id="btn-sku-search-cancel" class="px-4 py-2 text-sm rounded bg-gray-200 dark:bg-surface-700 hover:bg-gray-300 dark:hover:bg-surface-600 transition">Cancel</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-indigo-600 transition font-bold shadow-md">Assign Bin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-bins" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-4xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold flex items-center gap-2">
+          <svg class="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v4H4zM4 12h16v8H4z"/></svg>
+          Bin Setup & Labels
+        </h2>
+        <button id="modal-bins-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <!-- Bulk bin creator -->
+        <div class="lg:col-span-1 space-y-3">
+          <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Bin Generator</h3>
+          <!-- Mode toggle -->
+          <div class="flex rounded-xl bg-gray-100 dark:bg-surface-700/60 p-1 gap-1">
+            <button class="bin-mode-tab active" data-bin-mode="structured">Structured Grid</button>
+            <button class="bin-mode-tab" data-bin-mode="general">General / Zone</button>
+          </div>
+
+          <!-- Structured 5-Tier Inputs -->
+          <div id="bins-structured-panel" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Room</label>
+                <input id="bins-room" type="text" class="input-field w-full" placeholder="WH" maxlength="4" />
+              </div>
+              <div>
+                <label class="label">Aisle</label>
+                <input id="bins-aisle" type="text" class="input-field w-full" placeholder="A" maxlength="3" />
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="label">Bay</label>
+                <input id="bins-bay" type="number" min="1" class="input-field w-full" value="1" />
+              </div>
+              <div>
+                <label class="label">Bin Start #</label>
+                <input id="bins-start" type="number" min="1" class="input-field w-full" value="1" />
+              </div>
+              <div>
+                <label class="label">Bin Count</label>
+                <input id="bins-count" type="number" min="1" max="500" class="input-field w-full" value="12" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Level (Shelf Height)</label>
+                <select id="bins-level" class="input-field w-full">
+                  <option value="F">F (Floor)</option>
+                  <option value="1" selected>1 (Waist)</option>
+                  <option value="2">2 (Chest)</option>
+                  <option value="3">3 (Overhead)</option>
+                  <option value="4">4 (High Rack)</option>
+                </select>
+              </div>
+              <div>
+                <label class="label">Action Code</label>
+                <select id="bins-action" class="input-field w-full">
+                  <option value="STOCK">STOCK</option>
+                  <option value="PICK">PICK</option>
+                  <option value="BULK">BULK</option>
+                  <option value="STAGE">STAGE</option>
+                  <option value="QC">QC</option>
+                  <option value="RET">RET</option>
+                </select>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Format: <code class="font-mono">WH-A-01-03-1-STOCK</code></p>
+          </div>
+
+          <!-- General / Zone Storage Inputs -->
+          <div id="bins-general-panel" class="space-y-3 hidden">
+            <div>
+              <label class="label">Zone Classification</label>
+              <select id="bins-zone" class="input-field w-full">
+                <option value="RECEIVING">RECEIVING</option>
+                <option value="STAGING">STAGING</option>
+                <option value="SHIPPING">SHIPPING</option>
+                <option value="QA-REJECT">QA-REJECT</option>
+                <option value="BULK">BULK</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Custom Label</label>
+              <input id="bins-zone-label" type="text" class="input-field w-full" placeholder="DOCK_1, RACK_A, FLOOR_2…" maxlength="20" />
+            </div>
+            <div>
+              <label class="label">Count</label>
+              <input id="bins-zone-count" type="number" min="1" max="100" class="input-field w-full" value="6" />
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Format: <code class="font-mono">GENERAL-STAGING-DOCK_1-STOCK</code></p>
+          </div>
+
+          <button id="bins-generate" class="btn-accent w-full justify-center text-sm font-semibold py-2.5">
+            <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Generate Bin Codes
+          </button>
+        </div>
+
+        <!-- List preview + assignments -->
+        <div class="lg:col-span-2 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200">Preview & assignment</h3>
+            <div class="flex gap-2">
+              <select id="bins-label-size" class="select-field text-xs py-1.5">
+                <option value="4x2">4×2 in</option>
+                <option value="2x1">2×1 in</option>
+                <option value="a4-grid" selected>A4 grid (24)</option>
+              </select>
+              <button id="bins-print" class="btn-secondary text-xs py-1.5">
+                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                Print Sheet
+              </button>
+            </div>
+          </div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <p><strong>Chaotic storage:</strong> Any SKU can occupy any open coordinate — bins are auto-assigned in order to items without one. No product-type grouping enforced.</p>
+            <p>Click a free bin to manually assign it to the next unassigned item.</p>
+          </div>
+          <div id="bins-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[360px] overflow-y-auto scrollbar-thin p-1"></div>
+          <div id="bins-stats" class="text-xs text-gray-500 dark:text-gray-400"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ PARETO DASHBOARD MODAL ═══════════════════ -->
+  <div id="modal-pareto" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content w-full max-w-5xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold flex items-center gap-2">
+          <svg class="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
+          Pareto Insights — Top Movers
+        </h2>
+        <button id="modal-pareto-close" class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Mode ribbon -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button class="pareto-tab active" data-pareto-mode="transactions">By Scan-out Activity</button>
+        <button class="pareto-tab" data-pareto-mode="lowstock">By Reorder Urgency</button>
+        <button class="pareto-tab" data-pareto-mode="value">By Stock Value (BS Comm)</button>
+      </div>
+
+      <!-- Summary -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Total SKUs</p><p class="text-xl font-extrabold" id="pareto-total-skus">0</p></div>
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Top 20% movers</p><p class="text-xl font-extrabold text-accent" id="pareto-top20c">0%</p></div>
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Share of activity</p><p class="text-xl font-extrabold text-emerald-500" id="pareto-coverage">0%</p></div>
+        <div class="card p-3 text-center"><p class="text-xs text-gray-400">Vital few (count)</p><p class="text-xl font-extrabold" id="pareto-vital">0</p></div>
+      </div>
+
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-2" id="pareto-explainer"></p>
+
+      <!-- Chart bars -->
+      <div id="pareto-chart" class="h-56 w-full bg-gray-50 dark:bg-surface-700/40 rounded-xl p-3 flex items-end gap-1 overflow-x-auto scrollbar-thin"></div>
+
+      <!-- Table -->
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+              <th class="py-2 pr-3">#</th>
+              <th class="py-2 pr-3">SKU</th>
+              <th class="py-2 pr-3">Item</th>
+              <th class="py-2 pr-3 text-right">Measure</th>
+              <th class="py-2 pr-3 text-right">% of total</th>
+              <th class="py-2 pr-3 text-right">Cumulative</th>
+              <th class="py-2 pr-3 text-center">Vision tier</th>
+            </tr>
+          </thead>
+          <tbody id="pareto-body"></tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-xs text-gray-500 dark:text-gray-400"><strong>Vision tier A</strong> = items in the vital few (top 80% of activity). Move them to eye-level / aisle-end bins. <strong>Tier B</strong> = next 15%. <strong>Tier C</strong> = bottom 5% — push to back shelves.</p>
+    </div>
+  </div>
+
+  <!-- Connection status indicator (offline-first) -->
+  <div id="offline-indicator" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full bg-amber-500/95 text-white text-xs font-semibold shadow-lg flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728M5.636 18.364a9 9 0 010-12.728M12 9v4m0 4h.01"/></svg>
+    Offline — changes will sync when reconnected
+  </div>
+
+  <!-- Firebase Config + Main Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-
-    const app = initializeApp(window.firebaseConfig);
-    const db = getFirestore(app);
-
-    let masterData = new Map(); // sku -> { sku, name, totalQty, locations: [] }
-    let searchTerm = '';
-
-    // Listen to the flat allocations table in real-time
-    const q = query(collection(db, 'inventory'));
-    onSnapshot(q, (snapshot) => {
-      // Rebuild the map on every change to ensure deleted allocations are handled cleanly
-      masterData.clear();
-      
-      snapshot.forEach(doc => {
-        const d = doc.data();
-        const sku = (d.sku || 'UNKNOWN').toUpperCase();
-        
-        if (!masterData.has(sku)) {
-          masterData.set(sku, {
-            sku: sku,
-            name: d.item_name || '',
-            totalQty: 0,
-            locations: []
-          });
-        }
-        
-        const entry = masterData.get(sku);
-        const qty = parseFloat(d.quantity) || 0;
-        
-        entry.totalQty += qty;
-        
-        // Push this explicit location
-        entry.locations.push({
-          room: d.room || '-',
-          aisle: d.aisle || '-',
-          bay: d.bay || '-',
-          bin: d.bin || '-',
-          qty: qty
-        });
-      });
-      
-      renderTable();
-    }, (error) => {
-      console.error("Firebase listen error:", error);
-      document.getElementById('status-indicator').textContent = 'Error';
-      document.getElementById('status-indicator').classList.replace('text-emerald-400', 'text-red-400');
-    });
-
-    function renderTable() {
-      const tbody = document.getElementById('inventory-tbody');
-      
-      // Convert map to array and sort by SKU
-      let rows = Array.from(masterData.values()).sort((a,b) => a.sku.localeCompare(b.sku));
-      
-      // Filter
-      if (searchTerm) {
-         rows = rows.filter(r => r.sku.includes(searchTerm) || r.name.toUpperCase().includes(searchTerm));
-      }
-
-      document.getElementById('total-skus').textContent = rows.length;
-
-      if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-slate-500">No inventory found.</td></tr>`;
-        return;
-      }
-
-      let html = '';
-      rows.forEach(item => {
-        
-        // Build the concatenated 'Added to Bin' column string
-        // Format: "Room 1-Aisle A-Bay 04-Bin 02 (Qty: 10) | ..."
-        const locString = item.locations.sort((a,b) => b.qty - a.qty).map(l => {
-           return `<span class="loc-badge">${l.room}-${l.aisle}-${l.bay}-${l.bin} (<span class="qty">${l.qty}</span>)</span>`;
-        }).join(' ');
-
-        html += `
-          <tr class="hover:bg-slate-700/30 transition border-b border-slate-700/50">
-            <td class="px-6 py-3 font-mono font-bold text-blue-400">${item.sku}</td>
-            <td class="px-6 py-3 text-slate-300 truncate max-w-xs" title="${item.name}">${item.name}</td>
-            <td class="px-6 py-3 text-right font-bold text-white">${item.totalQty}</td>
-            <td class="px-6 py-3 whitespace-normal leading-tight">${locString}</td>
-          </tr>
-        `;
-      });
-
-      tbody.innerHTML = html;
-    }
-
-    document.getElementById('table-search').addEventListener('input', (e) => {
-       searchTerm = e.target.value.trim().toUpperCase();
-       renderTable();
-    });
-
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
