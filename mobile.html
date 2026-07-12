@@ -355,17 +355,19 @@
         await runTransaction(db, async (tx) => {
           const docSnap = await tx.get(docRef);
           if (!docSnap.exists()) throw "Document missing!";
-          const actualOldQty = docSnap.data().quantity;
+          const data = docSnap.data();
+          const actualOldQty = Number(data.quantity) || 0;
+          const sku = data.sku || data.item_name || 'UNKNOWN';
           
           if (newQty !== actualOldQty) {
             const logRef = doc(collection(db, 'discrepancies'));
             tx.set(logRef, {
                inventory_id: docId,
-               sku: docSnap.data().sku,
-               room: docSnap.data().room || null,
-               aisle: docSnap.data().aisle || null,
-               bay: docSnap.data().bay || null,
-               bin: docSnap.data().bin || null,
+               sku: sku,
+               room: data.room || null,
+               aisle: data.aisle || null,
+               bay: data.bay != null ? Number(data.bay) : null,
+               bin: data.bin != null ? Number(data.bin) : null,
                expected_qty: actualOldQty,
                actual_qty: newQty,
                variance: newQty - actualOldQty,
