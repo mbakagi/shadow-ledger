@@ -384,10 +384,10 @@
         .map(g => ({
           sku:         g.sku,
           name:        g.name,
-          binCount:    g.items.filter(i => i.binCode).length,
-          unassigned:  g.items.filter(i => !i.binCode).length,
+          binCount:    g.items.filter(i => getItemBins(i).length > 0).length,
+          unassigned:  g.items.filter(i => getItemBins(i).length === 0).length,
           totalQty:    g.items.reduce((s, i) => s + (i.totalStock || 0), 0),
-          bins:        g.items.filter(i => i.binCode).map(i => i.binCode)
+          bins:        g.items.flatMap(i => getItemBins(i))
         }))
         .sort((a, b) => b.binCount - a.binCount || b.unassigned - a.unassigned);
     }
@@ -830,7 +830,7 @@
       results = results.filter(i =>
         i.sku.toLowerCase().includes(query) ||
         i.name.toLowerCase().includes(query) ||
-        (i.binCode && i.binCode.toLowerCase().includes(query)) ||
+        (getItemBins(i).some(b => b.toLowerCase().includes(query))) ||
         (i.category && i.category.toLowerCase().includes(query)) ||
         (i.datasheetUrl && i.datasheetUrl.toLowerCase().includes(query))
       );
@@ -3422,7 +3422,7 @@
           <div class="bin-print-code">${esc(code)}</div>
         `;
         dom.printContainer.appendChild(div);
-        const assignedItem = State.items.find(i => (i.binCode || '').toUpperCase() === code.toUpperCase());
+        const assignedItem = State.items.find(i => getItemBins(i).map(b => b.toUpperCase()).includes(code.toUpperCase()));
         qrTargets.push({ id: qrId, code, itemId: assignedItem?.id || '' });
       });
 
@@ -3502,7 +3502,7 @@
   function openBinsModal() {
     const mode = getBinMode();
     const existingBins = new Set();
-    State.items.forEach(i => getItemBins(i).forEach(b => existingBins.add(b)));
+    State.items.forEach(i => getItemBins(i).forEach(b => existingBins.add(b.toUpperCase())));
     let codes = [];
 
     if (mode === 'general') {
@@ -3534,7 +3534,7 @@
 
     const grid = $('#bins-grid');
     grid.innerHTML = codes.map((code, idx) => {
-      const taken = existingBins.has(code);
+      const taken = existingBins.has(code.toUpperCase());
       const isGeneral = code.startsWith('GENERAL-');
       let sub1 = '', sub2 = '', sub3 = '';
 
@@ -3561,7 +3561,7 @@
     // "Unassigned" logic is now: items that have 0 bins
     const unassigned = State.items.filter(i => getItemBins(i).length === 0 && !i.archived);
 
-    const free = codes.filter(c => !existingBins.has(c));
+    const free = codes.filter(c => !existingBins.has(c.toUpperCase()));
     $('#bins-stats').textContent = `${free.length} free · ${codes.length - free.length} taken · ${unassigned.length} items without bins`;
 
     let activeBinCell = null;
@@ -3701,9 +3701,9 @@
               'bg-red-100 dark:bg-red-900/30 text-red-500'}">${r.tier}
           </span>
           <span class="ml-1 text-xs text-gray-400">
-            <input type="text" class="bin-inline-edit" value="${esc(r.item.binCode || '')}"
+            <input type="text" class="bin-inline-edit" value="${esc(getItemBins(r.item)[0] || '')}"
               placeholder="Bin…" maxlength="20"
-              data-sku="${esc(r.item.sku)}" title="Click to edit bin code" />
+              data-sku="${esc(r.item.sku)}" title="Click to edit primary bin code" />
           </span>
         </td>
       </tr>
@@ -3714,9 +3714,17 @@
       inp.addEventListener('change', async () => {
         const item = State.items.find(i => i.sku === inp.dataset.sku);
         if (!item) return;
-        item.binCode = inp.value.trim() || '';
-        await DAL.saveOne(item);
-        toast(`Bin for ${item.sku}: ${item.binCode || '—'}`, 'success');
+        const newBin = inp.value.trim().toUpperCase();
+        if (newBin) {
+          await DAL.assignBin(item.id, newBin);
+          toast(`Bin assigned to ${item.sku}: ${newBin}`, 'success');
+        } else {
+          const oldBins = getItemBins(item);
+          if (oldBins.length > 0) {
+            await DAL.clearBin(item.id, oldBins[0]);
+            toast(`Cleared primary bin for ${item.sku}`, 'success');
+          }
+        }
       });
     });
 
