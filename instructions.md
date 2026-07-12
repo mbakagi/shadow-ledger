@@ -466,3 +466,18 @@ async function saveItem(item) {
   applyFilters();
 }
 ```
+
+## 6. Recent Architectural Learnings & Constraints
+
+### 6.1 Chaotic Storage & Document Aggregation
+- The system now uses a flat NoSQL structure where multiple documents can share the same SKU to represent different physical bins.
+- `app.js` handles all client-side aggregation. When querying the `inventory` collection, `startSync` groups by SKU and dynamically recalculates total stock.
+- NEVER attempt to nest maps or objects within the location data. Always emit flat documents with explicit `room`, `aisle`, `bay`, and `bin` fields.
+
+### 6.2 Firebase SDK Version Matching
+- Always ensure that all entry points (`index.html`, `mobile.html`, etc.) are running identical major/minor versions of the Firebase SDK.
+- Mismatched SDK versions (e.g., v9 vs v10) across different tabs sharing the same origin will invalidate the IndexedDB Auth token and cause an infinite login/logout loop.
+
+### 6.3 Firestore Data Types Strictness
+- Cloud Firestore strictly rejects `undefined` values.
+- When parsing legacy documents that lack modern explicit fields, ALWAYS provide a fallback (`|| null` or `|| ''`) before attempting to `set()` or `update()` a document. Failure to do so will instantly crash the transaction.
