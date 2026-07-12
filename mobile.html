@@ -101,7 +101,11 @@
     </div>
     <div class="p-4 space-y-4">
       <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Search SKU</label>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Search By</label>
+        <div class="flex gap-2 mb-3">
+          <button type="button" id="mode-sku" class="flex-1 py-2 rounded-lg font-bold text-sm border-2 border-blue-500 bg-blue-50 text-blue-600 transition">SKU</button>
+          <button type="button" id="mode-name" class="flex-1 py-2 rounded-lg font-bold text-sm border-2 border-slate-200 bg-white text-slate-400 transition">Item Name</button>
+        </div>
         <div class="flex gap-2">
           <input type="text" id="search-sku" class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. SKU-123">
           <button id="btn-do-search" class="bg-blue-600 text-white px-6 rounded-lg font-bold shadow">Go</button>
@@ -258,7 +262,7 @@
         const snap = await getDocs(collection(db, 'inventory'));
         const skus = new Set();
         snap.forEach(d => { if(d.data().sku) skus.add(d.data().sku); });
-        
+
         let datalist = document.getElementById('sku-list');
         if (!datalist) {
           datalist = document.createElement('datalist');
@@ -272,11 +276,30 @@
           datalist.appendChild(opt);
         });
 
+        // Also cache item names for name-search autocomplete
+        const names = new Set();
+        snap.forEach(d => { const n = d.data().item_name || d.data().name; if (n) names.add(n); });
+        let nameList = document.getElementById('name-list');
+        if (!nameList) {
+          nameList = document.createElement('datalist');
+          nameList.id = 'name-list';
+          document.body.appendChild(nameList);
+        }
+        nameList.innerHTML = '';
+        names.forEach(n => {
+          const opt = document.createElement('option');
+          opt.value = n;
+          nameList.appendChild(opt);
+        });
+
         // Attach list to all SKU inputs
         ['search-sku', 'put-sku', 'mv-sku'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.setAttribute('list', 'sku-list');
         });
+        // search-sku switches between sku-list / name-list based on mode
+        const searchInput = document.getElementById('search-sku');
+        if (searchInput) searchInput.setAttribute('list', 'sku-list');
       } catch (e) {
         console.error("Failed to load autocomplete:", e);
       }
@@ -401,36 +424,127 @@
     };
 
     // --- MODULE 1: SEARCH & COUNT ---
+    let searchMode = 'sku';
+    const modeSkuBtn  = document.getElementById('mode-sku');
+    const modeNameBtn = document.getElementById('mode-name');
+    function setSearchMode(mode) {
+      searchMode = mode;
+      const skuInput = document.getElementById('search-sku');
+      if (mode === 'sku') {
+        modeSkuBtn.className  = 'flex-1 py-2 rounded-lg font-bold text-sm border-2 border-blue-500 bg-blue-50 text-blue-600 transition';
+        modeNameBtn.className = 'flex-1 py-2 rounded-lg font-bold text-sm border-2 border-slate-200 bg-white text-slate-400 transition';
+        skuInput.placeholder = 'e.g. SKU-123';
+        skuInput.classList.add('font-mono');
+        skuInput.setAttribute('list', 'sku-list');
+      } else {
+        modeNameBtn.className = 'flex-1 py-2 rounded-lg font-bold text-sm border-2 border-blue-500 bg-blue-50 text-blue-600 transition';
+        modeSkuBtn.className  = 'flex-1 py-2 rounded-lg font-bold text-sm border-2 border-slate-200 bg-white text-slate-400 transition';
+        skuInput.placeholder = 'e.g. Cable, Bolt, Filter...';
+        skuInput.classList.remove('font-mono');
+        skuInput.setAttribute('list', 'name-list');
+      }
+    }
+    modeSkuBtn.addEventListener('click',  () => setSearchMode('sku'));
+    modeNameBtn.addEventListener('click', () => setSearchMode('name'));
+    document.getElementById('search-sku').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-do-search').click();
+    });
+
     document.getElementById('btn-do-search').addEventListener('click', async () => {
-      const sku = document.getElementById('search-sku').value.trim().toUpperCase();
-      if (!sku) return;
+      const raw = document.getElementById('search-sku').value.trim();
+      if (!raw) return;
       const resDiv = document.getElementById('search-results');
       resDiv.innerHTML = '<p class="text-slate-500 text-center text-sm mt-4">Searching...</p>';
-      
-      const q = query(collection(db, 'inventory'), where('sku', '==', sku));
-      const snap = await getDocs(q);
-      
-      if (snap.empty) {
-        resDiv.innerHTML = '<p class="text-red-500 text-center text-sm mt-4 font-bold">SKU not found in any location.</p>';
+
+      let docs = [];
+      if (searchMode === 'sku') {
+        const sku = raw.toUpperCase();
+        const snap = await getDocs(query(collection(db, 'inventory'), where('sku', '==', sku)));
+        snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+      } else {
+        // Name search: fetch all, filter client-side (Firestore has no LIKE)
+        const needle = raw.toLowerCase();
+        const snap = await getDocs(collection(db, 'inventory'));
+        snap.forEach(d => {
+          const data = d.data();
+          const name = (data.item_name || data.name || '').toLowerCase();
+          if (name.includes(needle)) docs.push({ id: d.id, ...data });
+        });
+      }
+
+      if (docs.length === 0) {
+        resDiv.innerHTML = `<p class="text-red-500 text-center text-sm mt-4 font-bold">${searchMode === 'sku' ? 'SKU' : 'Name'} not found in any location.</p>`;
         return;
       }
 
-      let html = `<p class="text-sm font-bold text-slate-700 mb-2">Found in ${snap.size} location(s):</p>`;
-      snap.forEach(d => {
-        const data = d.data();
+      // Split into building (explicit location) vs depot (no location)
+      const building = [];
+      const depot = [];
+      docs.forEach(d => {
+        if (d.room || d.aisle || d.bay != null || d.bin != null) building.push(d);
+        else depot.push(d);
+      });
+      const buildingTotal = building.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
+      const depotTotal    = depot.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
+      const grandTotal     = buildingTotal + depotTotal;
+
+      let html = '';
+      // Summary card
+      html += `
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold text-blue-700">${docs[0].sku || '—'} <span class="text-slate-500 font-normal text-xs">(${docs.length} doc${docs.length > 1 ? 's' : ''})</span></span>
+            <span class="text-xs text-slate-500">${docs[0].item_name || docs[0].name || '—'}</span>
+          </div>
+          <div class="flex gap-4 text-xs">
+            <span>🏢 Building: <b>${buildingTotal}</b></span>
+            <span>📦 Depot: <b>${depotTotal}</b></span>
+            <span>∑ Total: <b>${grandTotal}</b></span>
+          </div>
+        </div>`;
+
+      // Building stock section
+      html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-3">Building Stock <span class="text-slate-400 font-normal">(${building.length})</span></p>`;
+      if (building.length === 0) {
+        html += '<p class="text-xs text-slate-400 italic">No building stock.</p>';
+      }
+      building.forEach(d => {
+        const qty = Number(d.quantity) || 0;
         html += `
           <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
-            <div>
-              <p class="font-mono font-bold text-blue-600 text-sm">${formatLoc(data)}</p>
-              <p class="text-xs text-slate-500 uppercase tracking-wide">Current System Qty: <span class="font-bold text-slate-800">${data.quantity}</span></p>
+            <div class="min-w-0">
+              <p class="font-mono font-bold text-blue-600 text-sm">${formatLoc(d)}</p>
+              <p class="text-xs text-slate-500">${d.item_name || d.name || '—'}</p>
+              <p class="text-xs text-slate-500 uppercase tracking-wide">Qty: <span class="font-bold text-slate-800">${qty}</span></p>
             </div>
-            <div class="flex items-center gap-2">
-              <input type="number" id="sc-${d.id}" value="${data.quantity}" min="0" class="w-16 border border-slate-300 rounded px-2 py-2 text-center font-bold focus:outline-blue-500">
-              <button onclick="verifyCount('${d.id}', ${data.quantity}, 'sc-${d.id}')" class="bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700 px-3 py-2 rounded font-bold border border-slate-200 transition">OK</button>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input type="number" id="sc-${d.id}" value="${qty}" min="0" class="w-16 border border-slate-300 rounded px-2 py-2 text-center font-bold focus:outline-blue-500">
+              <button onclick="verifyCount('${d.id}', ${qty}, 'sc-${d.id}')" class="bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700 px-3 py-2 rounded font-bold border border-slate-200 transition">OK</button>
             </div>
-          </div>
-        `;
+          </div>`;
       });
+
+      // Depot stock section
+      html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-4">Depot Stock <span class="text-slate-400 font-normal">(${depot.length})</span></p>`;
+      if (depot.length === 0) {
+        html += '<p class="text-xs text-slate-400 italic">No depot stock.</p>';
+      }
+      depot.forEach(d => {
+        const qty = Number(d.quantity) || 0;
+        html += `
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <p class="font-mono font-bold text-amber-600 text-sm">DEPOT</p>
+              <p class="text-xs text-slate-500">${d.item_name || d.name || '—'}</p>
+              <p class="text-xs text-slate-500 uppercase tracking-wide">Qty: <span class="font-bold text-slate-800">${qty}</span></p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input type="number" id="sc-${d.id}" value="${qty}" min="0" class="w-16 border border-amber-300 rounded px-2 py-2 text-center font-bold focus:outline-amber-500">
+              <button onclick="verifyCount('${d.id}', ${qty}, 'sc-${d.id}')" class="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-2 rounded font-bold border border-amber-300 transition">OK</button>
+            </div>
+          </div>`;
+      });
+
       resDiv.innerHTML = html;
     });
 
