@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WMS Migration Wizard</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen p-8">
+  
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-8 border-b border-slate-700 pb-4">
+      <h1 class="text-3xl font-bold text-white mb-2">Step 1: Location Hierarchy Sandbox</h1>
+      <p class="text-slate-400">This wizard translates existing 3D structural boundaries into explicit alphanumeric database rows.</p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-8">
+      <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+        <h2 class="text-xl font-bold mb-4 text-emerald-400">1. Extract & Simulate</h2>
+        <p class="text-sm text-slate-400 mb-4">Pull geometry rules from Firestore and simulate the new location strings and routing sequence numbers.</p>
+        <button id="btn-simulate" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded w-full transition">Generate Preview</button>
+      </div>
+
+      <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 opacity-50 transition-opacity" id="panel-commit">
+        <h2 class="text-xl font-bold mb-4 text-blue-400">2. Commit Migration</h2>
+        <p class="text-sm text-slate-400 mb-4">Batch write all simulated locations to a new <code>locations</code> collection in Firestore. <br>Status: <span id="status-text" class="text-amber-400 font-bold">Waiting for preview...</span></p>
+        <button id="btn-commit" disabled class="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-2 px-4 rounded w-full transition">Commit to Database</button>
+      </div>
+    </div>
+
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hidden" id="preview-container">
+      <div class="px-6 py-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+        <h3 class="font-bold text-white">Virtual Sandbox Preview</h3>
+        <span class="text-xs bg-slate-700 px-2 py-1 rounded-full text-slate-300">Total Locations: <span id="total-locs">0</span></span>
+      </div>
+      <div class="max-h-96 overflow-y-auto">
+        <table class="w-full text-left text-sm whitespace-nowrap">
+          <thead class="uppercase bg-slate-900/50 text-slate-500 text-[10px] tracking-wider sticky top-0 shadow-sm">
+            <tr>
+              <th class="px-6 py-3">Location ID</th>
+              <th class="px-6 py-3">Zone (Room)</th>
+              <th class="px-6 py-3">Aisle</th>
+              <th class="px-6 py-3">Bay</th>
+              <th class="px-6 py-3">Level</th>
+              <th class="px-6 py-3">Travel Seq (TSN)</th>
+            </tr>
+          </thead>
+          <tbody id="preview-tbody" class="divide-y divide-slate-700/50 text-slate-300">
+            <!-- Rendered JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <script>
+    const db = firebase.firestore();
+    let simulatedLocations = [];
+
+    document.getElementById('btn-simulate').addEventListener('click', async () => {
+      document.getElementById('btn-simulate').textContent = 'Loading...';
+      document.getElementById('btn-simulate').disabled = true;
+      try {
+        await generatePreview();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+      document.getElementById('btn-simulate').textContent = 'Regenerate Preview';
+      document.getElementById('btn-simulate').disabled = false;
+    });
+
+    document.getElementById('btn-commit').addEventListener('click', async () => {
+      if (!confirm(`Are you sure you want to write ${simulatedLocations.length} locations to Firestore?`)) return;
+      document.getElementById('btn-commit').disabled = true;
+      document.getElementById('btn-commit').textContent = 'Writing...';
+      try {
+        await commitToDatabase();
+      } catch (err) {
+        alert('Commit Error: ' + err.message);
+      }
+    });
+
+    async function generatePreview() {
+      const snap = await db.collection('layouts').get();
+      const rooms = [];
+      snap.forEach(doc => rooms.push({ id: doc.id, ...doc.data() }));
+
+      simulatedLocations = [];
+      let baseSequence = 1000;
+
+      rooms.sort((a,b) => (a.roomName || a.id).localeCompare(b.roomName || b.id));
+
+      for (const room of rooms) {
+        const zone = (room.roomName || room.id).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        
+        let aislesConfig = room.aislesData || {};
+        if (Object.keys(aislesConfig).length === 0) {
+           const numAisles = parseInt(room.aisles, 10) || 1;
+           const numBays = parseInt(room.bays, 10) || 1;
+           const numBins = parseInt(room.bins, 10) || 1;
+           const numLevels = parseInt(room.levels, 10) || 1;
+           for (let a = 0; a < numAisles; a++) {
+              aislesConfig[String.fromCharCode(65 + a)] = { bayStart: 1, bayEnd: numBays, bins: numBins, levels: numLevels };
+           }
+        }
+
+        const aisleLetters = Object.keys(aislesConfig).sort();
+
+        aisleLetters.forEach((aisle, aisleIdx) => {
+          const config = aislesConfig[aisle];
+          const bStart = config.bayStart || 1;
+          const bEnd = config.bayEnd || config.bays || 1;
+          const levels = config.levels || 1;
+
+          const isEven = (aisleIdx % 2 === 0);
+          
+          let bayList = [];
+          for (let b = bStart; b <= bEnd; b++) { bayList.push(b); }
+          if (!isEven) bayList.reverse();
+
+          for (const bay of bayList) {
+             baseSequence += 10;
+             for (let l = 1; l <= levels; l++) {
+                const bayPad = String(bay).padStart(2, '0');
+                const locId = `${zone}-${aisle}-${bayPad}-${l}`;
+                
+                const bins = config.bins || 1;
+                if (bins > 1) {
+                   for (let bi = 1; bi <= bins; bi++) {
+                      const pos = String.fromCharCode(64 + bi);
+                      const fullId = `${locId}-${pos}`;
+                      simulatedLocations.push({
+                         id: fullId,
+                         zone, aisle, bay: bayPad, level: l, position: pos,
+                         travelSequence: baseSequence + l,
+                         status: 'Active'
+                      });
+                   }
+                } else {
+                   simulatedLocations.push({
+                      id: locId,
+                      zone, aisle, bay: bayPad, level: l, position: '',
+                      travelSequence: baseSequence + l,
+                      status: 'Active'
+                   });
+                }
+             }
+          }
+        });
+      }
+
+      renderTable();
+
+      document.getElementById('panel-commit').classList.remove('opacity-50');
+      document.getElementById('btn-commit').disabled = false;
+      document.getElementById('status-text').textContent = 'Ready to commit!';
+      document.getElementById('status-text').className = 'text-emerald-400 font-bold';
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('preview-tbody');
+      document.getElementById('total-locs').textContent = simulatedLocations.length;
+      
+      const rows = simulatedLocations.slice(0, 100).map(loc => `
+        <tr class="hover:bg-slate-700/30 border-b border-slate-700/50">
+          <td class="px-6 py-2 mono font-bold text-emerald-300">${loc.id}</td>
+          <td class="px-6 py-2">${loc.zone}</td>
+          <td class="px-6 py-2">${loc.aisle}</td>
+          <td class="px-6 py-2">${loc.bay}</td>
+          <td class="px-6 py-2">${loc.level}</td>
+          <td class="px-6 py-2 mono text-blue-300">${loc.travelSequence}</td>
+        </tr>
+      `).join('');
+      
+      tbody.innerHTML = rows + (simulatedLocations.length > 100 ? `<tr><td colspan="6" class="px-6 py-4 text-center text-slate-500 italic">...and ${simulatedLocations.length - 100} more rows</td></tr>` : '');
+      document.getElementById('preview-container').classList.remove('hidden');
+    }
+
+    async function commitToDatabase() {
+      const batchSize = 400;
+      let count = 0;
+
+      for (let i = 0; i < simulatedLocations.length; i += batchSize) {
+        const chunk = simulatedLocations.slice(i, i + batchSize);
+        const batch = db.batch();
+        
+        chunk.forEach(loc => {
+          const ref = db.collection('locations').doc(loc.id);
+          batch.set(ref, loc);
+          count++;
+        });
+
+        await batch.commit();
+        document.getElementById('status-text').textContent = `Writing... ${count} / ${simulatedLocations.length}`;
+      }
+
+      document.getElementById('status-text').textContent = `Success! Wrote ${count} locations.`;
+      document.getElementById('status-text').className = 'text-blue-400 font-bold';
+      document.getElementById('btn-commit').textContent = 'Migration Complete';
+    }
+  </script>
+</body>
+</html>
