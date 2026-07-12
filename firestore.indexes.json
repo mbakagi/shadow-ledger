@@ -1,1 +1,54 @@
-{"indexes":[{"collectionGroup":"transactions","queryScope":"COLLECTION","fields":[{"fieldPath":"itemId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"DESCENDING"}]},{"collectionGroup":"transactions","queryScope":"COLLECTION","fields":[{"fieldPath":"timestamp","order":"DESCENDING"}]},{"collectionGroup":"transactions","queryScope":"COLLECTION","fields":[{"fieldPath":"sku","order":"ASCENDING"},{"fieldPath":"timestamp","order":"DESCENDING"}]},{"collectionGroup":"inventory","queryScope":"COLLECTION","fields":[{"fieldPath":"category","order":"ASCENDING"},{"fieldPath":"totalStock","order":"DESCENDING"}]}],"fieldOverrides":[]}
+{
+  "indexes": [
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemId",    "order": "ASCENDING"  },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sku",       "order": "ASCENDING"  },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category",   "order": "ASCENDING"  },
+        { "fieldPath": "totalStock", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "warehouseRoom",  "order": "ASCENDING" },
+        { "fieldPath": "warehouseAisle", "order": "ASCENDING" },
+        { "fieldPath": "sku",            "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "warehouseInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "templateId", "order": "ASCENDING"  },
+        { "fieldPath": "updatedAt",  "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+

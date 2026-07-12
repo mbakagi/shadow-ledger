@@ -30,6 +30,7 @@ service cloud.firestore {
         && request.resource.data.purchasingTrigger is int
         && request.resource.data.purchasingTrigger >= 0;
 
+      // Full record update (from main app)
       allow update: if request.auth != null
         && request.resource.data.sku is string
         && request.resource.data.totalStock is int
@@ -40,6 +41,14 @@ service cloud.firestore {
         && request.resource.data.maxCapacity >= 0
         && request.resource.data.purchasingTrigger is int
         && request.resource.data.purchasingTrigger >= 0;
+
+      // Warehouse bin-assignment update (from warehouse-3d view)
+      // Accepts partial merge writes: binCode + derived warehouse fields only
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['binCode','warehouseRoom','warehouseAisle',
+                      'warehouseBay','warehouseBin','warehouseLevel','updatedAt'])
+        && request.resource.data.binCode is string;
 
       allow delete: if request.auth != null;
     }

@@ -57,6 +57,9 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </h2>
+    <!-- Logged-in user badge — populated by auth.onAuthStateChanged -->
+    <div id="user-badge" class="hidden mb-2 px-2 py-1 rounded-md bg-indigo-900/40 border border-indigo-500/30 text-indigo-300 font-semibold truncate" style="font-size:10px;"></div>
+
 
     <div id="panel-content" class="space-y-4 text-xs">
       <div>
@@ -168,30 +171,23 @@
 
   <div id="toast"></div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <!-- Firebase SDKs — same version as index.html (shared firebase-config.js) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- Shared Firebase init: provides `db` and `auth` globals -->
+  <script src="firebase-config.js"></script>
   <script>
   /*
    ═══════════════════════════════════════════════════════
    3D Warehouse View — St3s Shadow Ledger
-   Uses Three.js for collision-free interactive 3D of the
-   warehouse layout (rooms → aisles → bays → bins → levels).
-   Bins are parsed/created from the actual binCode strings,
-   matching the format ROOM-AISLE-BAY-BIN-LEVEL-ACTION.
+   Auth: unified with main app via firebase-config.js.
+   Unauthenticated visitors are redirected to index.html.
+   Write path: assign/clear binCode writes all derived
+   warehouse fields to Firestore (REP-003 §4.2).
    ═══════════════════════════════════════════════════════ */
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyDBPAF8LeDCfywbFiWSMHeu01inc_uxSk0",
-    authDomain: "ledger-d57da.firebaseapp.com",
-    projectId: "ledger-d57da",
-    storageBucket: "ledger-d57da.firebasestorage.app",
-    messagingSenderId: "713000868232",
-    appId: "1:713000868232:web:b979ddfaa854ea80d5023d"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
-  const auth = firebase.auth();
+  // db and auth are provided by firebase-config.js
 
   const LOC_BUILDING = 'building';
   const COLOR_TAG = { default: 0x475569, occupied: 0x6366f1, low: 0xf59e0b, alert: 0xef4444, highlight: 0x22d3ee, selected: 0x10b981 };
@@ -212,59 +208,96 @@
   };
 
   // ───────────────────────────────────────────
-  // AUTH (anonymous) + DATA LOAD
+  // AUTH (unified with main app) + DATA LOAD
   // ───────────────────────────────────────────
-  async function bootstrap() {
+
+  // Derive binCode component fields per REP-003 §4.2
+  // Format: ROOM-AISLE-BAY-BIN-LEVEL-STOCK
+  function parseBinCode(binCode) {
+    const parts = String(binCode || '').split('-');
+    return {
+      warehouseRoom:  parts[0] || '',
+      warehouseAisle: parts[1] || '',
+      warehouseBay:   parseInt(parts[2], 10) || 0,
+      warehouseBin:   parseInt(parts[3], 10) || 0,
+      warehouseLevel: parts[4] || ''
+    };
+  }
+
+  // Assign a SKU to a bin: writes binCode + all derived fields to Firestore
+  async function assignSkuToBin(itemId, binCode) {
+    const parts = parseBinCode(binCode);
+    await db.collection('inventory').doc(itemId).set({
+      binCode,
+      ...parts,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    // Update local inventory so the 3D view refreshes immediately
+    const invItem = inventory.find(i => i.id === itemId);
+    if (invItem) Object.assign(invItem, { binCode, ...parts });
+  }
+
+  // Clear a bin: wipes binCode + all derived fields
+  async function clearSkuFromBin(itemId) {
+    await db.collection('inventory').doc(itemId).set({
+      binCode: '',
+      warehouseRoom: '', warehouseAisle: '',
+      warehouseBay: 0,  warehouseBin: 0, warehouseLevel: '',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    const invItem = inventory.find(i => i.id === itemId);
+    if (invItem) {
+      invItem.binCode = '';
+      invItem.warehouseRoom = ''; invItem.warehouseAisle = '';
+      invItem.warehouseBay = 0;  invItem.warehouseBin = 0; invItem.warehouseLevel = '';
+    }
+  }
+
+  let currentUser = null; // set when auth resolves
+
+  function startInventoryListener() {
     const info = document.getElementById('selected-info');
-    info.innerHTML = '<p class="text-indigo-400 text-xs">🔄 Connecting to database…</p>';
+    info.innerHTML = '<p class="text-indigo-400 text-xs">🔄 Loading inventory…</p>';
 
-    try {
-      await auth.signInAnonymously();
-    } catch (err) {
-      info.innerHTML = `<div class="space-y-2"><p class="text-red-400 text-sm font-semibold">Auth failed</p><p class="text-red-300 text-xs">${esc(err.message)}</p><p class="text-slate-400 text-xs mt-1">Anonymous sign-in may not be enabled in Firebase Console → Authentication → Sign-in method.</p><button id="retry-auth" class="mt-2 px-3 py-1.5 rounded-lg bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-semibold hover:bg-red-600/50 transition">Retry</button></div>`;
-      document.getElementById('retry-auth').addEventListener('click', () => {
-        bootstrap().catch(e => console.error(e));
-      });
-      return;
-    }
-    try {
-      // Real-time listener — keeps 3D view in sync with main app edits
-      db.collection('inventory').onSnapshot(snap => {
-        inventory = [];
-        snap.forEach(doc => {
-          const data = doc.data();
-          inventory.push({ id: doc.id, ...data });
-        });
-        // Only build/refresh if 3D has been initialized
-        if (renderer) {
-          buildAllRooms();
-          renderStats();
-        } else {
-          buildWarehouseStructure();
-        }
-      }, err => {
-        info.innerHTML = `<div class="space-y-2"><p class="text-red-400 text-sm font-semibold">Database load failed</p><p class="text-red-300 text-xs">${esc(err.message)}</p><button id="retry-db" class="mt-2 px-3 py-1.5 rounded-lg bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-semibold hover:bg-red-600/50 transition">Retry</button></div>`;
-        document.getElementById('retry-db').addEventListener('click', () => {
-          bootstrap().catch(e => console.error(e));
-        });
-      });
-      // Wait briefly to confirm we got at least an initial response
-      await new Promise(r => setTimeout(r, 100));
-    } catch (err) {
-      info.innerHTML = `<div class="space-y-2"><p class="text-red-400 text-sm font-semibold">Database load failed</p><p class="text-red-300 text-xs">${esc(err.message)}</p><button id="retry-db" class="mt-2 px-3 py-1.5 rounded-lg bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-semibold hover:bg-red-600/50 transition">Retry</button></div>`;
-      document.getElementById('retry-db').addEventListener('click', () => {
-        bootstrap().catch(e => console.error(e));
-      });
-      return;
-    }
+    db.collection('inventory').onSnapshot(snap => {
+      inventory = [];
+      snap.forEach(doc => inventory.push({ id: doc.id, ...doc.data() }));
+      if (renderer) {
+        buildAllRooms();
+        renderStats();
+      } else {
+        buildWarehouseStructure();
+        init3D();
+        renderStats();
+        document.getElementById('search-sku').disabled = false;
+        document.getElementById('search-sku').placeholder = 'Search SKU or bin code to highlight…';
+      }
+    }, err => {
+      info.innerHTML = `<div class="space-y-2"><p class="text-red-400 text-sm font-semibold">Database error</p><p class="text-red-300 text-xs">${esc(err.message)}</p></div>`;
+    });
+  }
 
-    buildWarehouseStructure();
-    init3D();
-    renderStats();
+  function bootstrap() {
+    const info = document.getElementById('selected-info');
+    info.innerHTML = '<p class="text-indigo-400 text-xs">🔐 Checking session…</p>';
 
-    // Enable search now that binMeshes is populated
-    document.getElementById('search-sku').disabled = false;
-    document.getElementById('search-sku').placeholder = 'Search SKU or bin code to highlight…';
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        // Not signed in — redirect to main app login
+        // Preserve the return destination so user lands back here after login
+        const returnUrl = encodeURIComponent(window.location.href);
+        window.location.href = 'index.html?redirect=warehouse&from=' + returnUrl;
+        return;
+      }
+      currentUser = user;
+      // Show logged-in user badge
+      const badge = document.getElementById('user-badge');
+      if (badge) {
+        badge.textContent = user.displayName || user.email || 'Signed in';
+        badge.classList.remove('hidden');
+      }
+      startInventoryListener();
+    });
   }
 
   // ───────────────────────────────────────────
@@ -664,12 +697,65 @@ function binColorFor(item) {
     const ud = mesh.userData;
     const info = document.getElementById('selected-info');
     if (!ud.item) {
+      // ── FREE BIN: show assign-SKU picker ──────────────────────
+      const unassignedItems = inventory.filter(i => !i.binCode && !i.archived);
+      const optionsHtml = unassignedItems.length === 0
+        ? '<option value="">— No unassigned SKUs —</option>'
+        : ['<option value="">Select a SKU to assign…</option>',
+            ...unassignedItems.map(i => `<option value="${esc(i.id)}">${esc(i.sku)} — ${esc(i.name)}</option>`)
+          ].join('');
+
       info.innerHTML = `
-        <div>
-          <p class="mono font-bold text-cyan-400 text-sm mb-1">${ud.code}</p>
-          <p class="text-slate-400">🟢 Free bin — no item assigned.</p>
-          <p class="text-slate-500 mt-1" style="font-size:11px;">Chaotic storage: assign any SKU here from the main inventory page's "Transfer" or "Edit" action.</p>
+        <div class="space-y-3">
+          <p class="mono font-bold text-cyan-400 text-sm">${ud.code}</p>
+          <p class="text-emerald-400 text-xs font-semibold">🟢 Free bin — assign a SKU to this location</p>
+          <div>
+            <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Choose SKU</label>
+            <select id="assign-sku-select"
+              class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+              ${optionsHtml}
+            </select>
+          </div>
+          <button id="btn-assign-confirm"
+            class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition disabled:opacity-40"
+            ${unassignedItems.length === 0 ? 'disabled' : ''}>
+            Assign to ${ud.code}
+          </button>
+          <p class="text-slate-600" style="font-size:10px">Writes binCode + 3D position to database immediately.</p>
         </div>`;
+
+      const confirmBtn = info.querySelector('#btn-assign-confirm');
+      if (confirmBtn && unassignedItems.length > 0) {
+        confirmBtn.addEventListener('click', async () => {
+          const select = info.querySelector('#assign-sku-select');
+          const itemId = select?.value;
+          if (!itemId) { toast('Select a SKU first'); return; }
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = 'Saving…';
+          try {
+            await assignSkuToBin(itemId, ud.code);
+            ud.item = inventory.find(i => i.id === itemId) || null;
+            const entry = binMeshes.find(b => b.mesh === mesh);
+            if (entry) {
+              entry.item = ud.item;
+              const col = binColorFor(ud.item);
+              entry.defaultColor = col;
+              mesh.material.color.setHex(col);
+              mesh.material.emissive.setHex(col);
+            }
+            selectedMesh = null;
+            renderStats();
+            toast(`✓ ${inventory.find(i=>i.id===itemId)?.sku || itemId} → ${ud.code}`);
+            // Refresh the info panel to show the item details
+            selectBin(mesh);
+          } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Assign to ' + ud.code;
+            toast('Error: ' + err.message);
+          }
+        });
+      }
+
     } else {
       const it = ud.item;
       const building = Number(it.locationStock?.[LOC_BUILDING] ?? it.buildingStock ?? 0);
@@ -688,31 +774,61 @@ function binColorFor(item) {
             ${alert ? '<p class="text-red-400 mt-1">⚠️ Carrier alert (below trigger)</p>' : ''}
             ${procure ? '<p class="text-amber-400 mt-1">🟡 Procurement alert</p>' : ''}
           </div>
-          <div class="mt-2 flex gap-1.5">
+          <div class="mt-2 flex gap-1.5 flex-wrap">
             ${it.datasheetUrl ? `<a href="${it.datasheetUrl}" target="_blank" rel="noopener" class="px-2 py-1 bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 rounded text-xs">Datasheet ↗</a>` : ''}
-            <button data-assign="${esc(it.id)}" class="px-2 py-1 bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded text-xs">Clear bin</button>
+            <button id="btn-clear-bin" class="px-2 py-1 bg-red-600/30 border border-red-500/40 text-red-300 rounded text-xs hover:bg-red-600/50 transition">🗑 Clear bin</button>
+            <button id="btn-reassign-bin" class="px-2 py-1 bg-amber-600/30 border border-amber-500/40 text-amber-300 rounded text-xs hover:bg-amber-600/50 transition">↔ Reassign</button>
           </div>
         </div>`;
-      const clearBtn = info.querySelector('[data-assign]');
-      if (clearBtn) {
-        clearBtn.addEventListener('click', async () => {
-          await db.collection('inventory').doc(it.id).update({ binCode: '' });
-          // Update local inventory array so future rebuilds are accurate
-          const invItem = inventory.find(i => i.id === it.id);
-          if (invItem) invItem.binCode = '';
+
+      // ── CLEAR BIN ───────────────────────────────────────────────
+      info.querySelector('#btn-clear-bin')?.addEventListener('click', async () => {
+        if (!confirm(`Clear ${it.sku} from bin ${ud.code}?`)) return;
+        try {
+          await clearSkuFromBin(it.id);
           ud.item = null;
           const entry = binMeshes.find(b => b.mesh === mesh);
-          if (entry) {
-            entry.item = null;
-            entry.defaultColor = COLOR_TAG.default;
-          }
+          if (entry) { entry.item = null; entry.defaultColor = COLOR_TAG.default; }
           mesh.material.color.setHex(COLOR_TAG.default);
           mesh.material.emissive.setHex(COLOR_TAG.default);
           selectedMesh = null;
           renderStats();
           toast('Bin cleared ✓');
+        } catch (err) { toast('Error: ' + err.message); }
+      });
+
+      // ── REASSIGN: show picker overlay ───────────────────────────
+      info.querySelector('#btn-reassign-bin')?.addEventListener('click', () => {
+        const freeBins = binMeshes.filter(b => !b.item && b.code !== ud.code);
+        if (freeBins.length === 0) { toast('No free bins available'); return; }
+        const opts = freeBins.map(b => `<option value="${esc(b.code)}">${esc(b.code)}</option>`).join('');
+        const overlay = document.createElement('div');
+        overlay.className = 'mt-3 space-y-2 border-t border-slate-700 pt-3';
+        overlay.innerHTML = `
+          <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Move to free bin</p>
+          <select id="reassign-select"
+            class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+            <option value="">Select target bin…</option>${opts}
+          </select>
+          <button id="btn-reassign-confirm"
+            class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition">
+            Move SKU
+          </button>`;
+        info.querySelector('div').appendChild(overlay);
+
+        overlay.querySelector('#btn-reassign-confirm').addEventListener('click', async () => {
+          const newBin = overlay.querySelector('#reassign-select').value;
+          if (!newBin) { toast('Select a target bin'); return; }
+          try {
+            await clearSkuFromBin(it.id);
+            await assignSkuToBin(it.id, newBin);
+            buildAllRooms();
+            renderStats();
+            toast(`✓ ${it.sku} moved to ${newBin}`);
+            deselectBin();
+          } catch (err) { toast('Error: ' + err.message); }
         });
-      }
+      });
     }
   }
 
