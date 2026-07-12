@@ -3913,7 +3913,7 @@
   // ─── Service worker registration ───
   function registerSW() {
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      navigator.serviceWorker.register('/sw.js').catch(err =>
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(err =>
         console.warn('Service worker registration failed:', err)
       );
     }

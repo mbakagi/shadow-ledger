@@ -207,6 +207,16 @@
   <div id="toast" class="fixed bottom-4 left-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-center font-medium"></div>
 
   <script src="firebase-config.js"></script>
+  <script>
+    // Register the app service worker so mobile.html participates in the
+    // unified PWA cache (sl-vN). Without this, the browser/CDN HTTP cache
+    // would serve a stale mobile.html indefinitely on static hosts like
+    // GitHub Pages. updateViaCache:'none' forces a network check for sw.js
+    // so cache-version bumps propagate immediately.
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
+    }
+  </script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
     import { getAuth, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
