@@ -440,22 +440,20 @@
           const data = snap.exists() ? snap.data() : {};
           const ls = { ...(data.locationStock || {}) };
 
-          // Compute current values from locationStock or scalar fallbacks
-          let curBuilding = Number(ls.building != null ? ls.building : data.buildingStock) || 0;
-          let curDepot    = Number(ls.depot    != null ? ls.depot    : data.depotStock)    || 0;
+          // Read current values from scalars (preferred) or locationStock fallback
+          let curBuilding = Number(data.buildingStock != null ? data.buildingStock : ls.building) || 0;
+          let curDepot    = Number(data.depotStock != null ? data.depotStock : ls.depot) || 0;
 
           if (which === 'building') {
             curBuilding = newQty;
-            ls.building = curBuilding;
           } else {
             curDepot = newQty;
-            ls.depot = curDepot;
           }
 
+          // Enforce invariant: total = building + depot
           const newTotal = curBuilding + curDepot;
 
           tx.set(docRef, {
-            locationStock: ls,
             buildingStock: curBuilding,
             depotStock: curDepot,
             totalStock: newTotal,
