@@ -162,16 +162,29 @@
                item.totalStock += qty;
                item._bins.add(locStr);
             } else {
-               // Aggregated / legacy doc (from main page) — read SCALAR fields only.
-               // Never iterate the locationStock map; it causes double-counting
-               // when stale per-bin keys persist from old writes.
-               const b = Math.max(0, Number(d.buildingStock) || 0);
-               const dp = Math.max(0, Number(d.depotStock) || 0);
-               const t = Math.max(0, Number(d.totalStock) || (b + dp));
+               // Aggregated / legacy doc (from main page)
+               let b = Math.max(0, Number(d.buildingStock) || 0);
+               let dp = Math.max(0, Number(d.depotStock) || 0);
+               let t = Math.max(0, Number(d.totalStock) || (b + dp));
+               
+               // Fallback: If scalars are missing but a legacy locationStock map exists, migrate its values.
+               if (t === 0 && d.locationStock && typeof d.locationStock === 'object') {
+                 for (const [k, v] of Object.entries(d.locationStock)) {
+                   const val = Math.max(0, Number(v) || 0);
+                   if (k === LOC_DEPOT) dp += val;
+                   else if (k === LOC_BUILDING) b += val;
+                   else {
+                     b += val;
+                     item._bins.add(k); // Recover legacy bin string
+                   }
+                   t += val;
+                 }
+               }
+
                item.buildingStock += b;
                item.depotStock += dp;
                item.totalStock += t;
-               // If the doc has a binCode, track it
+               // If the doc has a scalar binCode, track it
                if (d.binCode) item._bins.add(d.binCode);
             }
           });
