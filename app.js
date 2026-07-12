@@ -172,7 +172,9 @@
                if (d.locationStock) {
                  item.locationStock = d.locationStock;
                  Object.keys(item.locationStock).forEach(k => {
-                   item._explicitLocs.push({ str: k, qty: item.locationStock[k] });
+                   if (k !== LOC_DEPOT && k !== LOC_BUILDING) {
+                     item._explicitLocs.push({ str: k, qty: item.locationStock[k] });
+                   }
                  });
                } else {
                  item.locationStock = undefined; // Important: triggers legacy totalStock fallback
