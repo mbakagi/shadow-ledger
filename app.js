@@ -148,7 +148,7 @@
                 carrierTrigger: d.carrierTrigger || d.carrier_trigger || 0,
                 maxCapacity: d.maxCap || d.maxCapacity || 0,
                 purchasingTrigger: d.purchaseTrigger || d.purchasingTrigger || 0,
-                locationStock: {},
+                locationStock: undefined,
                 _explicitLocs: [] // temporary array for concatenated string
               });
             }
@@ -158,6 +158,7 @@
             if (d.room !== undefined || d.bin !== undefined) {
                // New explicit 4-field schema
                const locStr = `${d.room || '-'}-${d.aisle || '-'}-${d.bay || '-'}-${d.bin || '-'}`;
+               if (!item.locationStock) item.locationStock = {};
                item.locationStock[locStr] = (item.locationStock[locStr] || 0) + qty;
                item.totalStock += qty;
                item.buildingStock += qty; // Assume explicit bins are in Building
@@ -167,10 +168,15 @@
                item.totalStock = d.totalStock || 0;
                item.buildingStock = d.buildingStock || 0;
                item.depotStock = d.depotStock || 0;
-               item.locationStock = d.locationStock || {};
-               Object.keys(item.locationStock).forEach(k => {
-                 item._explicitLocs.push({ str: k, qty: item.locationStock[k] });
-               });
+               
+               if (d.locationStock) {
+                 item.locationStock = d.locationStock;
+                 Object.keys(item.locationStock).forEach(k => {
+                   item._explicitLocs.push({ str: k, qty: item.locationStock[k] });
+                 });
+               } else {
+                 item.locationStock = undefined; // Important: triggers legacy totalStock fallback
+               }
             }
           });
 
