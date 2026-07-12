@@ -57,7 +57,7 @@
       <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
       </div>
-      <span class="font-bold text-sm text-center">Bin<br>Count</span>
+      <span class="font-bold text-sm text-center">Location<br>Count</span>
     </button>
 
     <button onclick="nav('putaway')" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center gap-3 active:scale-95 transition">
@@ -83,7 +83,7 @@
     </div>
     <div class="p-4 space-y-4">
       <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Scan or Type SKU</label>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Search SKU</label>
         <div class="flex gap-2">
           <input type="text" id="search-sku" class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. SKU-123">
           <button id="btn-do-search" class="bg-blue-600 text-white px-6 rounded-lg font-bold shadow">Go</button>
@@ -95,19 +95,22 @@
     </div>
   </div>
 
-  <!-- MODULE: BIN COUNT -->
+  <!-- MODULE: LOCATION COUNT -->
   <div id="mod-bin" class="module-card">
     <div class="bg-purple-600 text-white p-4 flex items-center gap-3">
       <button onclick="nav('main-menu')" class="p-2 -ml-2"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg></button>
-      <h2 class="font-bold text-lg">Bin Count</h2>
+      <h2 class="font-bold text-lg">Location Count</h2>
     </div>
     <div class="p-4 space-y-4">
-      <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Scan Bin Barcode</label>
-        <div class="flex gap-2">
-          <input type="text" id="bin-search-id" class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. A-04-12">
-          <button id="btn-do-bin" class="bg-purple-600 text-white px-6 rounded-lg font-bold shadow">Go</button>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Target Location</label>
+        <div class="grid grid-cols-2 gap-3">
+          <input type="text" id="lc-room" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Room (WH1)">
+          <input type="text" id="lc-aisle" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Aisle (A)">
+          <input type="text" id="lc-bay" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Bay (04)">
+          <input type="text" id="lc-bin" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Bin (02)">
         </div>
+        <button id="btn-do-bin" class="w-full bg-purple-600 text-white py-3 rounded-lg font-bold shadow mt-2">Load Location</button>
       </div>
       <div id="bin-results" class="space-y-3">
         <!-- Results injected here -->
@@ -119,16 +122,21 @@
   <div id="mod-putaway" class="module-card">
     <div class="bg-emerald-600 text-white p-4 flex items-center gap-3">
       <button onclick="nav('main-menu')" class="p-2 -ml-2"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg></button>
-      <h2 class="font-bold text-lg">Putaway</h2>
+      <h2 class="font-bold text-lg">Assign (Putaway)</h2>
     </div>
     <form id="form-putaway" class="p-4 space-y-5">
       <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Target Bin</label>
-        <input type="text" id="put-bin" required class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="e.g. A-04-12">
-      </div>
-      <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">SKU</label>
         <input type="text" id="put-sku" required class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="e.g. SKU-123">
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Target Location</label>
+        <div class="grid grid-cols-2 gap-3">
+          <input type="text" id="put-room" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Room (WH1)">
+          <input type="text" id="put-aisle" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Aisle (A)">
+          <input type="text" id="put-bay" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Bay (04)">
+          <input type="text" id="put-bin" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Bin (02)">
+        </div>
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Quantity to Add</label>
@@ -146,10 +154,6 @@
     </div>
     <form id="form-move" class="p-4 space-y-4">
       <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Source Bin</label>
-        <input type="text" id="mv-src" required class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="e.g. A-01-01">
-      </div>
-      <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">SKU</label>
         <input type="text" id="mv-sku" required class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="e.g. SKU-123">
       </div>
@@ -157,25 +161,33 @@
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Quantity to Move</label>
         <input type="number" id="mv-qty" required min="1" class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="10">
       </div>
-      <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Destination Bin</label>
-        <input type="text" id="mv-dest" required class="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="e.g. A-04-12">
+      
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Source Location</label>
+        <div class="grid grid-cols-2 gap-3">
+          <input type="text" id="mv-src-room" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Room">
+          <input type="text" id="mv-src-aisle" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Aisle">
+          <input type="text" id="mv-src-bay" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Bay">
+          <input type="text" id="mv-src-bin" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Bin">
+        </div>
       </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Destination Location</label>
+        <div class="grid grid-cols-2 gap-3">
+          <input type="text" id="mv-dest-room" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Room">
+          <input type="text" id="mv-dest-aisle" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Aisle">
+          <input type="text" id="mv-dest-bay" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Bay">
+          <input type="text" id="mv-dest-bin" required class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Bin">
+        </div>
+      </div>
+      
       <button type="submit" id="btn-do-move" class="w-full bg-amber-500 text-white py-4 rounded-xl font-bold shadow-md active:scale-95 transition text-lg mt-2">Transfer Item</button>
     </form>
   </div>
 
   <div id="toast" class="fixed bottom-4 left-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-center font-medium"></div>
 
-  <!-- FIREBASE MODULAR SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-    import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, increment, setDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-    
-    // We import the config variables from the existing file, but since it's an old file (var firebaseConfig), 
-    // we just manually fetch it from window.
-  </script>
   <script src="firebase-config.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
@@ -207,6 +219,11 @@
       }, 3000);
     }
 
+    // Format Location String
+    function formatLoc(data) {
+      return `${data.room || '-'}/${data.aisle || '-'}/${data.bay || '-'}/${data.bin || '-'}`;
+    }
+
     // --- AUTH GATEWAY ---
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -233,7 +250,6 @@
 
     onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Fetch role
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (!userDoc.exists() || !['admin', 'worker'].includes(userDoc.data().role)) {
@@ -273,12 +289,14 @@
           const actualOldQty = docSnap.data().quantity;
           
           if (newQty !== actualOldQty) {
-            // Log discrepancy
             const logRef = doc(collection(db, 'discrepancies'));
             tx.set(logRef, {
                inventory_id: docId,
                sku: docSnap.data().sku,
-               bin_id: docSnap.data().bin_id,
+               room: docSnap.data().room,
+               aisle: docSnap.data().aisle,
+               bay: docSnap.data().bay,
+               bin: docSnap.data().bin,
                expected_qty: actualOldQty,
                actual_qty: newQty,
                variance: newQty - actualOldQty,
@@ -312,17 +330,17 @@
       const snap = await getDocs(q);
       
       if (snap.empty) {
-        resDiv.innerHTML = '<p class="text-red-500 text-center text-sm mt-4 font-bold">SKU not found in any bin.</p>';
+        resDiv.innerHTML = '<p class="text-red-500 text-center text-sm mt-4 font-bold">SKU not found in any location.</p>';
         return;
       }
 
-      let html = `<p class="text-sm font-bold text-slate-700 mb-2">Found in ${snap.size} bin(s):</p>`;
+      let html = `<p class="text-sm font-bold text-slate-700 mb-2">Found in ${snap.size} location(s):</p>`;
       snap.forEach(d => {
         const data = d.data();
         html += `
           <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
             <div>
-              <p class="font-mono font-bold text-blue-600 text-lg">${data.bin_id}</p>
+              <p class="font-mono font-bold text-blue-600 text-sm">${formatLoc(data)}</p>
               <p class="text-xs text-slate-500 uppercase tracking-wide">Current System Qty: <span class="font-bold text-slate-800">${data.quantity}</span></p>
             </div>
             <div class="flex items-center gap-2">
@@ -335,18 +353,28 @@
       resDiv.innerHTML = html;
     });
 
-    // --- MODULE 2: BIN COUNT ---
+    // --- MODULE 2: LOCATION COUNT ---
     document.getElementById('btn-do-bin').addEventListener('click', async () => {
-      const binId = document.getElementById('bin-search-id').value.trim().toUpperCase();
-      if (!binId) return;
+      const room = document.getElementById('lc-room').value.trim().toUpperCase();
+      const aisle = document.getElementById('lc-aisle').value.trim().toUpperCase();
+      const bay = document.getElementById('lc-bay').value.trim().toUpperCase();
+      const bin = document.getElementById('lc-bin').value.trim().toUpperCase();
+      
+      if (!room && !aisle && !bay && !bin) return toast('Enter at least one location criteria', 'error');
+
       const resDiv = document.getElementById('bin-results');
       resDiv.innerHTML = '<p class="text-slate-500 text-center text-sm mt-4">Searching...</p>';
       
-      const q = query(collection(db, 'inventory'), where('bin_id', '==', binId));
+      let q = collection(db, 'inventory');
+      if (room) q = query(q, where('room', '==', room));
+      if (aisle) q = query(q, where('aisle', '==', aisle));
+      if (bay) q = query(q, where('bay', '==', bay));
+      if (bin) q = query(q, where('bin', '==', bin));
+
       const snap = await getDocs(q);
       
       if (snap.empty) {
-        resDiv.innerHTML = '<p class="text-amber-600 text-center text-sm mt-4 font-bold">Bin is empty or not found.</p>';
+        resDiv.innerHTML = '<p class="text-amber-600 text-center text-sm mt-4 font-bold">Location is empty or not found.</p>';
         return;
       }
 
@@ -354,16 +382,15 @@
       snap.forEach(d => {
         const data = d.data();
         html += `
-          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
-            <div>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-2">
+            <div class="flex items-center justify-between">
               <p class="font-mono font-bold text-purple-600">${data.sku}</p>
-              <p class="text-xs text-slate-500 truncate w-32">${data.item_name || 'Unknown Item'}</p>
-              <p class="text-xs text-slate-400 mt-1">Expected: ${data.quantity}</p>
+              <div class="flex items-center gap-2">
+                <input type="number" id="bc-${d.id}" value="${data.quantity}" min="0" class="w-16 border border-slate-300 rounded px-2 py-2 text-center font-bold focus:outline-purple-500">
+                <button onclick="verifyCount('${d.id}', ${data.quantity}, 'bc-${d.id}')" class="bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700 px-3 py-2 rounded font-bold border border-slate-200 transition">OK</button>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <input type="number" id="bc-${d.id}" value="${data.quantity}" min="0" class="w-16 border border-slate-300 rounded px-2 py-2 text-center font-bold focus:outline-purple-500">
-              <button onclick="verifyCount('${d.id}', ${data.quantity}, 'bc-${d.id}')" class="bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700 px-3 py-2 rounded font-bold border border-slate-200 transition">OK</button>
-            </div>
+            <p class="text-xs text-slate-500 font-mono">${formatLoc(data)}</p>
           </div>
         `;
       });
@@ -373,8 +400,11 @@
     // --- MODULE 3: ASSIGN (PUTAWAY) ---
     document.getElementById('form-putaway').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const binId = document.getElementById('put-bin').value.trim().toUpperCase();
       const sku = document.getElementById('put-sku').value.trim().toUpperCase();
+      const room = document.getElementById('put-room').value.trim().toUpperCase();
+      const aisle = document.getElementById('put-aisle').value.trim().toUpperCase();
+      const bay = document.getElementById('put-bay').value.trim().toUpperCase();
+      const bin = document.getElementById('put-bin').value.trim().toUpperCase();
       const qty = parseInt(document.getElementById('put-qty').value, 10);
       const btn = document.getElementById('btn-do-putaway');
 
@@ -382,26 +412,28 @@
       
       try {
         await runTransaction(db, async (tx) => {
-          // Check if this SKU already exists in this BIN
-          const q = query(collection(db, 'inventory'), where('sku', '==', sku), where('bin_id', '==', binId));
-          const snap = await getDocs(q); // getDocs inside tx is safe if we don't rely on tx reads exclusively for locks, but ideally we should use doc refs.
-          // Since we can't reliably query inside a transaction for locks in older SDKs, in v9 it's allowed but locks the query results.
+          let q = query(collection(db, 'inventory'), 
+             where('sku', '==', sku),
+             where('room', '==', room),
+             where('aisle', '==', aisle),
+             where('bay', '==', bay),
+             where('bin', '==', bin)
+          );
+          const snap = await getDocs(q);
           
           if (!snap.empty) {
-            const existingDoc = snap.docs[0];
-            tx.update(existingDoc.ref, { quantity: increment(qty), updated_at: serverTimestamp() });
+            tx.update(snap.docs[0].ref, { quantity: increment(qty), updated_at: serverTimestamp() });
           } else {
             const newDoc = doc(collection(db, 'inventory'));
             tx.set(newDoc, {
-              sku,
-              bin_id: binId,
+              sku, room, aisle, bay, bin,
               quantity: qty,
-              item_name: 'Assigned via Scanner',
+              item_name: 'Assigned via Mobile',
               updated_at: serverTimestamp()
             });
           }
         });
-        toast(`Stored ${qty}x ${sku} in ${binId}`);
+        toast(`Stored ${qty}x ${sku}`);
         document.getElementById('put-qty').value = '';
         document.getElementById('put-sku').value = '';
         document.getElementById('put-sku').focus();
@@ -414,31 +446,46 @@
     // --- MODULE 4: MOVE (BIN-TO-BIN) ---
     document.getElementById('form-move').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const srcBin = document.getElementById('mv-src').value.trim().toUpperCase();
       const sku = document.getElementById('mv-sku').value.trim().toUpperCase();
       const qty = parseInt(document.getElementById('mv-qty').value, 10);
-      const destBin = document.getElementById('mv-dest').value.trim().toUpperCase();
+      
+      const sRoom = document.getElementById('mv-src-room').value.trim().toUpperCase();
+      const sAisle = document.getElementById('mv-src-aisle').value.trim().toUpperCase();
+      const sBay = document.getElementById('mv-src-bay').value.trim().toUpperCase();
+      const sBin = document.getElementById('mv-src-bin').value.trim().toUpperCase();
+
+      const dRoom = document.getElementById('mv-dest-room').value.trim().toUpperCase();
+      const dAisle = document.getElementById('mv-dest-aisle').value.trim().toUpperCase();
+      const dBay = document.getElementById('mv-dest-bay').value.trim().toUpperCase();
+      const dBin = document.getElementById('mv-dest-bin').value.trim().toUpperCase();
+
+      const srcStr = `${sRoom}/${sAisle}/${sBay}/${sBin}`;
+      const destStr = `${dRoom}/${dAisle}/${dBay}/${dBin}`;
+
+      if (srcStr === destStr) return toast("Source and Destination are the same.", "error");
+
       const btn = document.getElementById('btn-do-move');
-
-      if (srcBin === destBin) return toast("Source and Destination are the same.", "error");
-
       btn.disabled = true; btn.textContent = 'Transferring...';
 
       try {
         await runTransaction(db, async (tx) => {
-          // 1. Find Source Doc
-          const srcQ = query(collection(db, 'inventory'), where('sku', '==', sku), where('bin_id', '==', srcBin));
+          // Find Source Doc
+          const srcQ = query(collection(db, 'inventory'), 
+             where('sku', '==', sku), where('room', '==', sRoom), where('aisle', '==', sAisle), where('bay', '==', sBay), where('bin', '==', sBin)
+          );
           const srcSnap = await getDocs(srcQ);
-          if (srcSnap.empty) throw new Error(`SKU ${sku} not found in Source Bin ${srcBin}`);
+          if (srcSnap.empty) throw new Error(`SKU ${sku} not found in Source Location.`);
           const srcDoc = srcSnap.docs[0];
           
-          if (srcDoc.data().quantity < qty) throw new Error(`Not enough stock in ${srcBin} (Has ${srcDoc.data().quantity})`);
+          if (srcDoc.data().quantity < qty) throw new Error(`Not enough stock in source (Has ${srcDoc.data().quantity})`);
 
-          // 2. Find Dest Doc
-          const destQ = query(collection(db, 'inventory'), where('sku', '==', sku), where('bin_id', '==', destBin));
+          // Find Dest Doc
+          const destQ = query(collection(db, 'inventory'), 
+             where('sku', '==', sku), where('room', '==', dRoom), where('aisle', '==', dAisle), where('bay', '==', dBay), where('bin', '==', dBin)
+          );
           const destSnap = await getDocs(destQ);
 
-          // 3. Execute Writes
+          // Execute Writes
           tx.update(srcDoc.ref, { quantity: increment(-qty), updated_at: serverTimestamp() });
           
           if (!destSnap.empty) {
@@ -446,24 +493,20 @@
           } else {
              const newDoc = doc(collection(db, 'inventory'));
              tx.set(newDoc, {
-               sku,
-               bin_id: destBin,
+               sku, room: dRoom, aisle: dAisle, bay: dBay, bin: dBin,
                quantity: qty,
                item_name: srcDoc.data().item_name || 'Transferred Item',
                updated_at: serverTimestamp()
              });
           }
         });
-        toast(`Moved ${qty}x ${sku} to ${destBin}`);
-        document.getElementById('mv-qty').value = '';
-        document.getElementById('mv-dest').value = '';
-        document.getElementById('mv-sku').value = '';
+        toast(`Moved ${qty}x ${sku}`);
+        document.getElementById('form-move').reset();
       } catch (err) {
         toast(err.message, 'error');
       }
       btn.disabled = false; btn.textContent = 'Transfer Item';
     });
-
   </script>
 </body>
 </html>
