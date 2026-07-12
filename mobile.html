@@ -423,6 +423,72 @@
       }
     };
 
+    // --- MAIN STOCK UPDATE (synced with home page inventory/{SKU}) ---
+    // Writes locationStock.building or locationStock.depot + scalar fields to the
+    // aggregated doc that the home page (app.js) also reads/writes. Both pages
+    // share the same doc so edits propagate in both directions via onSnapshot.
+    window.verifyMainStock = async (docId, inputId, which) => {
+      const input = document.getElementById(inputId);
+      const newQty = parseInt(input.value, 10);
+      if (isNaN(newQty) || newQty < 0) return toast('Invalid quantity', 'error');
+
+      input.disabled = true;
+      try {
+        const docRef = doc(db, 'inventory', docId);
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(docRef);
+          const data = snap.exists() ? snap.data() : {};
+          const ls = { ...(data.locationStock || {}) };
+
+          // Compute current values from locationStock or scalar fallbacks
+          let curBuilding = Number(ls.building != null ? ls.building : data.buildingStock) || 0;
+          let curDepot    = Number(ls.depot    != null ? ls.depot    : data.depotStock)    || 0;
+
+          if (which === 'building') {
+            curBuilding = newQty;
+            ls.building = curBuilding;
+          } else {
+            curDepot = newQty;
+            ls.depot = curDepot;
+          }
+
+          const newTotal = curBuilding + curDepot;
+
+          tx.set(docRef, {
+            locationStock: ls,
+            buildingStock: curBuilding,
+            depotStock: curDepot,
+            totalStock: newTotal,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          // Log discrepancy if there's a quantity change
+          const oldVal = which === 'building'
+            ? (Number(ls.building != null ? ls.building : data.buildingStock) || 0)
+            : (Number(ls.depot    != null ? ls.depot    : data.depotStock)    || 0);
+          if (newQty !== oldVal) {
+            const logRef = doc(collection(db, 'discrepancies'));
+            tx.set(logRef, {
+              inventory_id: docId,
+              sku: data.sku || docId,
+              room: which === 'building' ? 'BUILDING' : null,
+              aisle: null, bay: null, bin: null,
+              expected_qty: oldVal,
+              actual_qty: newQty,
+              variance: newQty - oldVal,
+              worker_uid: currentUser.uid,
+              timestamp: serverTimestamp()
+            });
+          }
+        });
+        toast('Main ' + which + ' stock updated!');
+        input.classList.add('bg-emerald-50', 'border-emerald-300', 'text-emerald-700');
+      } catch (err) {
+        toast(err.message, 'error');
+        input.disabled = false;
+      }
+    };
+
     // --- MODULE 1: SEARCH & COUNT ---
     let searchMode = 'sku';
     const modeSkuBtn  = document.getElementById('mode-sku');
@@ -477,16 +543,33 @@
         return;
       }
 
-      // Split into building (explicit location) vs depot (no location)
-      const building = [];
-      const depot = [];
+      // Categorize docs:
+      //  - mainDoc: the aggregated inventory/{SKU} doc from the main page
+      //    (has locationStock map or buildingStock/depotStock scalars, no room/aisle/bay/bin)
+      //  - bins: per-bin docs from mobile (has room/aisle/bay/bin)
+      //  - orphanDepot: legacy docs without location and without aggregated fields
+      let mainDoc = null;
+      const bins = [];
+      const orphanDepot = [];
       docs.forEach(d => {
-        if (d.room || d.aisle || d.bay != null || d.bin != null) building.push(d);
-        else depot.push(d);
+        if (d.room || d.aisle || d.bay != null || d.bin != null) {
+          bins.push(d);
+        } else if (d.locationStock || d.buildingStock != null || d.depotStock != null) {
+          if (!mainDoc) mainDoc = d; // first aggregated doc wins
+        } else {
+          orphanDepot.push(d);
+        }
       });
-      const buildingTotal = building.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
-      const depotTotal    = depot.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
-      const grandTotal     = buildingTotal + depotTotal;
+
+      // Inherit building/depot values from the main page's aggregated doc
+      const mainBuilding = mainDoc ? (Number(mainDoc.buildingStock) || (mainDoc.locationStock ? Number(mainDoc.locationStock.building) || 0 : 0) || 0) : 0;
+      const mainDepot    = mainDoc ? (Number(mainDoc.depotStock)    || (mainDoc.locationStock ? Number(mainDoc.locationStock.depot)    || 0 : 0) || 0) : 0;
+      const binBuilding  = bins.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
+      const orphanDepotQty = orphanDepot.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
+      const buildingTotal = mainBuilding + binBuilding;
+      const depotTotal    = mainDepot + orphanDepotQty;
+      const grandTotal    = buildingTotal + depotTotal;
+      const mainDocId = mainDoc ? mainDoc.id : (docs[0].sku ? docs[0].sku.toUpperCase() : null);
 
       let html = '';
       // Summary card
@@ -497,18 +580,44 @@
             <span class="text-xs text-slate-500">${docs[0].item_name || docs[0].name || '—'}</span>
           </div>
           <div class="flex gap-4 text-xs">
-            <span>🏢 Building: <b>${buildingTotal}</b></span>
-            <span>📦 Depot: <b>${depotTotal}</b></span>
-            <span>∑ Total: <b>${grandTotal}</b></span>
+            <span>Building: <b>${buildingTotal}</b> <span class="text-slate-400">(main ${mainBuilding} + bins ${binBuilding})</span></span>
+            <span>Depot: <b>${depotTotal}</b></span>
+            <span>Total: <b>${grandTotal}</b></span>
           </div>
         </div>`;
 
-      // Building stock section
-      html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-3">Building Stock <span class="text-slate-400 font-normal">(${building.length})</span></p>`;
-      if (building.length === 0) {
-        html += '<p class="text-xs text-slate-400 italic">No building stock.</p>';
+      // ── Main Page Building/Depot Stock (inherited, editable) ──
+      html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-3">Main Stock <span class="text-slate-400 font-normal text-xs">(synced with home page)</span></p>`;
+      html += `
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm space-y-3">
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <p class="font-mono font-bold text-indigo-600 text-sm">BUILDING</p>
+              <p class="text-xs text-slate-500">From home page inventory/${mainDocId || '—'}</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input type="number" id="ms-bldg" value="${mainBuilding}" min="0" class="w-20 border border-indigo-300 rounded px-2 py-2 text-center font-bold focus:outline-indigo-500">
+              <button onclick="verifyMainStock('${mainDocId}','ms-bldg','building')" class="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-2 rounded font-bold border border-indigo-300 transition">OK</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <p class="font-mono font-bold text-amber-600 text-sm">DEPOT</p>
+              <p class="text-xs text-slate-500">From home page inventory/${mainDocId || '—'}</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input type="number" id="ms-depot" value="${mainDepot}" min="0" class="w-20 border border-amber-300 rounded px-2 py-2 text-center font-bold focus:outline-amber-500">
+              <button onclick="verifyMainStock('${mainDocId}','ms-depot','depot')" class="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-2 rounded font-bold border border-amber-300 transition">OK</button>
+            </div>
+          </div>
+        </div>`;
+
+      // ── Per-Bin Building Stock (from mobile scanner) ──
+      html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-4">Per-Bin Building Stock <span class="text-slate-400 font-normal">(${bins.length})</span></p>`;
+      if (bins.length === 0) {
+        html += '<p class="text-xs text-slate-400 italic">No bin allocations.</p>';
       }
-      building.forEach(d => {
+      bins.forEach(d => {
         const qty = Number(d.quantity) || 0;
         html += `
           <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
@@ -524,26 +633,25 @@
           </div>`;
       });
 
-      // Depot stock section
-      html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-4">Depot Stock <span class="text-slate-400 font-normal">(${depot.length})</span></p>`;
-      if (depot.length === 0) {
-        html += '<p class="text-xs text-slate-400 italic">No depot stock.</p>';
+      // ── Orphan Depot docs (legacy, no main doc, no location) ──
+      if (orphanDepot.length > 0) {
+        html += `<p class="text-sm font-bold text-slate-700 mb-2 mt-4">Unallocated Depot Docs <span class="text-slate-400 font-normal">(${orphanDepot.length})</span></p>`;
+        orphanDepot.forEach(d => {
+          const qty = Number(d.quantity) || 0;
+          html += `
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+              <div class="min-w-0">
+                <p class="font-mono font-bold text-amber-600 text-sm">DEPOT (orphan)</p>
+                <p class="text-xs text-slate-500">${d.item_name || d.name || '—'}</p>
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Qty: <span class="font-bold text-slate-800">${qty}</span></p>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <input type="number" id="sc-${d.id}" value="${qty}" min="0" class="w-16 border border-amber-300 rounded px-2 py-2 text-center font-bold focus:outline-amber-500">
+                <button onclick="verifyCount('${d.id}', ${qty}, 'sc-${d.id}')" class="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-2 rounded font-bold border border-amber-300 transition">OK</button>
+              </div>
+            </div>`;
+        });
       }
-      depot.forEach(d => {
-        const qty = Number(d.quantity) || 0;
-        html += `
-          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
-            <div class="min-w-0">
-              <p class="font-mono font-bold text-amber-600 text-sm">DEPOT</p>
-              <p class="text-xs text-slate-500">${d.item_name || d.name || '—'}</p>
-              <p class="text-xs text-slate-500 uppercase tracking-wide">Qty: <span class="font-bold text-slate-800">${qty}</span></p>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <input type="number" id="sc-${d.id}" value="${qty}" min="0" class="w-16 border border-amber-300 rounded px-2 py-2 text-center font-bold focus:outline-amber-500">
-              <button onclick="verifyCount('${d.id}', ${qty}, 'sc-${d.id}')" class="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-2 rounded font-bold border border-amber-300 transition">OK</button>
-            </div>
-          </div>`;
-      });
 
       resDiv.innerHTML = html;
     });

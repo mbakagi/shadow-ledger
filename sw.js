@@ -3,7 +3,7 @@
    Cache-first for app shell, network-first for Firebase
    ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'sl-v7';
+const CACHE_VERSION = 'sl-v8';
 const CACHE_NAME = 'st3s-' + CACHE_VERSION;
 const FIREBASE_V = '10.13.2';
 const APP_SHELL = [
