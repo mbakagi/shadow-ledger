@@ -124,10 +124,12 @@
           <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Bins:</span> <span id="stat-bins" class="font-bold text-slate-200">0</span></div>
           <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Occupied:</span> <span id="stat-occupied" class="font-bold text-indigo-400">0</span></div>
         </div>
-        <div class="mt-2 grid grid-cols-3 gap-2">
+        <div class="mt-2 grid grid-cols-4 gap-2">
+          <button id="btn-add-room" class="px-2 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition col-span-4 mb-1">Add Room Layout</button>
           <button id="btn-fit-all" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Fit All</button>
-          <button id="btn-top-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Top View</button>
+          <button id="btn-top-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Top</button>
           <button id="btn-front-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Front</button>
+          <button id="btn-iso-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">ISO</button>
         </div>
       </div>
 
@@ -224,45 +226,69 @@
     };
   }
 
-  // Assign a SKU to a bin: writes binCode + all derived fields to Firestore
+  // Assign a SKU to a bin
   async function assignSkuToBin(itemId, binCode) {
-    const parts = parseBinCode(binCode);
+    if (!binCode) return Promise.resolve();
+    // Use the deep merge to initialize locationStock[binCode] = 0
     await db.collection('inventory').doc(itemId).set({
-      binCode,
-      ...parts,
+      [`locationStock.${binCode}`]: 0,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    // Update local inventory so the 3D view refreshes immediately
-    const invItem = inventory.find(i => i.id === itemId);
-    if (invItem) Object.assign(invItem, { binCode, ...parts });
-  }
+    
+    // Also delete legacy fields
+    await db.collection('inventory').doc(itemId).set({
+      binCode: firebase.firestore.FieldValue.delete(),
+      warehouseRoom: firebase.firestore.FieldValue.delete(),
+      warehouseAisle: firebase.firestore.FieldValue.delete(),
+      warehouseBay: firebase.firestore.FieldValue.delete(),
+      warehouseBin: firebase.firestore.FieldValue.delete(),
+      warehouseLevel: firebase.firestore.FieldValue.delete()
+    }, { merge: true });
 
-  // Clear a bin: wipes binCode + all derived fields
-  async function clearSkuFromBin(itemId) {
-    await db.collection('inventory').doc(itemId).set({
-      binCode: '',
-      warehouseRoom: '', warehouseAisle: '',
-      warehouseBay: 0,  warehouseBin: 0, warehouseLevel: '',
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
     const invItem = inventory.find(i => i.id === itemId);
     if (invItem) {
-      invItem.binCode = '';
-      invItem.warehouseRoom = ''; invItem.warehouseAisle = '';
-      invItem.warehouseBay = 0;  invItem.warehouseBin = 0; invItem.warehouseLevel = '';
+      if (!invItem.locationStock) invItem.locationStock = {};
+      invItem.locationStock[binCode] = 0;
+    }
+  }
+
+  // Clear a bin: wipes specific binCode from locationStock
+  async function clearSkuFromBin(itemId, binCode) {
+    if (!binCode) return Promise.resolve();
+    await db.collection('inventory').doc(itemId).set({
+      [`locationStock.${binCode}`]: firebase.firestore.FieldValue.delete(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    const invItem = inventory.find(i => i.id === itemId);
+    if (invItem && invItem.locationStock) {
+      delete invItem.locationStock[binCode];
     }
   }
 
   let currentUser = null; // set when auth resolves
 
+  let warehouseRoomLayouts = [];
+
   function startInventoryListener() {
     const info = document.getElementById('selected-info');
     info.innerHTML = '<p class="text-indigo-400 text-xs">🔄 Loading inventory…</p>';
+
+    // Listen to empty room layouts first
+    db.collection('warehouse_rooms').onSnapshot(snap => {
+      warehouseRoomLayouts = [];
+      snap.forEach(doc => warehouseRoomLayouts.push({ id: doc.id, ...doc.data() }));
+      if (renderer) {
+        buildWarehouseStructure();
+        buildAllRooms();
+        renderStats();
+      }
+    });
 
     db.collection('inventory').onSnapshot(snap => {
       inventory = [];
       snap.forEach(doc => inventory.push({ id: doc.id, ...doc.data() }));
       if (renderer) {
+        buildWarehouseStructure();
         buildAllRooms();
         renderStats();
       } else {
@@ -306,6 +332,27 @@
   function buildWarehouseStructure() {
     warehouse.rooms = {};
 
+    // 1. Seed structural empty rooms from layout collection
+    warehouseRoomLayouts.forEach(layout => {
+      const room = layout.roomName || layout.id;
+      if (!warehouse.rooms[room]) {
+        warehouse.rooms[room] = { aisles: new Set(), bays: new Set(), bins: new Set(), levels: new Set(), items: new Map() };
+      }
+      const numAisles = parseInt(layout.aisles, 10) || 1;
+      const numBays = parseInt(layout.bays, 10) || 1;
+      const numBins = parseInt(layout.bins, 10) || 1;
+      const numLevels = parseInt(layout.levels, 10) || 1;
+
+      for (let a = 0; a < numAisles; a++) {
+        const aisleLetter = String.fromCharCode(65 + a);
+        warehouse.rooms[room].aisles.add(aisleLetter);
+      }
+      for (let b = 1; b <= numBays; b++) warehouse.rooms[room].bays.add(b);
+      for (let bi = 1; bi <= numBins; bi++) warehouse.rooms[room].bins.add(bi);
+      for (let l = 1; l <= numLevels; l++) warehouse.rooms[room].levels.add(String(l));
+    });
+
+    // 2. Overlay items from inventory onto the rooms
     inventory.forEach(item => {
       if (!item.locationStock) return;
       const bins = Object.keys(item.locationStock).filter(k => k !== 'depot' && k !== 'building');
@@ -1018,11 +1065,90 @@ function binColorFor(item) {
     renderer.render(scene, camera);
   }
 
+  // Boot Add Room Layout Events
+  const modalAddRoom = document.getElementById('modal-add-room');
+  const formAddRoom = document.getElementById('form-add-room');
+  
+  document.getElementById('btn-add-room')?.addEventListener('click', () => {
+    modalAddRoom.classList.remove('hidden');
+    modalAddRoom.classList.add('flex');
+    document.getElementById('input-room-name').focus();
+  });
+  
+  document.getElementById('btn-add-room-cancel')?.addEventListener('click', () => {
+    modalAddRoom.classList.add('hidden');
+    modalAddRoom.classList.remove('flex');
+  });
+  
+  formAddRoom?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const roomName = document.getElementById('input-room-name').value.trim().toUpperCase();
+    const aisles = document.getElementById('input-room-aisles').value;
+    const bays = document.getElementById('input-room-bays').value;
+    const bins = document.getElementById('input-room-bins').value;
+    const levels = document.getElementById('input-room-levels').value;
+    
+    if (!roomName) return;
+    
+    try {
+      await db.collection('warehouse_rooms').doc(roomName).set({
+        roomName,
+        aisles: parseInt(aisles, 10),
+        bays: parseInt(bays, 10),
+        bins: parseInt(bins, 10),
+        levels: parseInt(levels, 10),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      
+      toast(`Room layout ${roomName} saved!`);
+      modalAddRoom.classList.add('hidden');
+      modalAddRoom.classList.remove('flex');
+      formAddRoom.reset();
+    } catch (err) {
+      toast('Error saving layout: ' + err.message);
+    }
+  });
+
   // Boot
   bootstrap().catch(err => {
     console.error(err);
     toast('Failed to load: ' + err.message);
   });
   </script>
+
+  <!-- Add Room Modal -->
+  <div id="modal-add-room" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-slate-800 border border-slate-600 rounded-xl w-full max-w-sm p-5 shadow-2xl">
+      <h2 class="text-lg font-bold text-slate-100 mb-4">Add Room Layout</h2>
+      <form id="form-add-room" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Room Name</label>
+          <input id="input-room-name" type="text" required placeholder="e.g. WH2" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Aisles (A-Z)</label>
+            <input id="input-room-aisles" type="number" required min="1" max="26" value="4" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Bays per Aisle</label>
+            <input id="input-room-bays" type="number" required min="1" max="50" value="10" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Bins per Bay</label>
+            <input id="input-room-bins" type="number" required min="1" max="20" value="4" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Levels (Shelves)</label>
+            <input id="input-room-levels" type="number" required min="1" max="10" value="4" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button type="button" id="btn-add-room-cancel" class="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold transition">Cancel</button>
+          <button type="submit" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow transition">Save Layout</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </body>
 </html>

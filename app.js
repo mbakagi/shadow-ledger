@@ -435,7 +435,12 @@
     modalItem:        $('#modal-item'),
     modalImport:      $('#modal-import'),
     modalManifest:    $('#modal-manifest'),
-    modalAlerts:      $('#modal-alerts'),
+    modalAlerts:    $('#modal-alerts'),
+    modalSkuSearch: $('#modal-sku-search'),
+    formSkuSearch:  $('#form-sku-search'),
+    inputSkuSearch: $('#input-sku-search'),
+    skuDatalist:    $('#sku-datalist'),
+    assignTargetBin:$('#assign-target-bin'),
     formItem:         $('#form-item'),
     manifestContent:  $('#manifest-content'),
     importPreview:    $('#import-preview'),
@@ -2786,9 +2791,11 @@
     
     $('#modal-manifest-close').addEventListener('click', () => closeModal(dom.modalManifest));
     $('#modal-alerts-close').addEventListener('click', () => closeModal(dom.modalAlerts));
+    $('#modal-sku-search-close').addEventListener('click', () => closeModal(dom.modalSkuSearch));
+    $('#btn-sku-search-cancel').addEventListener('click', () => closeModal(dom.modalSkuSearch));
 
     // Close modals on overlay click (includes new modals)
-    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), $('#modal-item-history'), dom.modalBins, dom.modalPareto].forEach(modal => {
+    [dom.modalItem, dom.modalImport, dom.modalManifest, dom.modalAlerts, $('#modal-labelgen'), $('#modal-scanout'), $('#modal-history'), $('#modal-item-history'), dom.modalBins, dom.modalPareto, dom.modalSkuSearch].forEach(modal => {
       if (!modal) return;
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -3557,28 +3564,52 @@
     const free = codes.filter(c => !existingBins.has(c));
     $('#bins-stats').textContent = `${free.length} free · ${codes.length - free.length} taken · ${unassigned.length} items without bins`;
 
-    grid.querySelectorAll('.bin-cell.bin-free').forEach(cell => {
-      cell.addEventListener('click', async () => {
-        const binCode = cell.dataset.bincode;
-        const skuInput = window.prompt(`Enter the exact SKU to assign to bin ${binCode}:\n(Type SKU carefully, case-insensitive)`);
-        if (!skuInput) return;
-        
-        const targetSku = skuInput.trim().toUpperCase();
-        const item = State.items.find(i => i.sku.toUpperCase() === targetSku);
-        if (!item) {
-          toast(`SKU "${targetSku}" not found in inventory.`, 'error');
-          return;
-        }
+    let activeBinCell = null;
+    let activeBinCode = null;
 
-        await DAL.assignBin(item.id, binCode);
+    // Handle form submit on the new search modal
+    dom.formSkuSearch.onsubmit = async (e) => {
+      e.preventDefault();
+      if (!activeBinCell || !activeBinCode) return;
+      
+      const inputValue = dom.inputSkuSearch.value.trim();
+      // The user might select "SKU — Name" from datalist, so extract SKU
+      const targetSku = inputValue.split(' — ')[0].trim().toUpperCase();
+      
+      const item = State.items.find(i => i.sku.toUpperCase() === targetSku);
+      if (!item) {
+        toast(`SKU "${targetSku}" not found in inventory.`, 'error');
+        return;
+      }
+
+      await DAL.assignBin(item.id, activeBinCode);
+      
+      activeBinCell.classList.remove('bin-free');
+      activeBinCell.classList.add('bin-taken');
+      activeBinCell.querySelector('span:last-child').textContent = 'assigned';
+      toast(`${item.sku} → ${activeBinCode}`, 'success');
+      
+      const newUnassignedCount = State.items.filter(i => getItemBins(i).length === 0 && !i.archived).length;
+      $('#bins-stats').textContent = `${free.length - 1 ? 'more' : 'no more'} free · ${newUnassignedCount} items without bins`;
+      
+      closeModal(dom.modalSkuSearch);
+    };
+
+    grid.querySelectorAll('.bin-cell.bin-free').forEach(cell => {
+      cell.addEventListener('click', () => {
+        activeBinCode = cell.dataset.bincode;
+        activeBinCell = cell;
         
-        cell.classList.remove('bin-free');
-        cell.classList.add('bin-taken');
-        cell.querySelector('span:last-child').textContent = 'assigned';
-        toast(`${item.sku} → ${binCode}`, 'success');
-        
-        const newUnassignedCount = State.items.filter(i => getItemBins(i).length === 0 && !i.archived).length;
-        $('#bins-stats').textContent = `${free.length - 1 ? 'more' : 'no more'} free · ${newUnassignedCount} items without bins`;
+        // Populate datalist with active items
+        dom.skuDatalist.innerHTML = State.items
+          .filter(i => !i.archived)
+          .map(i => `<option value="${esc(i.sku)} — ${esc(i.name)}"></option>`)
+          .join('');
+          
+        dom.assignTargetBin.textContent = activeBinCode;
+        dom.inputSkuSearch.value = '';
+        openModal(dom.modalSkuSearch);
+        setTimeout(() => dom.inputSkuSearch.focus(), 100);
       });
     });
 
