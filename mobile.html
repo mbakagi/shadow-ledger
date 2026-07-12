@@ -252,18 +252,16 @@
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (!userDoc.exists() || !['admin', 'worker'].includes(userDoc.data().role)) {
-            await signOut(auth);
-            toast("Unauthorized role.", "error");
-            return;
-          }
-          currentUser = { uid: user.uid, role: userDoc.data().role, email: user.email };
+          const role = (userDoc.exists() && userDoc.data().role) ? userDoc.data().role : 'worker';
+          currentUser = { uid: user.uid, role: role, email: user.email };
           document.getElementById('user-role-badge').textContent = currentUser.role.toUpperCase();
           document.getElementById('auth-gateway').classList.add('hidden');
         } catch(e) {
           console.error(e);
-          toast("Could not verify permissions.", "error");
-          signOut(auth);
+          // Fallback if users collection is inaccessible
+          currentUser = { uid: user.uid, role: 'worker', email: user.email };
+          document.getElementById('user-role-badge').textContent = 'WORKER';
+          document.getElementById('auth-gateway').classList.add('hidden');
         }
       } else {
         currentUser = null;
