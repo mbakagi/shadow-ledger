@@ -164,9 +164,14 @@
         }
         const item = { id: doc.id, ...doc.data() };
         const expected = (item.binCode || '').toUpperCase();
-        if (expected && expected !== loc) {
+        const scanned  = loc.toUpperCase();
+
+        // Skip location check when:
+        //  - Item has no bin assigned yet (expected is empty)
+        //  - QR was printed before a bin was assigned (loc=ANY)
+        if (scanned !== 'ANY' && expected && scanned !== expected) {
           showError('Location Mismatch',
-            `Label says "${loc}" but item is stored at "${expected || '—'}". Cannot proceed.`);
+            `Label says "${scanned}" but item is stored at "${expected || '—'}". Cannot proceed.`);
           return;
         }
         renderCheckout(item);
@@ -175,6 +180,7 @@
         showError('Load Failed', err.message || 'Could not load item.');
       }
     }
+
 
     function renderCheckout(item) {
       document.getElementById('co-sku').textContent = item.sku;

@@ -275,8 +275,121 @@
         userId: auth.currentUser?.uid || null,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       }).catch(e => console.warn('Transaction log failed', e));
+    },
+
+    // ─── WMS: Bin reservation (optimistic locking via Firestore transaction) ───
+    // Atomically increments reservedStock for a specific item+location so two
+    // pickers cannot grab the same stock simultaneously.
+    // Returns the new reservedStock value.
+    reserveStock(itemId, locationId, qty) {
+      const itemRef = db.collection('inventory').doc(itemId);
+      return db.runTransaction(async (tx) => {
+        const doc = await tx.get(itemRef);
+        if (!doc.exists) throw new Error('Item not found: ' + itemId);
+        const data = doc.data();
+        // Guard: only allow reservation from the item's current bin
+        if (data.binCode !== locationId && locationId !== 'ANY') {
+          throw new Error(`Item ${data.sku} is not in bin ${locationId}`);
+        }
+        const ls        = { ...(data.locationStock || {}) };
+        const onHand    = ls['building'] || 0;
+        const reserved  = data.reservedStock || 0;
+        const available = onHand - reserved;
+        if (available < qty) {
+          throw new Error(`Insufficient available: need ${qty}, have ${available} (${reserved} already reserved)`);
+        }
+        tx.set(itemRef, {
+          reservedStock: firebase.firestore.FieldValue.increment(qty),
+          updatedAt:     firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { newReserved: reserved + qty, available: available - qty };
+      });
+    },
+
+    // ─── WMS: Release a reservation (on pick completion or timeout) ───
+    releaseStock(itemId, qty, committed = false) {
+      const itemRef = db.collection('inventory').doc(itemId);
+      return db.runTransaction(async (tx) => {
+        const doc = await tx.get(itemRef);
+        if (!doc.exists) return;
+        const data    = doc.data();
+        const current = data.reservedStock || 0;
+        const release = Math.min(qty, current); // never go negative
+        const updates = {
+          reservedStock: firebase.firestore.FieldValue.increment(-release),
+          updatedAt:     firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (committed) {
+          // Stock was actually picked — decrement on-hand building stock too
+          const ls = { ...(data.locationStock || {}) };
+          ls['building'] = Math.max(0, (ls['building'] || 0) - qty);
+          ls['depot']    = Math.max(0, (ls['depot'] || 0));
+          updates.locationStock = ls;
+          updates.buildingStock = ls['building'];
+          updates.totalStock    = Object.values(ls).reduce((s, v) => s + (Number(v) || 0), 0);
+        }
+        tx.set(itemRef, updates, { merge: true });
+        return { released: release };
+      });
+    },
+
+    // ─── WMS: Assign a bin and write all derived warehouse fields ───
+    // Single source of truth for bin writes — used by bins modal, warehouse-3d,
+    // and any future pick-path engine.
+    assignBin(itemId, binCode) {
+      const parts      = String(binCode || '').split('-');
+      const isGeneral  = parts[0] === 'GENERAL';
+      const warehouseFields = isGeneral ? {} : {
+        warehouseRoom:  parts[0] || '',
+        warehouseAisle: parts[1] || '',
+        warehouseBay:   parseInt(parts[2], 10) || 0,
+        warehouseBin:   parseInt(parts[3], 10) || 0,
+        warehouseLevel: parts[4] || ''
+      };
+      return db.collection('inventory').doc(itemId).set({
+        binCode,
+        ...warehouseFields,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    },
+
+    clearBin(itemId) {
+      return db.collection('inventory').doc(itemId).set({
+        binCode: '',
+        warehouseRoom: '', warehouseAisle: '',
+        warehouseBay: 0,  warehouseBin: 0, warehouseLevel: '',
+        reservedStock: 0,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    },
+
+    // ─── WMS: Fragmentation report ───
+    // Returns items sorted by bin count descending.
+    // bin_count > 1 = fragmented (same SKU, multiple physical locations).
+    // In the current single-bin-per-item model, fragmentation is detected
+    // when the same SKU string appears in multiple inventory documents.
+    getFragmentationReport() {
+      const skuMap = {};
+      State.items.forEach(item => {
+        if (item.archived) return;
+        const s = item.sku;
+        if (!skuMap[s]) skuMap[s] = { sku: s, name: item.name, items: [] };
+        skuMap[s].items.push(item);
+      });
+      return Object.values(skuMap)
+        .filter(g => g.items.length > 1 || !g.items[0]?.binCode)
+        .map(g => ({
+          sku:         g.sku,
+          name:        g.name,
+          binCount:    g.items.filter(i => i.binCode).length,
+          unassigned:  g.items.filter(i => !i.binCode).length,
+          totalQty:    g.items.reduce((s, i) => s + (i.totalStock || 0), 0),
+          bins:        g.items.filter(i => i.binCode).map(i => i.binCode)
+        }))
+        .sort((a, b) => b.binCount - a.binCount || b.unassigned - a.unassigned);
     }
   };
+
 
   // ─── DOM Refs ───
   const $ = (sel) => document.querySelector(sel);
@@ -493,9 +606,15 @@
   // ─── Guest Checkout URL builder ───
   // QR codes must encode a URL that any phone camera can open natively.
   // Uses the live GitHub Pages deployment as the canonical base.
+  // IMPORTANT: must match the actual GitHub Pages subdirectory path.
   const GUEST_BASE_URL = 'https://mbakagi.github.io/shadow-ledger';
+
   function guestUrl(itemId, loc) {
-    return `${GUEST_BASE_URL}/guest-out.html?id=${encodeURIComponent(itemId)}&loc=${encodeURIComponent(loc || '')}`;
+    // loc is the binCode (e.g. 'A-A1-01-01-F-STOCK').
+    // If the item has no binCode yet we still encode the item ID — the guest
+    // page will load the item and skip the location-mismatch check.
+    const safeLoc = (loc && loc.trim()) ? loc.trim() : 'ANY';
+    return `${GUEST_BASE_URL}/guest-out.html?id=${encodeURIComponent(itemId)}&loc=${encodeURIComponent(safeLoc)}`;
   }
 
   // Convert legacy items (only totalStock + buildingStock) to per-location map
@@ -3204,7 +3323,13 @@
         try {
           const el = dom.printContainer.querySelector('#' + id);
           if (el) {
-            const url = itemId ? guestUrl(itemId, code) : `${location.origin}/guest-out.html?loc=${encodeURIComponent(code)}`;
+            // Always use GUEST_BASE_URL (GitHub Pages canonical path).
+            // If a specific item is assigned, encode its ID so guest-out loads
+            // directly. If the bin is unassigned, encode just the location code
+            // so a picker can scan and select an item at checkout time.
+            const url = itemId
+              ? guestUrl(itemId, code)
+              : `${GUEST_BASE_URL}/guest-out.html?loc=${encodeURIComponent(code)}`;
             new QRCode(el, {
               text: url,
               width: 200, height: 200,
@@ -3310,12 +3435,23 @@
       cell.addEventListener('click', async () => {
         if (unassigned.length === 0) { toast('No items without bins', 'info'); return; }
         const item = unassigned.shift();
-        item.binCode = cell.dataset.bincode;
+        const binCode = cell.dataset.bincode;
+        // Write binCode + all derived WMS warehouse fields (REP-003 §4.2)
+        const parts = String(binCode).split('-');
+        const isGeneral = parts[0] === 'GENERAL';
+        item.binCode = binCode;
+        if (!isGeneral) {
+          item.warehouseRoom  = parts[0] || '';
+          item.warehouseAisle = parts[1] || '';
+          item.warehouseBay   = parseInt(parts[2], 10) || 0;
+          item.warehouseBin   = parseInt(parts[3], 10) || 0;
+          item.warehouseLevel = parts[4] || '';
+        }
         await DAL.saveOne(item);
         cell.classList.remove('bin-free');
         cell.classList.add('bin-taken');
         cell.querySelector('span:last-child').textContent = 'assigned';
-        toast(`${item.sku} → ${item.binCode}`, 'success');
+        toast(`${item.sku} → ${binCode}`, 'success');
         $('#bins-stats').textContent = `${free.length - 1 ? 'more' : 'no more'} free · ${unassigned.length} items without bins`;
       });
     });
