@@ -149,24 +149,33 @@
                 maxCapacity: d.maxCap || d.maxCapacity || 0,
                 purchasingTrigger: d.purchaseTrigger || d.purchasingTrigger || 0,
                 _bins: new Set(),
+                _aggBuilding: 0,
+                _aggDepot: 0,
+                _aggTotal: 0,
+                _hasPerBinDocs: false,
                 binCode: d.binCode || ''
               });
             }
             const item = itemMap.get(sku);
             const qty = Math.max(0, parseFloat(d.quantity) || 0);
-            
+
             if (d.room !== undefined || d.bin !== undefined) {
                // Per-bin doc (from mobile scanner) — adds to building stock.
                const locStr = `${d.room || '-'}-${d.aisle || '-'}-${d.bay || '-'}-${d.bin || '-'}`;
                item.buildingStock += qty;
                item.totalStock += qty;
                item._bins.add(locStr);
+               // Track that per-bin docs exist for this SKU — scalars from any
+               // aggregated doc become irrelevant (they double-count per-bin qty).
+               item._hasPerBinDocs = true;
             } else {
-               // Aggregated / legacy doc (from main page)
+               // Aggregated / legacy doc (from main page) — ALWAYS store scalars;
+               // reconcileStock() decides at the end whether to honor them based
+               // on whether any per-bin docs exist for this SKU.
                let b = Math.max(0, Number(d.buildingStock) || 0);
                let dp = Math.max(0, Number(d.depotStock) || 0);
                let t = Math.max(0, Number(d.totalStock) || (b + dp));
-               
+
                // Fallback: If scalars are missing but a legacy locationStock map exists, migrate its values.
                if (t === 0 && d.locationStock && typeof d.locationStock === 'object') {
                  for (const [k, v] of Object.entries(d.locationStock)) {
@@ -181,9 +190,9 @@
                  }
                }
 
-               item.buildingStock += b;
-               item.depotStock += dp;
-               item.totalStock += t;
+               item._aggBuilding += b;
+               item._aggDepot    += dp;
+               item._aggTotal    += t;
                // If the doc has a scalar binCode, track it
                if (d.binCode) item._bins.add(d.binCode);
             }
@@ -193,10 +202,35 @@
 
            // Generate the concatenated 'Added to Bin' string
 items.forEach(item => {
+             // Per-bin docs (mobile) carry the AUTHORITATIVE per-bin quantity.
+             // Aggregated scalars from the main page represent the (b, dp, t) the
+             // user typed. When BOTH exist for the same SKU, the per-bin sum is
+             // "building stock" and any aggregated scalar total exceeding that
+             // sum is "depot stock". This prevents double-count inflation.
+             if (item._hasPerBinDocs) {
+               const perBinBuilding = item.buildingStock; // already sums per-bin quantity
+               const aggTotal = item._aggTotal;            // scalar total from main page
+               // depot = max(0, aggregated total − per-bin building)
+               const depot = Math.max(0, aggTotal - perBinBuilding);
+               item.buildingStock = perBinBuilding;
+               item.depotStock = depot;
+               item.totalStock = perBinBuilding + depot;
+             } else {
+               // No per-bin docs: honor aggregated scalars directly.
+               item.buildingStock = item._aggBuilding;
+               item.depotStock    = item._aggDepot;
+               item.totalStock    = item._aggTotal;
+             }
+
              if (item._bins.size > 0) {
                item.binCode = Array.from(item._bins).join(', ');
              }
              delete item._bins;
+             delete item._aggBuilding;
+             delete item._aggDepot;
+             delete item._aggTotal;
+             delete item._hasPerBinDocs;
+
              // Enforce invariant: total = building + depot (always)
              reconcileStock(item);
              // Assert invariant — log violations loudly so we can fix upstream bugs.
