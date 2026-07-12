@@ -546,8 +546,8 @@ items.forEach(item => {
           // Success callback
           items => {
             const active = document.activeElement;
-            // Auto-migrate old items: ensure locationStock map exists
-            State.items = items.map(migrateItemLocations);
+            // Items are already reconciled (total = building + depot) in startSync.
+            State.items = items;
             if (active && active.classList && active.classList.contains('inline-input')) {
               renderDashboard();
             } else {
