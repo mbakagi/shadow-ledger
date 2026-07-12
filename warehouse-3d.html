@@ -331,6 +331,7 @@
   // ───────────────────────────────────────────
   function buildWarehouseStructure() {
     warehouse.rooms = {};
+    warehouse.emptyBins = [];
 
     // 1. Seed structural empty rooms from layout collection
     warehouseRoomLayouts.forEach(layout => {
@@ -660,6 +661,11 @@ function binColorFor(item) {
             const xWithinAisle = (binIdx - (numBins - 1)/2) * (shelfUnitWidth + binGap);
             const zWithinAisle = (bayIdx - (numBays - 1)/2) * (shelfUnitDepth + binGap);
             const y = levelIdx * levelHeight + levelHeight/2 + 0.1;
+            
+            if (!itemEntry) {
+              warehouse.emptyBins.push({ code, mesh: binMesh });
+            }
+
             binMesh.position.set(aisleX + xWithinAisle, y, zWithinAisle);
             binMesh.userData = { code, item, defaultColor: color };
             binMesh.castShadow = true;
@@ -1044,20 +1050,90 @@ function binColorFor(item) {
     const listEl = document.getElementById('unassigned-list');
     const countEl = document.getElementById('unassigned-count');
     if (!listEl || !countEl) return;
-    const unassigned = inventory.filter(i => !i.binCode && !i.archived);
+
+    // A SKU is unassigned if it has no bins EXCEPT building/depot
+    const unassigned = inventory.filter(i => {
+      if (i.archived) return false;
+      const bins = Object.keys(i.locationStock || {}).filter(k => k !== 'building' && k !== 'depot' && i.locationStock[k] > 0);
+      return bins.length === 0;
+    });
+
     countEl.textContent = unassigned.length;
     if (unassigned.length === 0) {
-      listEl.innerHTML = '<p class="italic text-xs text-slate-500">✓ All SKUs have bins assigned.</p>';
+      listEl.innerHTML = '<p class="italic text-xs text-slate-500">✓ All active SKUs have bins assigned.</p>';
       return;
     }
     listEl.innerHTML = unassigned.slice(0, 50).map(i => `
-      <div class="flex items-center justify-between gap-1 py-0.5 px-1.5 rounded hover:bg-slate-700/60">
-        <span class="font-mono text-indigo-300 truncate">${esc(i.sku)}</span>
-        <span class="text-slate-500 truncate ml-1" style="font-size:10px">${esc(i.name || '')}</span>
-        <span class="text-amber-400 font-bold ml-1 shrink-0">${Number(i.locationStock?.building ?? i.buildingStock ?? 0)}</span>
+      <div class="flex items-center justify-between gap-1 py-1 px-1.5 rounded hover:bg-slate-700/60 border-b border-slate-700/50 last:border-0 group">
+        <div class="flex-1 min-w-0">
+          <span class="font-mono text-indigo-300 text-sm truncate block">${esc(i.sku)}</span>
+          <span class="text-slate-500 text-[10px] truncate block">${esc(i.name || '')}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-amber-400 font-bold text-sm shrink-0">${Number(i.locationStock?.building ?? i.buildingStock ?? 0)}</span>
+          <button onclick="suggestPutaway('${i.id}')" title="Find optimal empty bin" class="p-1 rounded bg-slate-700 hover:bg-emerald-600 text-slate-300 hover:text-white transition opacity-0 group-hover:opacity-100 focus:opacity-100">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          </button>
+        </div>
       </div>
-    `).join('') + (unassigned.length > 50 ? `<p class="text-xs text-slate-500 italic mt-1">+${unassigned.length - 50} more…</p>` : '');
+    `).join('') + (unassigned.length > 50 ? `<p class="text-xs text-slate-500 italic mt-2">+${unassigned.length - 50} more…</p>` : '');
   }
+
+  let putawayPulseInterval = null;
+  
+  window.suggestPutaway = function(itemId) {
+    if (!warehouse.emptyBins || warehouse.emptyBins.length === 0) {
+      toast('No empty bins available in the layout!');
+      return;
+    }
+
+    const item = inventory.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Reset previous pulses
+    if (putawayPulseInterval) clearInterval(putawayPulseInterval);
+    warehouse.emptyBins.forEach(b => {
+      if (b.mesh && b.mesh.material) {
+        b.mesh.material.emissive.setHex(b.mesh.userData.defaultColor);
+      }
+    });
+
+    // Strategy 1: Find closest to staging area (X=0, Z=0)
+    // Strategy 2: If we had velocity/proximity, we would calculate distance to existing identical SKUs.
+    // For now, we calculate distance to the absolute center of the warehouse.
+    
+    const candidates = warehouse.emptyBins.map(b => {
+       const dx = b.mesh.position.x;
+       const dz = b.mesh.position.z;
+       const dist = Math.sqrt(dx*dx + dz*dz);
+       return { ...b, dist };
+    }).sort((a,b) => a.dist - b.dist);
+
+    // Pick top 3 recommendations
+    const topBins = candidates.slice(0, 3);
+    
+    // Highlight them
+    let bright = true;
+    putawayPulseInterval = setInterval(() => {
+      topBins.forEach(b => {
+        if (!b.mesh || !b.mesh.material) return;
+        b.mesh.material.emissive.setHex(bright ? 0x10b981 : 0x064e3b); // Emerald pulse
+        b.mesh.material.color.setHex(bright ? 0x10b981 : 0x064e3b);
+      });
+      bright = !bright;
+    }, 500);
+
+    const best = topBins[0];
+    
+    // Move camera to look at the best bin
+    const camTarget = best.mesh.position;
+    controls.target.copy(camTarget);
+    camera.position.set(camTarget.x + 10, camTarget.y + 10, camTarget.z + 10);
+    controls.update();
+
+    const codes = topBins.map(b => b.code).join(', ');
+    toast(`Suggested Putaway Bins: ${codes}. Glowing green.`);
+  };
 
   // ───────────────────────────────────────────
   // UTILS
