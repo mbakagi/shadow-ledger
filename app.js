@@ -2692,6 +2692,9 @@ const buildingStock = parseNum(cols[colMap.buildingStock], 0);
     // Theme
     $('#btn-theme').addEventListener('click', toggleTheme);
 
+    // 3D Warehouse in-app drawer
+    bindWarehouse3DPanel();
+
     // Search & Filters
     dom.searchInput.addEventListener('input', debounce(applyFilters, 200));
     dom.categorySelect.addEventListener('change', applyFilters);
@@ -3611,6 +3614,58 @@ const buildingStock = parseNum(cols[colMap.buildingStock], 0);
         tab.classList.add('active');
         renderPareto(tab.dataset.paretoMode);
       });
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  3D WAREHOUSE — IN-APP DRAWER (iframe of warehouse-3d.html)
+  // ══════════════════════════════════════════════════════════════════════
+  // Drawer slides in from the right; lazy-loads warehouse-3d.html only on
+  // first open so the main page stays light. The iframe shares Firebase
+  // auth via same-origin cookies. 'Pop out' promotes the same URL to a tab
+  // for users who want to multi-task.
+  // ══════════════════════════════════════════════════════════════════════
+  function bindWarehouse3DPanel() {
+    const btn      = $('#btn-3d-panel');
+    const drawer   = $('#w3d-drawer');
+    const backdrop = $('#w3d-backdrop');
+    const closer   = $('#w3d-close');
+    const popout   = $('#w3d-open-newtab');
+    const iframe   = $('#w3d-iframe');
+    if (!btn || !drawer || !iframe) return;
+
+    let isOpen = false;
+
+    const open = () => {
+      if (isOpen) return;
+      // Lazy-load iframe only on first open — saves ~300KB three.js parse until needed
+      if (iframe.dataset.loaded !== '1') {
+        iframe.src = 'warehouse-3d.html';
+        iframe.dataset.loaded = '1';
+      }
+      backdrop.classList.remove('hidden');
+      drawer.classList.remove('translate-x-full');
+      isOpen = true;
+      document.body.style.overflow = 'hidden';
+    };
+
+    const close = () => {
+      if (!isOpen) return;
+      drawer.classList.add('translate-x-full');
+      backdrop.classList.add('hidden');
+      isOpen = false;
+      document.body.style.overflow = '';
+    };
+
+    btn.addEventListener('click', open);
+    closer.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    popout.addEventListener('click', () => {
+      window.open('warehouse-3d.html', '_blank', 'noopener');
+      close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isOpen) close();
     });
   }
 

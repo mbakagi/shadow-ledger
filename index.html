@@ -630,11 +630,11 @@
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>
         <span class="text-sm font-semibold hidden lg:inline">Pareto</span>
       </button>
-      <!-- 3D Warehouse -->
-      <a href="warehouse-3d.html" target="_blank" rel="noopener" title="3D warehouse view — explore rooms, aisles, bays, bins" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">
+      <!-- 3D Warehouse (in-app drawer) -->
+      <button id="btn-3d-panel" type="button" title="3D warehouse view — in-app panel" class="btn-accent whitespace-nowrap" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
         <span class="text-sm font-semibold">3D View</span>
-      </a>
+      </button>
     </section>
 
     <!-- ═══════════════════ BULK ACTIONS BAR ═══════════════════ -->
@@ -1649,6 +1649,34 @@
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728M5.636 18.364a9 9 0 010-12.728M12 9v4m0 4h.01"/></svg>
     Offline — changes will sync when reconnected
   </div>
+
+  <!-- ═══════════════════ IN-APP 3D WAREHOUSE DRAWER ═══════════════════ -->
+  <div id="w3d-backdrop" class="hidden fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm transition-opacity"></div>
+  <aside id="w3d-drawer" class="fixed top-0 right-0 z-[301] h-full w-full lg:w-[1100px] bg-slate-950 border-l border-slate-800 shadow-2xl translate-x-full transition-transform duration-300 ease-out flex flex-col" role="dialog" aria-modal="true" aria-label="3D warehouse view">
+    <header class="flex items-center justify-between px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-slate-100 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        </div>
+        <div>
+          <h2 class="text-sm font-bold tracking-wide">3D Warehouse</h2>
+          <p class="text-[10px] text-slate-400 uppercase tracking-wider">Drag · Scroll · Click bins · Press <kbd class="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">Esc</kbd> to close</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="w3d-open-newtab" type="button" title="Open in a dedicated tab for multi-tasking" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          Pop out
+        </button>
+        <button id="w3d-close" type="button" title="Close" class="p-1.5 rounded-lg hover:bg-slate-800 transition text-slate-300">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="flex-1 bg-slate-950 relative">
+      <iframe id="w3d-iframe" src="about:blank" class="absolute inset-0 w-full h-full border-0" allow="autoplay; fullscreen" title="3D warehouse"></iframe>
+    </div>
+  </aside>
 
   <!-- Firebase Config + Main Logic -->
   <script src="firebase-config.js"></script>
