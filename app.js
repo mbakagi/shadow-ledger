@@ -149,7 +149,8 @@
                 maxCapacity: d.maxCap || d.maxCapacity || 0,
                 purchasingTrigger: d.purchaseTrigger || d.purchasingTrigger || 0,
                 locationStock: undefined,
-                _explicitLocs: [] // temporary array for concatenated string
+                _bins: new Set(),
+                binCode: d.binCode || ''
               });
             }
             const item = itemMap.get(sku);
@@ -158,11 +159,9 @@
             if (d.room !== undefined || d.bin !== undefined) {
                // New explicit 4-field schema
                const locStr = `${d.room || '-'}-${d.aisle || '-'}-${d.bay || '-'}-${d.bin || '-'}`;
-               if (!item.locationStock) item.locationStock = {};
-               item.locationStock[locStr] = (item.locationStock[locStr] || 0) + qty;
                item.totalStock += qty;
                item.buildingStock += qty; // Assume explicit bins are in Building
-               item._explicitLocs.push({ str: locStr, qty: qty });
+               item._bins.add(locStr);
             } else {
                // Legacy flat document schema
                item.totalStock = d.totalStock || 0;
@@ -173,7 +172,7 @@
                  item.locationStock = d.locationStock;
                  Object.keys(item.locationStock).forEach(k => {
                    if (k !== LOC_DEPOT && k !== LOC_BUILDING) {
-                     item._explicitLocs.push({ str: k, qty: item.locationStock[k] });
+                     item._bins.add(k);
                    }
                  });
                } else {
@@ -186,11 +185,10 @@
           
           // Generate the concatenated 'Added to Bin' string
           items.forEach(item => {
-             item.binCode = item._explicitLocs
-               .sort((a,b) => b.qty - a.qty)
-               .map(l => `${l.str} (Qty: ${l.qty})`)
-               .join(' | ');
-             delete item._explicitLocs;
+             if (item._bins.size > 0) {
+               item.binCode = Array.from(item._bins).join(', ');
+             }
+             delete item._bins;
           });
 
           Storage.saveSnapshot(items);
