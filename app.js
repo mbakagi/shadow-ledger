@@ -189,16 +189,20 @@
             }
           });
 
-          const items = Array.from(itemMap.values());
-          
-          // Generate the concatenated 'Added to Bin' string
+           const items = Array.from(itemMap.values());
+
+           // Generate the concatenated 'Added to Bin' string
 items.forEach(item => {
              if (item._bins.size > 0) {
                item.binCode = Array.from(item._bins).join(', ');
              }
              delete item._bins;
-             // Enforce invariant: total = building + depot
+             // Enforce invariant: total = building + depot (always)
              reconcileStock(item);
+             // Assert invariant — log violations loudly so we can fix upstream bugs.
+             if (item.buildingStock + item.depotStock !== item.totalStock) {
+               console.error(`[INVARIANT] ${item.sku}: total=${item.totalStock} != building=${item.buildingStock}+depot=${item.depotStock}`);
+             }
            });
 
           Storage.saveSnapshot(items);
