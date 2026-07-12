@@ -2286,17 +2286,35 @@
       const n = parseInt(val, 10);
       return isNaN(n) ? def : n;
     };
+    
+    const buildingStock = parseNum(cols[colMap.buildingStock], 0);
+    const totalStock = parseNum(cols[colMap.totalStock], 0);
+    const depotStock = Math.max(0, totalStock - buildingStock);
+    
+    const locationStock = { [LOC_DEPOT]: depotStock };
+    const rawBins = String(cols[colMap.binCode] ?? '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    
+    if (rawBins.length > 0) {
+      const perBin = Math.floor(buildingStock / rawBins.length);
+      const remainder = buildingStock % rawBins.length;
+      rawBins.forEach((b, idx) => {
+        locationStock[b] = perBin + (idx === 0 ? remainder : 0);
+      });
+    } else {
+      locationStock[LOC_BUILDING] = buildingStock;
+    }
+
     return {
       sku:               String(cols[colMap.sku] ?? '').trim(),
       name:              String(cols[colMap.name] ?? '').trim(),
       category:          String(cols[colMap.category] ?? '').trim(),
-      binCode:            String(cols[colMap.binCode] ?? '').trim(),
       datasheetUrl:      String(cols[colMap.datasheetUrl] ?? '').trim(),
-      totalStock:        parseNum(cols[colMap.totalStock], 0),
-      buildingStock:     parseNum(cols[colMap.buildingStock], 0),
+      totalStock:        totalStock,
+      buildingStock:     buildingStock,
       carrierTrigger:    parseNum(cols[colMap.carrierTrigger], 5),
       maxCapacity:       parseNum(cols[colMap.maxCapacity], 20),
       purchasingTrigger: parseNum(cols[colMap.purchasingTrigger], 10),
+      locationStock:     locationStock
     };
   }
 
