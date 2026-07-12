@@ -116,7 +116,35 @@
     const db   = firebase.firestore();
     const auth = firebase.auth();
 
-    const MASTER_CODE = 'ST3S-MASTER-2024';
+    /* Guest authorization: verified against Firestore orgSecrets/default
+       (PBKDF2-SHA256 hash). An admin must seed orgSecrets/default via the
+       Migration Wizard (Tools > Guest PIN Rotation) before guest transfers work. */
+    const hexToBytes = h => new Uint8Array((h || '').match(/.{1,2}/g).map(b => parseInt(b, 16)));
+    const bytesToHex = b => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+
+    async function verifyMasterCode(inputCode) {
+      const snap = await db.collection('orgSecrets').doc('default').get();
+      if (!snap.exists) {
+        throw new Error('No authorization secret configured. Ask an admin to seed it via the Migration Wizard.');
+      }
+      const { guestCheckoutHash, salt, iterations } = snap.data() || {};
+      if (!guestCheckoutHash || !salt || !iterations) {
+        throw new Error('Authorization secret is malformed. Re-seed orgSecrets/default.');
+      }
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw', enc.encode(inputCode), { name: 'PBKDF2' }, false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt: hexToBytes(salt), iterations: iterations | 0, hash: 'SHA-256' },
+        keyMaterial, 256);
+      const computed = bytesToHex(new Uint8Array(bits));
+      if (computed.length !== String(guestCheckoutHash).length) return false;
+      let diff = 0;
+      for (let i = 0; i < computed.length; i++) {
+        diff |= computed.charCodeAt(i) ^ String(guestCheckoutHash).charCodeAt(i);
+      }
+      return diff === 0;
+    }
 
     const LOC_DEPOT   = 'depot';
     const LOC_BUILDING = 'building';
@@ -250,14 +278,28 @@
       if (!targetBin) { showCheckoutError('Target bin is required.'); return; }
       if (sourceBin === targetBin) { showCheckoutError('Source and target bins cannot be the same.'); return; }
 
+      const submitBtn = document.getElementById('co-submit');
+
       const code = document.getElementById('co-code').value.trim();
       if (!code) { showCheckoutError('Authorization code is required.'); return; }
-      if (code !== MASTER_CODE) { showCheckoutError('Invalid authorization code.'); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Verifying…';
+      let ok = false;
+      try { ok = await verifyMasterCode(code); }
+      catch (e) {
+        showCheckoutError(e.message || 'Could not verify authorization code.');
+        submitBtn.disabled = false; submitBtn.textContent = 'Confirm Transfer';
+        return;
+      }
+      if (!ok) {
+        showCheckoutError('Invalid authorization code.');
+        submitBtn.disabled = false; submitBtn.textContent = 'Confirm Transfer';
+        return;
+      }
 
       const qty = Math.max(1, parseInt(document.getElementById('co-qty').value, 10) || 1);
 
-      const submitBtn = document.getElementById('co-submit');
-      submitBtn.disabled = true;
       submitBtn.textContent = 'Transferring…';
 
       try {

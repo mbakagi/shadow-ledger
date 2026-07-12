@@ -3,20 +3,29 @@
    Cache-first for app shell, network-first for Firebase
    ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'sl-v4';
+const CACHE_VERSION = 'sl-v5';
+const CACHE_NAME = 'st3s-' + CACHE_VERSION;
+const FIREBASE_V = '10.13.2';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/app.js',
   '/firebase-config.js',
   '/manifest.json',
+  '/sw.js',
   '/icon.svg',
-  '/warehouse-3d.html'
+  '/warehouse-3d.html',
+  '/mobile.html',
+  '/guest-out.html',
+  `https://www.gstatic.com/firebasejs/${FIREBASE_V}/firebase-app-compat.js`,
+  `https://www.gstatic.com/firebasejs/${FIREBASE_V}/firebase-auth-compat.js`,
+  `https://www.gstatic.com/firebasejs/${FIREBASE_V}/firebase-firestore-compat.js`,
+  'https://cdn.tailwindcss.com/3.4.16'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_VERSION)
+    caches.open(CACHE_NAME)
       .then(cache => cache.addAll(APP_SHELL).catch(() => {
         // Fallback: cache each asset individually so one failure doesn't block install
         return Promise.all(
@@ -33,7 +42,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
@@ -58,7 +67,7 @@ self.addEventListener('fetch', event => {
         const network = fetch(request).then(resp => {
           if (resp.ok) {
             const clone = resp.clone();
-            caches.open(CACHE_VERSION).then(c => c.put(request, clone));
+            caches.open(CACHE_NAME).then(c => c.put(request, clone));
           }
           return resp;
         }).catch(() => cached);
@@ -74,7 +83,7 @@ self.addEventListener('fetch', event => {
       return cached || fetch(request).then(resp => {
         if (resp.ok && request.method === 'GET') {
           const clone = resp.clone();
-          caches.open(CACHE_VERSION).then(c => c.put(request, clone));
+          caches.open(CACHE_NAME).then(c => c.put(request, clone));
         }
         return resp;
       }).catch(() => {

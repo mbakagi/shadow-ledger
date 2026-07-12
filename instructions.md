@@ -481,3 +481,55 @@ async function saveItem(item) {
 ### 6.3 Firestore Data Types Strictness
 - Cloud Firestore strictly rejects `undefined` values.
 - When parsing legacy documents that lack modern explicit fields, ALWAYS provide a fallback (`|| null` or `|| ''`) before attempting to `set()` or `update()` a document. Failure to do so will instantly crash the transaction.
+
+### 6.4 Guest Checkout PIN — Seeding & Rotation (REP-003 §3.4)
+
+Guest checkout (`guest-out.html` / `guest-move.html`) no longer compares input against a hardcoded string. The master PIN is now stored as a **PBKDF2-SHA256 hash** in `orgSecrets/default`, and guest pages verify by re-deriving the hash via the Web Crypto API.
+
+**Firestore document** — `/orgSecrets/default`:
+```json
+{
+  "guestCheckoutHash": "<64-char hex>",
+  "salt":              "<64-char hex>",
+  "iterations":        150000,
+  "algo":              "PBKDF2-SHA256",
+  "updatedBy":         "<admin UID>",
+  "updatedAt":         "<server timestamp>"
+}
+```
+
+> **Prerequisite:** `orgSecrets` is rule-locked (`allow read: if request.auth != null; allow write: if false;`). It must be seeded once before guest checkout works. The browser cannot write it.
+
+**Recommended path — Migration Wizard:**
+1. Open `https://<your-domain>/migration-wizard.html` and sign in with an admin account.
+2. Tab **4 · Guest PIN** → enter the new PIN + confirm → **Generate Hash**.
+3. Copy the produced Firebase CLI command (or the JSON) and run it in your terminal (or paste into the Firebase Console → Firestore → `orgSecrets` → `default`).
+4. Open any guest checkout link and confirm the PIN is accepted.
+
+**Fallback path — browser console snippet** (paste in a Firebase-authenticated tab):
+```javascript
+(async () => {
+  const pin = prompt('New guest master PIN?');             if (!pin) return;
+  const iterations = 150000;
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const key  = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), { name:'PBKDF2' }, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt, iterations, hash:'SHA-256' }, key, 256);
+  const hash = [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2,'0')).join('');
+  const saltHex = [...salt].map(b => b.toString(16).padStart(2,'0')).join('');
+  console.log({ guestCheckoutHash: hash, salt: saltHex, iterations, algo:'PBKDF2-SHA256' });
+  // Then seed /orgSecrets/default with these values via the Firebase Console or CLI:
+  //   firebase firestore:documents:set orgSecrets/default --project ledger-d57da --data '{...}'
+})();
+```
+
+**Rotation:** re-run either path with a new PIN; `orgSecrets/default` is overwritten. The guest pages pick up the new hash on their next verify (no code deploy needed).
+
+### 6.5 Warehouse Backend Seeding (REP-003 §5 / Phase 0 & 4)
+
+Run these admin tools in **`migration-wizard.html`** after signing in:
+
+1. **Warehouse Template** (Tab 1):
+   - Copy the provided Firebase CLI command and run it once to seed the immutable `warehouseTemplates/template-standard-v1` blueprint (rule-locked, write:false).
+   - Click **Initialize Instance** to create `warehouseInstances/default` (`binsOccupied:{}`, `binsFree:192`, `totalBins:192`) — this document IS client-writable.
+2. **Location Hierarchy** (Tab 2): generate `locations` documents (schema `{id,name,order,description}`) from the template and commit in batches. Choose rooms and levels to subset.
+3. **Inventory Backfill** (Tab 3): scans every `inventory` document with a spec-format `binCode` (`ROOM-AISLE-BAY:02-BIN:02-LEVEL-STOCK`) and writes the indexed derived fields `warehouseRoom / warehouseAisle / warehouseBay / warehouseBin / warehouseLevel`. Idempotent — already-correct documents are skipped.

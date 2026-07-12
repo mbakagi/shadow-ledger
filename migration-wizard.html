@@ -1,210 +1,570 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>WMS Migration Wizard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>St3s — Admin & Migration Hub</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <script src="https://cdn.tailwindcss.com/3.4.16"></script>
   <style>
-    body { font-family: 'Inter', -apple-system, sans-serif; }
-    .mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .tab-active { background:#1e293b; color:#fff; border-color:#6366f1; }
+    .tab { color:#94a3b8; }
+    .tab:hover { color:#e2e8f0; }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-200 min-h-screen p-8">
-  
-  <div class="max-w-4xl mx-auto">
-    <div class="mb-8 border-b border-slate-700 pb-4">
-      <h1 class="text-3xl font-bold text-white mb-2">Step 1: Location Hierarchy Sandbox</h1>
-      <p class="text-slate-400">This wizard translates existing 3D structural boundaries into explicit alphanumeric database rows.</p>
+<body class="bg-slate-900 text-slate-200 min-h-screen">
+
+  <!-- ════ AUTH GATE ════ -->
+  <div id="auth-gate" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-2xl p-6">
+      <h1 class="text-2xl font-bold text-white mb-1">Admin Hub</h1>
+      <p class="text-sm text-slate-400 mb-5">Sign in with an authorized admin account to manage warehouse templates, locations, inventory backfill, and the guest PIN.</p>
+      <input id="si-email" type="email" placeholder="admin@example.com"
+        class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 mb-3 text-sm focus:outline-none focus:border-indigo-500" />
+      <input id="si-pass" type="password" placeholder="Password"
+        class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 mb-3 text-sm focus:outline-none focus:border-indigo-500" />
+      <div id="si-err" class="hidden text-sm text-red-300 mb-3"></div>
+      <button id="si-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-lg transition">Sign in</button>
+      <p class="text-[10px] text-slate-500 mt-4 text-center">Writes to <code class="text-slate-400">warehouseInstances</code>, <code class="text-slate-400">inventory</code> &amp; <code class="text-slate-400">locations</code> only — <code class="text-slate-400">warehouseTemplates</code> / <code class="text-slate-400">orgSecrets</code> are rule-locked and seeded via CLI/Console.</p>
+    </div>
+  </div>
+
+  <!-- ════ HUB (shown when authed) ════ -->
+  <div id="hub" class="hidden max-w-5xl mx-auto p-6">
+
+    <div class="flex items-center justify-between mb-6 border-b border-slate-700 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-white">St3s — Admin &amp; Migration Hub</h1>
+        <p class="text-sm text-slate-400">REP-003 tooling: templates · locations · backfill · guest PIN</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="user-badge" class="text-xs text-slate-300 bg-slate-800 border border-slate-700 rounded-full px-3 py-1">—</span>
+        <button id="sign-out" class="text-xs text-slate-400 hover:text-red-300 border border-slate-700 rounded-lg px-3 py-1.5">Sign out</button>
+      </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-4 mb-8">
-      <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
-        <h2 class="text-xl font-bold mb-4 text-emerald-400">1. Extract & Simulate</h2>
-        <p class="text-sm text-slate-400 mb-4">Pull geometry rules from Firestore and simulate the new location strings and routing sequence numbers.</p>
-        <button id="btn-simulate" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded w-full transition">Generate Preview</button>
-      </div>
-
-      <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 opacity-50 transition-opacity" id="panel-commit">
-        <h2 class="text-xl font-bold mb-4 text-blue-400">2. Commit Migration</h2>
-        <p class="text-sm text-slate-400 mb-4">Batch write all simulated locations to a new <code>locations</code> collection in Firestore. <br>Status: <span id="status-text" class="text-amber-400 font-bold">Waiting for preview...</span></p>
-        <button id="btn-commit" disabled class="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-2 px-4 rounded w-full transition">Commit to Database</button>
-      </div>
+    <!-- Tab nav -->
+    <div class="flex gap-1 mb-6 border-b border-slate-700 overflow-x-auto">
+      <button data-tab="template"    class="tab tab-active px-4 py-2 text-sm font-semibold border-b-2 rounded-t-lg whitespace-nowrap">1 · Warehouse Template</button>
+      <button data-tab="locations"   class="tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent rounded-t-lg whitespace-nowrap">2 · Location Hierarchy</button>
+      <button data-tab="backfill"    class="tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent rounded-t-lg whitespace-nowrap">3 · Inventory Backfill</button>
+      <button data-tab="pin"         class="tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent rounded-t-lg whitespace-nowrap">4 · Guest PIN</button>
     </div>
 
-    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hidden" id="preview-container">
-      <div class="px-6 py-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
-        <h3 class="font-bold text-white">Virtual Sandbox Preview</h3>
-        <span class="text-xs bg-slate-700 px-2 py-1 rounded-full text-slate-300">Total Locations: <span id="total-locs">0</span></span>
+    <!-- ── Toast/status ── -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50"></div>
+
+    <!-- ══════════ PANEL 1: WAREHOUSE TEMPLATE ══════════ -->
+    <section id="panel-template">
+      <h2 class="text-lg font-bold text-white mb-1">Warehouse Template Blueprint</h2>
+      <p class="text-sm text-slate-400 mb-4">Canonical two-room blueprint (per <span class="mono text-slate-300">REP-003-A1</span>): Room A = 2 aisles, Room B = 1 aisle, each aisle = 4 bays × 4 bins × 4 levels = <b>192 bin slots</b>.</p>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <h3 class="text-sm font-bold text-emerald-400 mb-2">A · Seed template blueprint</h3>
+          <p class="text-xs text-slate-400 mb-3"><code class="text-slate-300">warehouseTemplates</code> is rule-locked (<code>write: false</code>), so seed it once via the Firebase CLI. Copy the command below and run it in your terminal.</p>
+          <pre id="tpl-cli" class="mono text-[10px] bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto text-slate-300 whitespace-pre"></pre>
+          <button id="copy-tpl-cli" class="mt-3 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-1.5 rounded">Copy command</button>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <h3 class="text-sm font-bold text-blue-400 mb-2">B · Initialize runtime instance</h3>
+          <p class="text-xs text-slate-400 mb-3">Creates <code class="text-slate-300">warehouseInstances/default</code> with empty occupancy. This <em>is</em> client-writable — run after the template is seeded.</p>
+          <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 mono text-[10px] text-slate-400 mb-3">{ templateId, binsOccupied:{}, binsFree:192, totalBins:192 }</div>
+          <button id="seed-instance" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">Initialize Instance</button>
+          <div id="instance-status" class="text-xs text-amber-400 font-semibold mt-2">Not initialized.</div>
+        </div>
       </div>
-      <div class="max-h-96 overflow-y-auto">
-        <table class="w-full text-left text-sm whitespace-nowrap">
-          <thead class="uppercase bg-slate-900/50 text-slate-500 text-[10px] tracking-wider sticky top-0 shadow-sm">
-            <tr>
-              <th class="px-6 py-3">Location ID</th>
-              <th class="px-6 py-3">Zone (Room)</th>
-              <th class="px-6 py-3">Aisle</th>
-              <th class="px-6 py-3">Bay</th>
-              <th class="px-6 py-3">Level</th>
-              <th class="px-6 py-3">Travel Seq (TSN)</th>
-            </tr>
-          </thead>
-          <tbody id="preview-tbody" class="divide-y divide-slate-700/50 text-slate-300">
-            <!-- Rendered JS -->
-          </tbody>
-        </table>
+
+      <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+          <h3 class="font-bold text-white text-sm">Bin-Slot Preview (192)</h3>
+          <span class="text-xs bg-slate-700 px-2 py-0.5 rounded-full text-slate-300" id="tpl-count">—</span>
+        </div>
+        <div id="tpl-preview" class="max-h-72 overflow-y-auto p-3 text-[11px] mono text-slate-400 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5"></div>
       </div>
-    </div>
+    </section>
+
+    <!-- ══════════ PANEL 2: LOCATION HIERARCHY ══════════ -->
+    <section id="panel-locations" class="hidden">
+      <h2 class="text-lg font-bold text-white mb-1">Location Hierarchy Sandbox</h2>
+      <p class="text-sm text-slate-400 mb-4">Generate <code class="text-slate-300">locations</code> documents from the warehouse template using the canonical BinCode format
+        <span class="mono text-slate-300">ROOM-AISLE-BAY:02-BIN:02-LEVEL-STOCK</span>. Each row matches the schema <code class="text-slate-300">{ id, name, order, description }</code>.</p>
+
+      <div class="flex flex-wrap items-end gap-4 mb-4">
+        <div>
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Rooms</label>
+          <select id="loc-rooms" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm">
+            <option value="AB">Room A + Room B (192)</option>
+            <option value="A">Room A only (128)</option>
+            <option value="B">Room B only (64)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Levels</label>
+          <div class="flex gap-2 text-sm text-slate-200">
+            <label class="flex items-center gap-1"><input type="checkbox" class="loc-lvl" value="F" checked> F</label>
+            <label class="flex items-center gap-1"><input type="checkbox" class="loc-lvl" value="1" checked> 1</label>
+            <label class="flex items-center gap-1"><input type="checkbox" class="loc-lvl" value="2" checked> 2</label>
+            <label class="flex items-center gap-1"><input type="checkbox" class="loc-lvl" value="3" checked> 3</label>
+          </div>
+        </div>
+        <button id="btn-simulate" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-2 px-4 rounded">Generate Preview</button>
+        <button id="btn-commit" disabled class="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm py-2 px-4 rounded">Commit to Firestore</button>
+      </div>
+
+      <div id="loc-status" class="text-xs text-amber-400 font-semibold mb-3">Waiting for preview…</div>
+
+      <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hidden" id="preview-container">
+        <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+          <h3 class="font-bold text-white text-sm">Virtual Sandbox Preview</h3>
+          <span class="text-xs bg-slate-700 px-2 py-0.5 rounded-full text-slate-300">Total: <span id="total-locs">0</span></span>
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="uppercase bg-slate-900/60 text-slate-500 text-[10px] tracking-wider sticky top-0">
+              <tr>
+                <th class="px-5 py-2.5">Location ID / Name</th>
+                <th class="px-5 py-2.5">Room</th>
+                <th class="px-5 py-2.5">Aisle</th>
+                <th class="px-5 py-2.5">Bay</th>
+                <th class="px-5 py-2.5">Bin</th>
+                <th class="px-5 py-2.5">Level</th>
+                <th class="px-5 py-2.5">Order</th>
+              </tr>
+            </thead>
+            <tbody id="preview-tbody" class="divide-y divide-slate-700/50 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ PANEL 3: INVENTORY BACKFILL ══════════ -->
+    <section id="panel-backfill" class="hidden">
+      <h2 class="text-lg font-bold text-white mb-1">Inventory Derived-Field Backfill</h2>
+      <p class="text-sm text-slate-400 mb-4">Scans the <code class="text-slate-300">inventory</code> collection and parses each document's <code class="text-slate-300">binCode</code> into the indexed derived fields
+        <span class="mono text-slate-300">warehouseRoom / warehouseAisle / warehouseBay / warehouseBin / warehouseLevel</span> (REP-003 §5.2). Only documents whose derived fields are missing or stale are queued.</p>
+
+      <div class="flex gap-3 mb-4">
+        <button id="btn-scan" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-2 px-4 rounded">Scan Inventory</button>
+        <button id="btn-backfill" disabled class="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm py-2 px-4 rounded">Commit Backfill</button>
+      </div>
+
+      <div id="bf-status" class="text-xs text-amber-400 font-semibold mb-3">Idle.</div>
+
+      <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hidden" id="bf-container">
+        <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+          <h3 class="font-bold text-white text-sm">Backfill Preview</h3>
+          <span class="text-xs bg-slate-700 px-2 py-0.5 rounded-full text-slate-300">Queued: <span id="bf-count">0</span></span>
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="uppercase bg-slate-900/60 text-slate-500 text-[10px] tracking-wider sticky top-0">
+              <tr>
+                <th class="px-5 py-2.5">Doc ID</th>
+                <th class="px-5 py-2.5">SKU</th>
+                <th class="px-5 py-2.5">binCode</th>
+                <th class="px-5 py-2.5">→ room</th>
+                <th class="px-5 py-2.5">→ aisle</th>
+                <th class="px-5 py-2.5">→ bay</th>
+                <th class="px-5 py-2.5">→ bin</th>
+                <th class="px-5 py-2.5">→ lvl</th>
+              </tr>
+            </thead>
+            <tbody id="bf-tbody" class="divide-y divide-slate-700/50 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ PANEL 4: GUEST PIN ══════════ -->
+    <section id="panel-pin" class="hidden">
+      <h2 class="text-lg font-bold text-white mb-1">Guest Checkout PIN Rotation</h2>
+      <p class="text-sm text-slate-400 mb-4">Derive a PBKDF2-SHA256 hash for the guest master PIN, then seed <code class="text-slate-300">orgSecrets/default</code>. Because that document is rule-locked (<code>write: false</code>), the hash is shown as a CLI command + JSON to paste into the Firebase Console/CLI — it is never written from the browser.</p>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">New master PIN</label>
+          <input id="pin-new" type="password" placeholder="••••••••"
+            class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm mb-3 mono focus:outline-none focus:border-indigo-500" />
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Confirm PIN</label>
+          <input id="pin-confirm" type="password" placeholder="••••••••"
+            class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm mb-3 mono focus:outline-none focus:border-indigo-500" />
+          <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">PBKDF2 iterations</label>
+          <input id="pin-iter" type="number" value="150000" min="100000"
+            class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm mb-3 mono focus:outline-none focus:border-indigo-500" />
+          <button id="pin-generate" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded transition">Generate Hash</button>
+          <div id="pin-err" class="hidden text-sm text-red-300 mt-3"></div>
+        </div>
+
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <h3 class="text-sm font-bold text-emerald-400 mb-2">Seed command (run once in your terminal)</h3>
+          <pre id="pin-cli" class="mono text-[10px] bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto text-slate-300 whitespace-pre min-h-[88px]">— generate a hash to populate this command —</pre>
+          <button id="copy-pin-cli" disabled class="mt-3 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 font-semibold px-3 py-1.5 rounded">Copy command</button>
+
+          <h3 class="text-sm font-bold text-blue-400 mt-5 mb-2">…or paste this JSON into the Firebase Console</h3>
+          <pre id="pin-json" class="mono text-[10px] bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto text-slate-300 whitespace-pre min-h-[88px]">—</pre>
+          <button id="copy-pin-json" disabled class="mt-3 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 font-semibold px-3 py-1.5 rounded">Copy JSON</button>
+
+          <div class="mt-5 border-t border-slate-700 pt-4">
+            <h3 class="text-sm font-bold text-amber-400 mb-2">Verify before going live</h3>
+            <p class="text-[11px] text-slate-400 mb-2">After seeding, open any guest checkout link and try the PIN — the verifier in <code>guest-out.html</code> re-derives the hash and compares it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
   </div>
 
+  <!-- Firebase SDKs (compat v10.13.2 — unified with the rest of the app) -->
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
 
   <script>
-    const db = firebase.firestore();
-    let simulatedLocations = [];
+    /* ═══════════════════════════════════════════════════════
+       St3s Admin & Migration Hub
+       Uses firebase-config.js globals: db, auth.
+       Implements REP-003 Phase 0 / Phase 4 / Phase 5 tooling.
+       ═══════════════════════════════════════════════════════ */
+    const db   = window.db;
+    const auth = window.auth;
+    let currentUser = null;
 
-    document.getElementById('btn-simulate').addEventListener('click', async () => {
-      document.getElementById('btn-simulate').textContent = 'Loading...';
-      document.getElementById('btn-simulate').disabled = true;
-      try {
-        await generatePreview();
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-      document.getElementById('btn-simulate').textContent = 'Regenerate Preview';
-      document.getElementById('btn-simulate').disabled = false;
-    });
+    /* ── Canonical warehouse template (REP-003-A1 blueprint) ── */
+    const STANDARD_TEMPLATE = {
+      id: 'template-standard-v1',
+      version: '1.0.0',
+      name: 'Standard Two-Room Warehouse',
+      rooms: [
+        { id: 'A', name: 'Room A', position: { x: 0, z: 0 }, aisles: [
+          { id: 'A1', label: 'Aisle 1', bays: 4, binsPerBay: 4, levels: ['F','1','2','3'] },
+          { id: 'A2', label: 'Aisle 2', bays: 4, binsPerBay: 4, levels: ['F','1','2','3'] }
+        ]},
+        { id: 'B', name: 'Room B', position: { x: 20, z: 0 }, aisles: [
+          { id: 'A1', label: 'Aisle 1', bays: 4, binsPerBay: 4, levels: ['F','1','2','3'] }
+        ]}
+      ],
+      spacing: { aisleGap: 4.0, bayDepth: 2.0, binWidth: 2.0, levelHeight: 2.0 }
+    };
 
-    document.getElementById('btn-commit').addEventListener('click', async () => {
-      if (!confirm(`Are you sure you want to write ${simulatedLocations.length} locations to Firestore?`)) return;
-      document.getElementById('btn-commit').disabled = true;
-      document.getElementById('btn-commit').textContent = 'Writing...';
-      try {
-        await commitToDatabase();
-      } catch (err) {
-        alert('Commit Error: ' + err.message);
-      }
-    });
-
-    async function generatePreview() {
-      const snap = await db.collection('layouts').get();
-      const rooms = [];
-      snap.forEach(doc => rooms.push({ id: doc.id, ...doc.data() }));
-
-      simulatedLocations = [];
-      let baseSequence = 1000;
-
-      rooms.sort((a,b) => (a.roomName || a.id).localeCompare(b.roomName || b.id));
-
-      for (const room of rooms) {
-        const zone = (room.roomName || room.id).toUpperCase().replace(/[^A-Z0-9]/g, '');
-        
-        let aislesConfig = room.aislesData || {};
-        if (Object.keys(aislesConfig).length === 0) {
-           const numAisles = parseInt(room.aisles, 10) || 1;
-           const numBays = parseInt(room.bays, 10) || 1;
-           const numBins = parseInt(room.bins, 10) || 1;
-           const numLevels = parseInt(room.levels, 10) || 1;
-           for (let a = 0; a < numAisles; a++) {
-              aislesConfig[String.fromCharCode(65 + a)] = { bayStart: 1, bayEnd: numBays, bins: numBins, levels: numLevels };
-           }
-        }
-
-        const aisleLetters = Object.keys(aislesConfig).sort();
-
-        aisleLetters.forEach((aisle, aisleIdx) => {
-          const config = aislesConfig[aisle];
-          const bStart = config.bayStart || 1;
-          const bEnd = config.bayEnd || config.bays || 1;
-          const levels = config.levels || 1;
-
-          const isEven = (aisleIdx % 2 === 0);
-          
-          let bayList = [];
-          for (let b = bStart; b <= bEnd; b++) { bayList.push(b); }
-          if (!isEven) bayList.reverse();
-
-          for (const bay of bayList) {
-             baseSequence += 10;
-             for (let l = 1; l <= levels; l++) {
-                const bayPad = String(bay).padStart(2, '0');
-                const locId = `${zone}-${aisle}-${bayPad}-${l}`;
-                
-                const bins = config.bins || 1;
-                if (bins > 1) {
-                   for (let bi = 1; bi <= bins; bi++) {
-                      const pos = String.fromCharCode(64 + bi);
-                      const fullId = `${locId}-${pos}`;
-                      simulatedLocations.push({
-                         id: fullId,
-                         zone, aisle, bay: bayPad, level: l, position: pos,
-                         travelSequence: baseSequence + l,
-                         status: 'Active'
-                      });
-                   }
-                } else {
-                   simulatedLocations.push({
-                      id: locId,
-                      zone, aisle, bay: bayPad, level: l, position: '',
-                      travelSequence: baseSequence + l,
-                      status: 'Active'
-                   });
-                }
-             }
+    function generateAllBinCodes(template) {
+      const out = [];
+      let order = 1000;
+      template.rooms.forEach(room => {
+        room.aisles.forEach(aisle => {
+          for (let b = 1; b <= aisle.bays; b++) {
+            for (let n = 1; n <= aisle.binsPerBay; n++) {
+              aisle.levels.forEach(level => {
+                const bay = String(b).padStart(2, '0');
+                const bin = String(n).padStart(2, '0');
+                const code = `${room.id}-${aisle.id}-${bay}-${bin}-${level}-STOCK`;
+                out.push({ code, room: room.id, aisle: aisle.id, bay: b, bin: n, level, order: order += 5 });
+              });
+            }
           }
         });
-      }
-
-      renderTable();
-
-      document.getElementById('panel-commit').classList.remove('opacity-50');
-      document.getElementById('btn-commit').disabled = false;
-      document.getElementById('status-text').textContent = 'Ready to commit!';
-      document.getElementById('status-text').className = 'text-emerald-400 font-bold';
+      });
+      return out;
     }
 
-    function renderTable() {
+    /* BinCode parser: ROOM-AISLE-BAY-BIN-LEVEL-STOCK → derived fields */
+    const BIN_RE = /^([A-Z])-([A-Z][0-9])-(\d{2})-(\d{2})-([F0-9])-STOCK$/i;
+    function parseBinCode(binCode) {
+      if (!binCode) return null;
+      const m = String(binCode).toUpperCase().match(BIN_RE);
+      if (!m) return null;
+      return {
+        warehouseRoom:  m[1],
+        warehouseAisle: m[2],
+        warehouseBay:   parseInt(m[3], 10),
+        warehouseBin:   parseInt(m[4], 10),
+        warehouseLevel: m[5]
+      };
+    }
+
+    /* ── Auth ── */
+    auth.onAuthStateChanged(user => {
+      const gate = document.getElementById('auth-gate');
+      const hub  = document.getElementById('hub');
+      if (user) {
+        currentUser = user;
+        document.getElementById('user-badge').textContent = user.displayName || user.email || 'Signed in';
+        gate.classList.add('hidden');
+        hub.classList.remove('hidden');
+        initPanels();
+      } else {
+        currentUser = null;
+        hub.classList.add('hidden');
+        gate.classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('si-btn').addEventListener('click', async () => {
+      const email = document.getElementById('si-email').value.trim();
+      const pass  = document.getElementById('si-pass').value;
+      const err   = document.getElementById('si-err');
+      err.classList.add('hidden');
+      if (!email || !pass) { err.textContent = 'Email and password are required.'; err.classList.remove('hidden'); return; }
+      try {
+        await auth.signInWithEmailAndPassword(email, pass);
+      } catch (e) {
+        err.textContent = e.message; err.classList.remove('hidden');
+      }
+    });
+    document.getElementById('sign-out').addEventListener('click', () => auth.signOut());
+
+    /* ── Tabs ── */
+    document.querySelectorAll('[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-tab]').forEach(b => {
+          b.classList.remove('tab-active'); b.classList.add('tab');
+          b.classList.add('border-transparent');
+        });
+        btn.classList.add('tab-active', 'border-transparent'); btn.classList.remove('tab');
+        const tab = btn.dataset.tab;
+        ['template','locations','backfill','pin'].forEach(t => {
+          document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+        });
+      });
+    });
+
+    /* ── Toast ── */
+    function toast(msg, kind = 'info') {
+      const colors = { info: 'bg-slate-800 border-slate-600 text-slate-200', ok: 'bg-emerald-900/40 border-emerald-500/50 text-emerald-200', err: 'bg-red-900/40 border-red-500/50 text-red-200' };
+      const el = document.createElement('div');
+      el.className = `border rounded-lg px-4 py-2.5 text-sm font-semibold shadow-xl ${colors[kind]}`;
+      el.textContent = msg;
+      document.getElementById('toast').appendChild(el);
+      setTimeout(() => el.remove(), 3200);
+    }
+    function copyText(text) {
+      navigator.clipboard && navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard', 'ok'), () => toast('Copy failed — select manually', 'err'));
+    }
+    const hex = b => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+    const randHex = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return hex(a); };
+
+    /* ════════ PANEL 1: TEMPLATE ════════ */
+    function initTemplatePanel() {
+      const codes = generateAllBinCodes(STANDARD_TEMPLATE);
+      document.getElementById('tpl-count').textContent = codes.length;
+      document.getElementById('tpl-preview').innerHTML =
+        codes.map(c => `<span class="bg-slate-900 border border-slate-700/60 rounded px-1.5 py-0.5">${c.code}</span>`).join('');
+      const data = JSON.stringify({
+        version: STANDARD_TEMPLATE.version,
+        name: STANDARD_TEMPLATE.name,
+        rooms: STANDARD_TEMPLATE.rooms,
+        spacing: STANDARD_TEMPLATE.spacing,
+        createdAt: '<serverTimestamp>'
+      }, null, 2);
+      const cli = `firebase firestore:documents:set warehouseTemplates/template-standard-v1 \\
+  --project ledger-d57da \\
+  --data '${JSON.stringify({ version: STANDARD_TEMPLATE.version, name: STANDARD_TEMPLATE.name, rooms: STANDARD_TEMPLATE.rooms, spacing: STANDARD_TEMPLATE.spacing }).replace(/'/g, "'\\''")}'`;
+      document.getElementById('tpl-cli').textContent = cli;
+      document.getElementById('copy-tpl-cli').onclick = () => copyText(cli);
+    }
+    document.getElementById('seed-instance').addEventListener('click', async () => {
+      const st = document.getElementById('instance-status');
+      try {
+        st.textContent = 'Writing…'; st.className = 'text-xs text-amber-400 font-semibold mt-2';
+        await db.collection('warehouseInstances').doc('default').set({
+          templateId: 'template-standard-v1',
+          binsOccupied: {},
+          binsFree: 192,
+          totalBins: 192,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        st.textContent = 'Initialized ✓ — 192 free bins.'; st.className = 'text-xs text-emerald-400 font-semibold mt-2';
+        toast('Warehouse instance initialized', 'ok');
+      } catch (e) {
+        st.textContent = 'Error: ' + e.message; st.className = 'text-xs text-red-400 font-semibold mt-2';
+        toast('Init failed', 'err');
+      }
+    });
+
+    /* ════════ PANEL 2: LOCATIONS ════════ */
+    let simulatedLocations = [];
+    function buildLocationsPreview() {
+      const which = document.getElementById('loc-rooms').value;
+      const levels = Array.from(document.querySelectorAll('.loc-lvl:checked')).map(c => c.value);
+      const all = generateAllBinCodes(STANDARD_TEMPLATE);
+      simulatedLocations = all.filter(c => {
+        const okRoom = which === 'AB' || which === c.room;
+        const okLvl  = levels.includes(c.level);
+        return okRoom && okLvl;
+      }).map(c => ({
+        id: c.code, name: c.code, order: c.order,
+        description: `Room ${c.room} · Aisle ${c.aisle} · Bay ${String(c.bay).padStart(2,'0')} · Bin ${String(c.bin).padStart(2,'0')} · Level ${c.level}`
+      }));
       const tbody = document.getElementById('preview-tbody');
       document.getElementById('total-locs').textContent = simulatedLocations.length;
-      
-      const rows = simulatedLocations.slice(0, 100).map(loc => `
-        <tr class="hover:bg-slate-700/30 border-b border-slate-700/50">
-          <td class="px-6 py-2 mono font-bold text-emerald-300">${loc.id}</td>
-          <td class="px-6 py-2">${loc.zone}</td>
-          <td class="px-6 py-2">${loc.aisle}</td>
-          <td class="px-6 py-2">${loc.bay}</td>
-          <td class="px-6 py-2">${loc.level}</td>
-          <td class="px-6 py-2 mono text-blue-300">${loc.travelSequence}</td>
-        </tr>
-      `).join('');
-      
-      tbody.innerHTML = rows + (simulatedLocations.length > 100 ? `<tr><td colspan="6" class="px-6 py-4 text-center text-slate-500 italic">...and ${simulatedLocations.length - 100} more rows</td></tr>` : '');
+      const rows = simulatedLocations.slice(0, 200).map(l => `
+        <tr class="hover:bg-slate-700/20">
+          <td class="px-5 py-1.5 mono font-bold text-emerald-300">${l.id}</td>
+          <td class="px-5 py-1.5">${l.id.split('-')[0]}</td>
+          <td class="px-5 py-1.5">${l.id.split('-')[1]}</td>
+          <td class="px-5 py-1.5">${l.id.split('-')[2]}</td>
+          <td class="px-5 py-1.5">${l.id.split('-')[3]}</td>
+          <td class="px-5 py-1.5">${l.id.split('-')[4]}</td>
+          <td class="px-5 py-1.5 mono text-blue-300">${l.order}</td>
+        </tr>`).join('');
+      tbody.innerHTML = rows + (simulatedLocations.length > 200 ? `<tr><td colspan="7" class="px-5 py-3 text-center text-slate-500 italic">…and ${simulatedLocations.length - 200} more</td></tr>` : '');
       document.getElementById('preview-container').classList.remove('hidden');
+      const st = document.getElementById('loc-status');
+      st.textContent = `Ready to commit ${simulatedLocations.length} locations.`;
+      st.className = 'text-xs text-emerald-400 font-semibold mb-3';
+      document.getElementById('btn-commit').disabled = simulatedLocations.length === 0;
     }
-
-    async function commitToDatabase() {
-      const batchSize = 400;
-      let count = 0;
-
-      for (let i = 0; i < simulatedLocations.length; i += batchSize) {
-        const chunk = simulatedLocations.slice(i, i + batchSize);
-        const batch = db.batch();
-        
-        chunk.forEach(loc => {
-          const ref = db.collection('locations').doc(loc.id);
-          batch.set(ref, loc);
-          count++;
-        });
-
-        await batch.commit();
-        document.getElementById('status-text').textContent = `Writing... ${count} / ${simulatedLocations.length}`;
+    document.getElementById('btn-simulate').addEventListener('click', buildLocationsPreview);
+    document.getElementById('btn-commit').addEventListener('click', async () => {
+      if (!simulatedLocations.length) return;
+      if (!confirm(`Write ${simulatedLocations.length} locations to Firestore?`)) return;
+      const btn = document.getElementById('btn-commit');
+      btn.disabled = true; btn.textContent = 'Writing…';
+      try {
+        const BATCH = 400; let count = 0;
+        for (let i = 0; i < simulatedLocations.length; i += BATCH) {
+          const batch = db.batch();
+          simulatedLocations.slice(i, i + BATCH).forEach(l => batch.set(db.collection('locations').doc(l.id), l));
+          await batch.commit(); count += Math.min(BATCH, simulatedLocations.length - i);
+          document.getElementById('loc-status').textContent = `Writing… ${count}/${simulatedLocations.length}`;
+        }
+        document.getElementById('loc-status').textContent = `Success — wrote ${count} locations.`;
+        toast('Locations committed', 'ok');
+      } catch (e) {
+        document.getElementById('loc-status').textContent = 'Error: ' + e.message;
+        document.getElementById('loc-status').className = 'text-xs text-red-400 font-semibold mb-3';
+        toast('Commit failed', 'err');
       }
+      btn.disabled = false; btn.textContent = 'Commit to Firestore';
+    });
 
-      document.getElementById('status-text').textContent = `Success! Wrote ${count} locations.`;
-      document.getElementById('status-text').className = 'text-blue-400 font-bold';
-      document.getElementById('btn-commit').textContent = 'Migration Complete';
+    /* ════════ PANEL 3: BACKFILL ════════ */
+    let backfillQueue = [];
+    document.getElementById('btn-scan').addEventListener('click', async () => {
+      const st = document.getElementById('bf-status');
+      const btn = document.getElementById('btn-scan');
+      btn.disabled = true; btn.textContent = 'Scanning…'; st.textContent = 'Scanning inventory…';
+      backfillQueue = [];
+      try {
+        const snap = await db.collection('inventory').get();
+        snap.forEach(d => {
+          const data = d.data();
+          const binCode = data.binCode || '';
+          const parsed = parseBinCode(binCode);
+          if (!parsed) return;
+          if (data.warehouseRoom === parsed.warehouseRoom
+              && data.warehouseAisle === parsed.warehouseAisle
+              && data.warehouseBay === parsed.warehouseBay
+              && data.warehouseBin === parsed.warehouseBin
+              && data.warehouseLevel === parsed.warehouseLevel) return;
+          backfillQueue.push({ id: d.id, sku: data.sku || '—', binCode, parsed });
+        });
+        const tbody = document.getElementById('bf-tbody');
+        document.getElementById('bf-count').textContent = backfillQueue.length;
+        tbody.innerHTML = backfillQueue.slice(0, 300).map(r => `
+          <tr class="hover:bg-slate-700/20">
+            <td class="px-5 py-1.5 mono text-slate-400">${r.id.slice(0,18)}</td>
+            <td class="px-5 py-1.5 mono text-emerald-300">${r.sku}</td>
+            <td class="px-5 py-1.5 mono">${r.binCode}</td>
+            <td class="px-5 py-1.5">${r.parsed.warehouseRoom}</td>
+            <td class="px-5 py-1.5">${r.parsed.warehouseAisle}</td>
+            <td class="px-5 py-1.5">${r.parsed.warehouseBay}</td>
+            <td class="px-5 py-1.5">${r.parsed.warehouseBin}</td>
+            <td class="px-5 py-1.5">${r.parsed.warehouseLevel}</td>
+          </tr>`).join('') + (backfillQueue.length > 300 ? `<tr><td colspan="8" class="px-5 py-3 text-center text-slate-500 italic">…and ${backfillQueue.length - 300} more</td></tr>` : '');
+        document.getElementById('bf-container').classList.remove('hidden');
+        st.textContent = backfillQueue.length ? `Queued ${backfillQueue.length} documents for update.` : 'Nothing to backfill — all derived fields are current.';
+        st.className = 'text-xs text-emerald-400 font-semibold mb-3';
+        document.getElementById('btn-backfill').disabled = backfillQueue.length === 0;
+      } catch (e) {
+        st.textContent = 'Error: ' + e.message; st.className = 'text-xs text-red-400 font-semibold mb-3';
+      }
+      btn.disabled = false; btn.textContent = 'Scan Inventory';
+    });
+    document.getElementById('btn-backfill').addEventListener('click', async () => {
+      if (!backfillQueue.length) return;
+      const btn = document.getElementById('btn-backfill');
+      btn.disabled = true; btn.textContent = 'Writing…';
+      const st = document.getElementById('bf-status');
+      try {
+        const BATCH = 400; let count = 0;
+        for (let i = 0; i < backfillQueue.length; i += BATCH) {
+          const batch = db.batch();
+          backfillQueue.slice(i, i + BATCH).forEach(r => {
+            batch.set(db.collection('inventory').doc(r.id), {
+              warehouseRoom: r.parsed.warehouseRoom,
+              warehouseAisle: r.parsed.warehouseAisle,
+              warehouseBay: r.parsed.warehouseBay,
+              warehouseBin: r.parsed.warehouseBin,
+              warehouseLevel: r.parsed.warehouseLevel,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          });
+          await batch.commit(); count += Math.min(BATCH, backfillQueue.length - i);
+          st.textContent = `Writing… ${count}/${backfillQueue.length}`;
+        }
+        st.textContent = `Done — updated ${count} documents.`; st.className = 'text-xs text-emerald-400 font-semibold mb-3';
+        toast('Backfill committed', 'ok');
+      } catch (e) {
+        st.textContent = 'Error: ' + e.message; st.className = 'text-xs text-red-400 font-semibold mb-3';
+        toast('Backfill failed', 'err');
+      }
+      btn.disabled = false; btn.textContent = 'Commit Backfill';
+    });
+
+    /* ════════ PANEL 4: GUEST PIN ════════ */
+    async function derivePbkdf2(pin, iterations) {
+      const salt = crypto.getRandomValues(new Uint8Array(32));
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), { name: 'PBKDF2' }, false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations: iterations | 0, hash: 'SHA-256' }, keyMaterial, 256);
+      return { hash: hex(new Uint8Array(bits)), salt: hex(salt) };
+    }
+    document.getElementById('pin-generate').addEventListener('click', async () => {
+      const a = document.getElementById('pin-new').value;
+      const b = document.getElementById('pin-confirm').value;
+      const it = parseInt(document.getElementById('pin-iter').value, 10) || 150000;
+      const err = document.getElementById('pin-err');
+      err.classList.add('hidden');
+      if (!a) { err.textContent = 'Enter a PIN.'; err.classList.remove('hidden'); return; }
+      if (a.length < 6) { err.textContent = 'PIN must be at least 6 characters.'; err.classList.remove('hidden'); return; }
+      if (a !== b) { err.textContent = 'PINs do not match.'; err.classList.remove('hidden'); return; }
+      if (it < 100000) { err.textContent = 'Use at least 100000 iterations.'; err.classList.remove('hidden'); return; }
+      try {
+        const { hash, salt } = await derivePbkdf2(a, it);
+        const json = {
+          guestCheckoutHash: hash,
+          salt: salt,
+          iterations: it,
+          algo: 'PBKDF2-SHA256',
+          updatedBy: currentUser ? currentUser.uid : null,
+          updatedAt: '<serverTimestamp>'
+        };
+        const jsonStr = JSON.stringify(json, null, 2);
+        document.getElementById('pin-json').textContent = jsonStr;
+        const cli = `firebase firestore:documents:set orgSecrets/default \\
+  --project ledger-d57da \\
+  --data '${JSON.stringify({ guestCheckoutHash: hash, salt: salt, iterations: it, algo: 'PBKDF2-SHA256' }).replace(/'/g, "'\\''")}'`;
+        document.getElementById('pin-cli').textContent = cli;
+        document.getElementById('copy-pin-cli').disabled = false;
+        document.getElementById('copy-pin-json').disabled = false;
+        toast('Hash generated — seed it to go live', 'ok');
+      } catch (e) {
+        err.textContent = e.message; err.classList.remove('hidden');
+      }
+    });
+    document.getElementById('copy-pin-cli').onclick = () => copyText(document.getElementById('pin-cli').textContent);
+    document.getElementById('copy-pin-json').onclick = () => copyText(document.getElementById('pin-json').textContent);
+
+    /* Init once on first auth */
+    let inited = false;
+    function initPanels() {
+      if (inited) return; inited = true;
+      initTemplatePanel();
     }
   </script>
 </body>

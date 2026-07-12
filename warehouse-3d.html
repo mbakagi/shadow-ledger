@@ -173,10 +173,15 @@
 
   <div id="toast"></div>
 
-  <!-- Firebase SDKs — same version as index.html (shared firebase-config.js) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- Deprecation banner — standalone 3D page is a legacy fallback; use the in-app 3D panel from the dashboard. -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:80;background:rgba(180,83,9,0.96);color:#fff;font:600 12px/1.4 'Inter',system-ui,sans-serif;text-align:center;padding:6px 12px;backdrop-filter:blur(6px);">
+    ⚠️ This standalone 3D page is deprecated. Use the in-app 3D panel from the dashboard for the unified session.
+  </div>
+
+  <!-- Firebase SDKs — SAME compat version as index.html (v10.13.2) to avoid cross-tab auth-token invalidation -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <!-- Shared Firebase init: provides `db` and `auth` globals -->
   <script src="firebase-config.js"></script>
   <script>
