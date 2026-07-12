@@ -289,12 +289,23 @@
     </div>
   </section>
 
-  <!-- Pane: Bin Setup / QR Code Generation -->
+  <!-- Pane: Bin Setup / QR Code & Labels -->
   <section id="pane-bins" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-bins">
-    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Bin Setup / QR Code Labels</h2>
-    <p class="text-xs text-slate-500">Generate printable QR codes for each composite location (SKU_Rroom_Aaisle_Bbay_Bbin). Scan with Wizard OCR.</p>
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Bin Setup / QR Code & Labels</h2>
+    <p class="text-xs text-slate-500">Generate printable QR codes for composite locations, bin location labels, or item labels.</p>
 
-    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+    <!-- Sub-tabs for Bin Setup -->
+    <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Bin setup modes">
+      <button class="bins-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="qr" role="tab" aria-selected="true" aria-controls="bins-qr">📱 QR Codes</button>
+      <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="binlabels" role="tab" aria-selected="false" aria-controls="bins-binlabels">🏷 Bin Labels</button>
+      <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="itemlabels" role="tab" aria-selected="false" aria-controls="bins-itemlabels">📦 Item Labels</button>
+    </div>
+
+    <!-- Sub-tab: QR Codes (existing) -->
+    <section id="bins-qr" class="bins-subtab active space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h3 class="font-bold text-sm">QR Code Generator — Composite Location Deep-Links</h3>
+      <p class="text-xs text-slate-500">Scan with Wizard OCR → opens Task Wizard pre-filled with location.</p>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div><label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label><input id="qr-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
         <div><label class="block text-xs font-semibold text-slate-500 mb-1">Room</label><input id="qr-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
@@ -315,7 +326,92 @@
       </div>
 
       <div id="qr-grid" class="qr-grid print-grid"></div>
-    </div>
+    </section>
+
+    <!-- Sub-tab: Bin Location Labels -->
+    <section id="bins-binlabels" class="bins-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h3 class="font-bold text-sm">Bin Location Labels</h3>
+      <p class="text-xs text-slate-500">Print adhesive labels for physical bin locations (Room-Aisle-Bay-Bin).</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Room</label><input id="bl-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Aisle</label><input id="bl-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bay Range</label><input id="bl-bay-start" type="text" placeholder="Start (e.g. 01)" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">to</label><input id="bl-bay-end" type="text" placeholder="End (e.g. 10)" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bin Range</label><input id="bl-bin-start" type="text" placeholder="Start (e.g. 01)" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">to</label><input id="bl-bin-end" type="text" placeholder="End (e.g. 04)" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Label Size</label>
+          <select id="bl-size" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="2x1">2″ × 1″ (standard)</option>
+            <option value="3x1">3″ × 1″ (wide)</option>
+            <option value="4x2">4″ × 2″ (large)</option>
+          </select>
+        </div>
+        <div class="flex items-end"><button id="btn-bl-generate" class="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Generate Bin Labels</button></div>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm">Bin Labels (<span id="bl-count">0</span>)</h3>
+        <div class="flex gap-2 no-print">
+          <button id="btn-bl-print" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Print</button>
+          <button id="btn-bl-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear</button>
+        </div>
+      </div>
+
+      <div id="bl-grid" class="qr-grid print-grid"></div>
+    </section>
+
+    <!-- Sub-tab: Item Labels (Search & Add, Single/Multi) -->
+    <section id="bins-itemlabels" class="bins-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h3 class="font-bold text-sm">Item Labels — Search & Add</h3>
+      <p class="text-xs text-slate-500">Search SKUs, add to selection, choose single or multi-label mode, print.</p>
+
+      <!-- Mode toggle -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Mode:</span>
+          <button id="il-mode-single" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400" data-mode="single">Single</button>
+          <button id="il-mode-multi" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" data-mode="multi">Multi</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Label Size:</span>
+          <select id="il-size" class="px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="2x1">2″ × 1″ (SKU + Name)</option>
+            <option value="3x1">3″ × 1″ (SKU + Name + Qty)</option>
+            <option value="4x2">4″ × 2″ (Full detail)</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Qty per label:</span>
+          <input id="il-qty" type="number" min="1" value="1" class="w-16 px-2 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+      </div>
+
+      <!-- Search & Add -->
+      <div class="relative">
+        <label class="block text-xs font-semibold text-slate-500 mb-1">Search SKU or Name (type to filter, Enter to add)</label>
+        <div class="flex gap-2">
+          <input id="il-search" type="text" placeholder="Type SKU or item name…" class="flex-1 mono px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" autocomplete="off" />
+          <div id="il-search-results" class="absolute z-20 w-full max-h-48 overflow-y-auto scrollbar-thin bg-white dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-600 shadow-lg hidden text-xs"></div>
+        </div>
+      </div>
+
+      <!-- Selected chips -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-slate-500">Selected:</span>
+        <div id="il-chips" class="flex-1 flex flex-wrap gap-1.5 min-h-[28px]"></div>
+        <span id="il-chip-count" class="text-xs text-slate-400 font-mono">0</span>
+      </div>
+
+      <div class="flex gap-2 no-print">
+        <button id="btn-il-print" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Print Labels</button>
+        <button id="btn-il-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear Selection</button>
+      </div>
+
+      <div id="il-grid" class="qr-grid print-grid"></div>
+    </section>
   </section>
 
   <!-- ──────────────────────────────────────────────────────────────
@@ -381,6 +477,11 @@
   var batchPending = 0;
   var batchAuditCount = 0;
   var qrItems = [];
+  var blItems = []; // bin labels
+  var ilSelected = []; // item labels selection
+  var ilMode = 'single';
+  var ilAllItems = []; // cached SKU list
+  var ilSearchDebounce = null;
 
   /* ================================================================
      URL PARAM DEEP-LINK ROUTER
@@ -934,6 +1035,209 @@
   D('btn-qr-add').addEventListener('click', addQrToGrid);
   D('btn-qr-print').addEventListener('click', function(){ window.print(); });
   D('btn-qr-clear').addEventListener('click', function(){ qrItems = []; renderQrGrid(); toast('QR grid cleared','info'); });
+
+  /* ================================================================
+     PANE 4b — BIN LOCATION LABELS
+     ================================================================ */
+  function generateBinLabels(){
+    var room = S(D('bl-room').value), aisle = S(D('bl-aisle').value);
+    var bayStart = parseInt(D('bl-bay-start').value,10)||1, bayEnd = parseInt(D('bl-bay-end').value,10)||bayStart;
+    var binStart = parseInt(D('bl-bin-start').value,10)||1, binEnd = parseInt(D('bl-bin-end').value,10)||binStart;
+    var size = D('bl-size').value;
+
+    if (!room || !aisle) { toast('Room & Aisle required','error'); return; }
+    if (bayEnd < bayStart || binEnd < binStart) { toast('End must be >= Start','error'); return; }
+
+    blItems = [];
+    for (var b = bayStart; b <= bayEnd; b++) {
+      var bay = String(b).padStart(2,'0');
+      for (var n = binStart; n <= binEnd; n++) {
+        var bin = String(n).padStart(2,'0');
+        var loc = 'R'+room+'-A'+aisle+'-B'+bay+'-B'+bin;
+        var url = window.location.origin + window.location.pathname + '?tab=wizard&room='+encodeURIComponent(room)+'&aisle='+encodeURIComponent(aisle)+'&bay='+encodeURIComponent(bay)+'&bin='+encodeURIComponent(bin)+'&subtab=putaway';
+        blItems.push({ loc: loc, url: url, room: room, aisle: aisle, bay: bay, bin: bin });
+      }
+    }
+    renderBinLabels();
+  }
+
+  function renderBinLabels(){
+    var grid = D('bl-grid'), size = D('bl-size').value;
+    grid.innerHTML = blItems.map(function(item, idx){
+      var canvasId = 'bl-canvas-'+idx;
+      var dims = labelDims(size);
+      setTimeout(function(){
+        try { new QRCode(document.getElementById(canvasId), { text: item.url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+      }, 0);
+      return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;">'
+        + '<canvas id="'+canvasId+'" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;"></canvas>'
+        + '<div class="label" style="font-size:'+dims.font+'px;margin-top:2px;">'+esc(item.loc)+'</div>'
+        + '<div class="label" style="font-size:'+(dims.font-1)+'px;color:#64748b;">Room '+item.room+' · Aisle '+item.aisle+' · Bay '+item.bay+' · Bin '+item.bin+'</div>'
+        + '</div>';
+    }).join('');
+    D('bl-count').textContent = blItems.length;
+  }
+
+  function labelDims(size){
+    if (size==='3x1') return { w:76, h:25, qr:20, font:9 };
+    if (size==='4x2') return { w:102, h:51, qr:30, font:11 };
+    return { w:51, h:25, qr:18, font:8 }; // 2x1 default
+  }
+
+  D('btn-bl-generate').addEventListener('click', generateBinLabels);
+  D('btn-bl-print').addEventListener('click', function(){ window.print(); });
+  D('btn-bl-clear').addEventListener('click', function(){ blItems = []; renderBinLabels(); toast('Bin labels cleared','info'); });
+
+  /* ================================================================
+     PANE 4c — ITEM LABELS (Search & Add, Single/Multi)
+     ================================================================ */
+  var ilMode = 'single'; // 'single' or 'multi'
+  var ilSelected = []; // array of {sku, name, qty}
+  var ilSearchDebounce = null;
+  var ilAllItems = []; // cached from stockItems
+
+  function rebuildIlItemCache(){
+    // Build unique SKU list from stockItems
+    var seen = new Set();
+    ilAllItems = [];
+    stockItems.forEach(function(i){
+      if (!seen.has(i.sku)) { seen.add(i.sku); ilAllItems.push({ sku:i.sku, name:i.name }); }
+    });
+    ilAllItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
+  }
+
+  function renderIlChips(){
+    var wrap = D('il-chips');
+    wrap.innerHTML = ilSelected.map(function(item, idx){
+      return '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono">'
+        + esc(item.sku) + (ilMode==='multi' ? ' ×'+item.qty : '')
+        + '<button type="button" onclick="ilRemove('+idx+')" class="ml-1 text-indigo-500 hover:text-red-500 font-bold leading-none">✕</button>'
+        + '</span>';
+    }).join('');
+    D('il-chip-count').textContent = ilSelected.length;
+  }
+
+  window.ilRemove = function(idx){ ilSelected.splice(idx,1); renderIlChips(); rebuildIlGrid(); };
+
+  function ilSearch(q){
+    q = (q||'').toLowerCase().trim();
+    var results = ilAllItems.filter(function(item){
+      return item.sku.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
+    }).slice(0, 20);
+    var el = D('il-search-results');
+    if (!q || !results.length) { el.classList.add('hidden'); return; }
+    el.innerHTML = results.map(function(item){
+      var already = ilSelected.some(function(s){ return s.sku===item.sku; });
+      return '<div class="px-3 py-2 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border-b border-slate-200/50 last:border-0 flex items-center justify-between '+(already?'opacity-50':'')+'" data-sku="'+esc(item.sku)+'" data-name="'+esc(item.name)+'">'
+        + '<span class="font-mono text-indigo-600 dark:text-indigo-400">'+esc(item.sku)+'</span>'
+        + '<span class="ml-2 truncate text-slate-600 dark:text-slate-300">'+esc(item.name)+'</span>'
+        + (already ? '<span class="text-xs text-emerald-600">✓ Added</span>' : '<span class="text-xs text-slate-400">+ Add</span>')
+        + '</div>';
+    }).join('');
+    el.classList.remove('hidden');
+
+    // Click handler
+    el.querySelectorAll('[data-sku]').forEach(function(row){
+      row.addEventListener('click', function(){
+        var sku = this.dataset.sku, name = this.dataset.name;
+        if (ilMode === 'single') {
+          ilSelected = [{ sku:sku, name:name, qty: parseInt(D('il-qty').value,10)||1 }];
+        } else {
+          if (!ilSelected.some(function(s){ return s.sku===sku; })) {
+            ilSelected.push({ sku:sku, name:name, qty: parseInt(D('il-qty').value,10)||1 });
+          }
+        }
+        D('il-search').value = '';
+        D('il-search-results').classList.add('hidden');
+        renderIlChips();
+        rebuildIlGrid();
+      });
+    });
+  }
+
+  D('il-search').addEventListener('input', function(){
+    clearTimeout(ilSearchDebounce);
+    ilSearchDebounce = setTimeout(function(){ ilSearch(this.value); }.bind(this), 150);
+  });
+  D('il-search').addEventListener('keydown', function(e){
+    if (e.key==='Enter') { e.preventDefault(); ilSearch(this.value); }
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('#il-search') && !e.target.closest('#il-search-results')) D('il-search-results').classList.add('hidden');
+  });
+
+  D('il-mode-single').addEventListener('click', function(){ setIlMode('single'); });
+  D('il-mode-multi').addEventListener('click', function(){ setIlMode('multi'); });
+
+  function setIlMode(mode){
+    ilMode = mode;
+    D('il-mode-single').classList.toggle('bg-indigo-100', mode==='single');
+    D('il-mode-single').classList.toggle('text-indigo-600', mode==='single');
+    D('il-mode-single').classList.toggle('dark:bg-indigo-900/30', mode==='single');
+    D('il-mode-single').classList.toggle('dark:text-indigo-400', mode==='single);
+    D('il-mode-multi').classList.toggle('bg-indigo-100', mode==='multi');
+    D('il-mode-multi').classList.toggle('text-indigo-600', mode==='multi');
+    D('il-mode-multi').classList.toggle('dark:bg-indigo-900/30', mode==='multi');
+    D('il-mode-multi').classList.toggle('dark:text-indigo-400', mode==='multi');
+    if (mode==='single' && ilSelected.length>1) { ilSelected = ilSelected.slice(0,1); renderIlChips(); rebuildIlGrid(); }
+  }
+
+  function rebuildIlGrid(){
+    var grid = D('il-grid'), size = D('il-size').value;
+    if (!ilSelected.length) { grid.innerHTML = ''; return; }
+    var dims = labelDims(size);
+    grid.innerHTML = ilSelected.map(function(item, idx){
+      var canvasId = 'il-canvas-'+idx;
+      var url = window.location.origin + window.location.pathname + '?tab=wizard&sku='+encodeURIComponent(item.sku)+'&subtab=count';
+      setTimeout(function(){
+        try { new QRCode(document.getElementById(canvasId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+      }, 0);
+      var lines = [];
+      if (size==='4x2') {
+        lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
+        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name)+'</div>');
+        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;color:#64748b;">Qty: '+item.qty+'</div>');
+      } else if (size==='3x1') {
+        lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
+        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,24)+'</div>');
+        lines.push('<div style="font-size:'+(dims.font-2)+'px;margin-top:1px;color:#64748b;">Qty: '+item.qty+'</div>');
+      } else {
+        lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
+        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,20)+'</div>');
+      }
+      return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;display:flex;flex-direction:column;justify-content:center;align-items:center;">'
+        + '<canvas id="'+canvasId+'" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin-bottom:2px;"></canvas>'
+        + lines.join('')
+        + '</div>';
+    }).join('');
+  }
+
+  D('il-size').addEventListener('change', rebuildIlGrid);
+  D('il-qty').addEventListener('change', function(){
+    if (ilMode==='single' && ilSelected.length) { ilSelected[0].qty = parseInt(this.value,10)||1; rebuildIlGrid(); }
+  });
+
+  D('btn-il-print').addEventListener('click', function(){ if (!ilSelected.length) { toast('Add items first','error'); return; } window.print(); });
+  D('btn-il-clear').addEventListener('click', function(){ ilSelected = []; renderIlChips(); rebuildIlGrid(); toast('Selection cleared','info'); });
+
+  /* ================================================================
+     BINS SUB-TAB SWITCHING
+     ================================================================ */
+  function showBinsSubtab(sub){
+    document.querySelectorAll('.bins-subtab-btn').forEach(function(b){
+      var active = b.dataset.subtab===sub;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', active);
+    });
+    document.querySelectorAll('.bins-subtab').forEach(function(p){
+      p.classList.toggle('active', p.id==='bins-'+sub);
+    });
+    // Rebuild item cache when entering itemlabels
+    if (sub==='itemlabels') rebuildIlItemCache();
+  }
+  document.querySelectorAll('.bins-subtab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ showBinsSubtab(b.dataset.subtab); });
+  });
 
   /* ================================================================
      INITIAL TAB FROM URL
