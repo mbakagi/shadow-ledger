@@ -3,23 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>proofinv — Master Inventory Dashboard</title>
+  <title>proofinv — Text-Based WMS</title>
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <script src="https://cdn.tailwindcss.com/3.4.16"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
-  <script src="firebase-inv.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .scrollbar-thin::-webkit-scrollbar { width: 5px; }
     .scrollbar-thin::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+    .tab-btn.active { background: rgba(99,102,241,0.16); color: #6366f1; border-color: rgba(99,102,241,0.4); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; animation: fadeIn 120ms ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    #camera-canvas { display: none; }
+    .batch-row input { transition: border-color 0.15s; }
+    .batch-row input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+    .qr-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; text-align: center; }
+    .qr-card canvas { max-width: 100%; height: auto; display: block; margin: 0 auto 4px; }
+    .qr-card .label { font-size: 10px; font-family: ui-monospace, monospace; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* PRINT — paper logsheet */
+    /* PRINT — paper logsheet & QR grid */
     @media print {
       body { background: white !important; color: black !important; font-size: 10pt; }
-      nav, button, input, select, .no-print, #login-overlay { display: none !important; }
+      nav, button, input, select, .no-print, #login-overlay, .tab-nav, .tab-btn, .btn-print, .btn-logout, .user-badge, #search-input { display: none !important; }
+      .tab-pane { display: block !important; page-break-after: avoid; }
       #dashboard-table { border-collapse: collapse; width: 100%; }
       #dashboard-table th, #dashboard-table td {
         border: 1px solid #000; padding: 4px 6px; font-size: 9pt; text-align: left;
@@ -28,12 +41,17 @@
       #dashboard-table tr:nth-child(even) { background: #fafafa; }
       h1 { font-size: 14pt; margin-bottom: 6px; }
       .print-date { font-size: 8pt; color: #555; margin-bottom: 10px; }
+      .qr-grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+      .qr-card { border: 1px solid #999 !important; page-break-inside: avoid; }
+      .qr-card .label { font-size: 8pt !important; color: #000 !important; }
     }
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen">
 
-  <!-- Auth overlay -->
+  <!-- ──────────────────────────────────────────────────────────────
+       SHARED AUTH OVERLAY (single instance)
+       ────────────────────────────────────────────────────────────── -->
   <div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm">
     <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 space-y-4">
       <div class="text-center">
@@ -41,9 +59,9 @@
         <p class="text-sm text-slate-500 mt-1">Sign in to access inventory</p>
       </div>
       <form id="login-form" class="space-y-3">
-        <input id="login-email" type="email" placeholder="Email" required
+        <input id="login-email" type="email" placeholder="Email" required autocomplete="email"
                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
-        <input id="login-password" type="password" placeholder="Password" required
+        <input id="login-password" type="password" placeholder="Password" required autocomplete="current-password"
                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
         <div id="login-error" class="text-red-500 text-xs font-semibold hidden"></div>
         <button id="login-btn" type="submit"
@@ -52,100 +70,484 @@
     </div>
   </div>
 
-  <!-- Header -->
+  <!-- ──────────────────────────────────────────────────────────────
+       GLOBAL HEADER / NAVBAR
+       ────────────────────────────────────────────────────────────── -->
   <nav class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-4 flex-wrap">
-    <h1 class="text-lg font-black tracking-tight text-indigo-600 dark:text-indigo-400 mono">proofinv</h1>
-    <div class="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
-      <input id="search-input" type="text" placeholder="Search SKU, name, bin…" class="flex-1 min-w-[200px] px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
-      <button id="btn-print" class="no-print px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition flex items-center gap-1.5">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-        Print Logsheet
+    <h1 class="text-lg font-black tracking-tight text-indigo-600 dark:text-indigo-400 mono no-print">proofinv</h1>
+
+    <!-- Tab navigation -->
+    <div class="tab-nav flex flex-1 min-w-0 flex-wrap gap-2 no-print" role="tablist" aria-label="Main views">
+      <button class="tab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="stock" role="tab" aria-selected="true" aria-controls="pane-stock">
+        📊 Live Stock
       </button>
-      <div id="user-badge" class="hidden ml-auto text-xs text-slate-500 dark:text-slate-400 truncate max-w-[160px] font-medium"></div>
-      <button id="btn-logout" class="hidden text-xs px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-600 dark:text-slate-300 transition">Sign out</button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="wizard" role="tab" aria-selected="false" aria-controls="pane-wizard">
+        🧙 Task Wizard
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="batch" role="tab" aria-selected="false" aria-controls="pane-batch">
+        ⌨ Batch Entry
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="bins" role="tab" aria-selected="false" aria-controls="pane-bins">
+        🏷 Bin Setup / QR
+      </button>
+    </div>
+
+    <div class="flex items-center gap-3 flex-wrap no-print">
+      <input id="search-input" type="text" placeholder="Search SKU, name, bin…" class="flex-1 min-w-[180px] px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" aria-label="Search inventory" />
+      <button id="btn-print" class="btn-print px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition flex items-center gap-1.5" aria-label="Print logsheet">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        Print
+      </button>
+      <div id="user-badge" class="user-badge hidden ml-auto text-xs text-slate-500 dark:text-slate-400 truncate max-w-[160px] font-medium" aria-live="polite"></div>
+      <button id="btn-logout" class="btn-logout hidden text-xs px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-600 dark:text-slate-300 transition">Sign out</button>
     </div>
   </nav>
 
-  <!-- Stats -->
-  <section class="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
-    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total SKUs</p>
-      <p id="stat-skus" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
-    </div>
-    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total Units</p>
-      <p id="stat-units" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
-    </div>
-    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Bins Used</p>
-      <p id="stat-bins" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
-    </div>
-    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Docs</p>
-      <p id="stat-docs" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+  <!-- ──────────────────────────────────────────────────────────────
+       TAB PANES (only one visible at a time)
+       ────────────────────────────────────────────────────────────── -->
+
+  <!-- Pane: Live Stock Dashboard -->
+  <section id="pane-stock" class="tab-pane active p-4" role="tabpanel" aria-labelledby="tab-stock">
+    <!-- Stats -->
+    <section class="px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total SKUs</p>
+        <p id="stat-skus" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total Units</p>
+        <p id="stat-units" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Bins Used</p>
+        <p id="stat-bins" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Docs</p>
+        <p id="stat-docs" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <div class="px-4 pb-8 overflow-x-auto">
+      <table id="dashboard-table" class="w-full text-sm border-collapse print-grid">
+        <thead>
+          <tr class="border-b border-slate-300 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold bg-slate-100 dark:bg-slate-800/50">
+            <th class="px-3 py-2.5">SKU</th>
+            <th class="px-3 py-2.5">Item Name</th>
+            <th class="px-3 py-2.5">Total Qty</th>
+            <th class="px-3 py-2.5">Bin Count</th>
+            <th class="px-3 py-2.5">Added to Bin</th>
+          </tr>
+        </thead>
+        <tbody id="table-body" class="divide-y divide-slate-200 dark:divide-slate-800"></tbody>
+      </table>
+      <div id="empty-state" class="hidden text-center py-12 text-slate-400 dark:text-slate-500">
+        <p class="text-lg font-semibold">No inventory records</p>
+        <p class="text-sm mt-1">Use the Wizard or Batch Entry to add items</p>
+      </div>
     </div>
   </section>
 
-  <!-- Table -->
-  <div class="px-4 pb-8 overflow-x-auto">
-    <table id="dashboard-table" class="w-full text-sm border-collapse">
-      <thead>
-        <tr class="border-b border-slate-300 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold bg-slate-100 dark:bg-slate-800/50">
-          <th class="px-3 py-2.5">SKU</th>
-          <th class="px-3 py-2.5">Item Name</th>
-          <th class="px-3 py-2.5">Total Qty</th>
-          <th class="px-3 py-2.5">Bin Count</th>
-          <th class="px-3 py-2.5">Added to Bin</th>
-        </tr>
-      </thead>
-      <tbody id="table-body" class="divide-y divide-slate-200 dark:divide-slate-800"></tbody>
-    </table>
-    <div id="empty-state" class="hidden text-center py-12 text-slate-400 dark:text-slate-500">
-      <p class="text-lg font-semibold">No inventory records</p>
-      <p class="text-sm mt-1">Use the wizard or batch entry to add items</p>
+  <!-- Pane: Task Wizard -->
+  <section id="pane-wizard" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-wizard">
+    <!-- Sub-tab nav inside Wizard -->
+    <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Wizard tasks">
+      <button class="wizard-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="count" role="tab" aria-selected="true" aria-controls="wizard-count">🔍 Search & Count</button>
+      <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="putaway" role="tab" aria-selected="false" aria-controls="wizard-putaway">📦 Putaway / Assign</button>
+      <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="transfer" role="tab" aria-selected="false" aria-controls="wizard-transfer">↔ Bin-to-Bin Transfer</button>
     </div>
-  </div>
 
+    <!-- Sub-tab: Search & Count -->
+    <section id="wizard-count" class="wizard-subtab active space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Search & Count</h2>
+
+      <!-- OCR Camera Controls -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">OCR:</span>
+          <button id="ocr-toggle-sku" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 hover:bg-indigo-100 transition" data-target="sku">SKU</button>
+          <button id="ocr-toggle-loc" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 hover:bg-indigo-100 transition" data-target="loc">Location</button>
+          <span id="ocr-status" class="text-[10px] text-slate-400 font-medium">OFF</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-capture" class="hidden px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">📸 Capture</button>
+          <button id="btn-camera-close" class="hidden px-3 py-1.5 rounded-lg bg-red-100 text-red-600 text-xs font-bold transition">✕ Cam</button>
+        </div>
+      </div>
+      <video id="camera-video" class="hidden w-full max-w-[360px] rounded-xl border border-slate-300 shadow" autoplay playsinline muted></video>
+      <canvas id="camera-canvas"></canvas>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label>
+          <input id="count-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Item Name (optional, for new items)</label>
+          <input id="count-name" type="text" placeholder="Item name" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+      </div>
+      <button id="btn-count-search" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Search</button>
+
+      <div id="count-results" class="hidden mt-2 border-t border-slate-200 dark:border-slate-700 pt-2 space-y-2">
+        <p id="count-title" class="text-sm font-bold text-slate-600 dark:text-slate-300"></p>
+        <div id="count-locs" class="space-y-1.5 max-h-72 overflow-y-auto scrollbar-thin"></div>
+      </div>
+    </section>
+
+    <!-- Sub-tab: Putaway / Assign -->
+    <section id="wizard-putaway" class="wizard-subtab hidden space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Putaway / Assign</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Room</label><input id="pa-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Aisle</label><input id="pa-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bay</label><input id="pa-bay" type="text" placeholder="e.g. 01" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bin</label><input id="pa-bin" type="text" placeholder="e.g. 04" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label><input id="pa-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Item Name (required for new SKU)</label><input id="pa-name" type="text" placeholder="Item name" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Quantity</label><input id="pa-qty" type="number" min="1" value="1" class="w-24 px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        <button id="btn-putaway" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition mt-5">Assign · Putaway</button>
+      </div>
+    </section>
+
+    <!-- Sub-tab: Bin-to-Bin Transfer -->
+    <section id="wizard-transfer" class="wizard-subtab hidden space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Bin-to-Bin Transfer</h2>
+      <p class="text-xs text-slate-500">Source → Destination (same SKU, atomic Firestore transaction)</p>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="space-y-2 p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/30">
+          <p class="text-xs font-bold text-red-500">SOURCE</p>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="tf-s-room" placeholder="Room" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-red-400 outline-none uppercase text-xs" maxlength="4" />
+            <input id="tf-s-aisle" placeholder="Aisle" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-red-400 outline-none uppercase text-xs" maxlength="4" />
+            <input id="tf-s-bay" placeholder="Bay" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-red-400 outline-none uppercase text-xs" maxlength="4" />
+            <input id="tf-s-bin" placeholder="Bin" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-red-400 outline-none uppercase text-xs" maxlength="4" />
+          </div>
+        </div>
+        <div class="space-y-2 p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/30">
+          <p class="text-xs font-bold text-emerald-500">DESTINATION</p>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="tf-d-room" placeholder="Room" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-400 outline-none uppercase text-xs" maxlength="4" />
+            <input id="tf-d-aisle" placeholder="Aisle" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-400 outline-none uppercase text-xs" maxlength="4" />
+            <input id="tf-d-bay" placeholder="Bay" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-400 outline-none uppercase text-xs" maxlength="4" />
+            <input id="tf-d-bin" placeholder="Bin" class="mono w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-400 outline-none uppercase text-xs" maxlength="4" />
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label><input id="tf-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Item Name</label><input id="tf-name" type="text" placeholder="Item name" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Qty to Move</label><input id="tf-qty" type="number" min="1" value="1" class="w-24 px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        <button id="btn-transfer" class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition mt-5">Execute Transfer</button>
+      </div>
+    </section>
+  </section>
+
+  <!-- Pane: Batch Entry -->
+  <section id="pane-batch" class="tab-pane p-4 max-w-6xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-batch">
+    <div class="flex gap-3 flex-wrap no-print">
+      <div class="bg-white dark:bg-slate-800 rounded-xl px-4 py-2 border border-slate-200 dark:border-slate-700">
+        <span class="text-[10px] uppercase text-slate-400 font-semibold">Committed</span>
+        <span id="stat-committed" class="ml-2 font-black text-emerald-600">0</span>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl px-4 py-2 border border-slate-200 dark:border-slate-700">
+        <span class="text-[10px] uppercase text-slate-400 font-semibold">Pending</span>
+        <span id="stat-pending" class="ml-2 font-black text-amber-500">0</span>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl px-4 py-2 border border-slate-200 dark:border-slate-700">
+        <span class="text-[10px] uppercase text-slate-400 font-semibold">Last SKU</span>
+        <span id="stat-last" class="ml-2 font-mono text-xs text-slate-600">—</span>
+      </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Rapid Entry · Press Enter to commit & jump to next row</h2>
+
+      <div class="grid grid-cols-7 gap-2 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 pb-1.5 px-1">
+        <span>SKU</span><span>Item Name</span><span>Room</span><span>Aisle</span><span>Bay</span><span>Bin</span><span>Qty</span>
+      </div>
+
+      <div id="batch-rows" class="space-y-1.5"></div>
+
+      <div class="flex gap-2 pt-2 no-print">
+        <button id="btn-commit-all" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Commit All Pending</button>
+        <button id="btn-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear Grid</button>
+      </div>
+
+      <details class="mt-2">
+        <summary class="text-xs text-slate-400 cursor-pointer font-semibold">Session audit trail (<span id="audit-count">0</span> entries)</summary>
+        <div id="audit-log" class="max-h-48 overflow-y-auto scrollbar-thin mt-1 space-y-0.5 text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-2 border border-slate-200 dark:border-slate-600"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Pane: Bin Setup / QR Code Generation -->
+  <section id="pane-bins" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-bins">
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Bin Setup / QR Code Labels</h2>
+    <p class="text-xs text-slate-500">Generate printable QR codes for each composite location (SKU_Rroom_Aaisle_Bbay_Bbin). Scan with Wizard OCR.</p>
+
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label><input id="qr-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Room</label><input id="qr-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Aisle</label><input id="qr-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bay</label><input id="qr-bay" type="text" placeholder="e.g. 01" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bin</label><input id="qr-bin" type="text" placeholder="e.g. 04" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div class="flex items-end"><button id="btn-qr-add" class="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Add to Grid</button></div>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm">QR Grid (<span id="qr-count">0</span> codes)</h3>
+        <div class="flex gap-2 no-print">
+          <button id="btn-qr-print" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Print Grid</button>
+          <button id="btn-qr-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear</button>
+        </div>
+      </div>
+
+      <div id="qr-grid" class="qr-grid print-grid"></div>
+    </div>
+  </section>
+
+  <!-- ──────────────────────────────────────────────────────────────
+       SHARED JAVASCRIPT — GLOBAL INIT, STATE, HELPERS, TABS, TABS
+       ────────────────────────────────────────────────────────────── -->
   <script>
   'use strict';
 
-  // ── DOM ──
-  const D = id => document.getElementById(id);
-  const loginOverlay = D('login-overlay');
-  const loginForm    = D('login-form');
-  const loginEmail   = D('login-email');
-  const loginPassword = D('login-password');
-  const loginError   = D('login-error');
-  const loginBtn     = D('login-btn');
-  const userBadge    = D('user-badge');
-  const btnLogout    = D('btn-logout');
-  const searchInput  = D('search-input');
-  const btnPrint     = D('btn-print');
-  const tableBody    = D('table-body');
-  const emptyState   = D('empty-state');
-  const statSkus     = D('stat-skus');
-  const statUnits    = D('stat-units');
-  const statBins     = D('stat-bins');
-  const statDocs     = D('stat-docs');
+  /* ================================================================
+     GLOBAL FIREBASE INIT (runs once, before any other code)
+     ================================================================ */
+  (function () {
+    const cfg = {
+      apiKey: "AIzaSyDBPAF8LeDCfywbFiWSMHeu01inc_uxSk0",
+      authDomain: "ledger-d57da.firebaseapp.com",
+      projectId: "ledger-d57da",
+      storageBucket: "ledger-d57da.firebasestorage.app",
+      messagingSenderId: "713000868232",
+      appId: "1:713000868232:web:b979ddfaa854ea80d5023d"
+    };
+    if (typeof firebase === 'undefined') {
+      console.error('Firebase compat SDK not loaded');
+      return;
+    }
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    window.db = firebase.firestore();
+    window.auth = firebase.auth();
+    window.db.enablePersistence({ synchronizeTabs: true })
+      .catch(function (e) {
+        if (e.code === 'failed-precondition' || e.code === 'unimplemented') {
+          console.warn('Firestore persistence unavailable:', e.code);
+        }
+      });
+  })();
 
-  let items = [];
-
-  // ── Helpers ──
-  function esc(v) { return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function toast(msg, type) {
+  /* ================================================================
+     SHARED HELPERS
+     ================================================================ */
+  var D = function(id){return document.getElementById(id);};
+  var esc = function(v){ return String(v).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); };
+  var S = function(v){ var s=String(v||'').trim().toUpperCase(); return s.replace(/\s+/g,''); };
+  var normId = function(sku,room,aisle,bay,bin){ return sku+'_R'+room+'_A'+aisle+'_B'+bay+'_B'+bin; };
+  var toast = function(msg, type){
     var t = document.createElement('div');
-    t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full text-white text-xs font-semibold shadow-lg animate-pulse ' + (type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-700');
+    t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full text-white text-xs font-semibold shadow-lg animate-pulse ' +
+      (type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-700');
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(function(){t.remove();}, 2500);
+    setTimeout(function(){ t.remove(); }, 2500);
+  };
+
+  /* ================================================================
+     SHARED STATE
+     ================================================================ */
+  var currentUser = null;
+  var stockUnsub = null;
+  var stockItems = [];
+  var stockFilter = '';
+  var cameraStream = null;
+  var ocrTarget = 'sku';
+  var batchRows = 8;
+  var batchCommitted = 0;
+  var batchPending = 0;
+  var batchAuditCount = 0;
+  var qrItems = [];
+
+  /* ================================================================
+     URL PARAM DEEP-LINK ROUTER
+     ================================================================ */
+  (function routeFromUrl(){
+    var params = new URLSearchParams(window.location.search);
+    var tab = params.get('tab') || 'stock';
+    var validTabs = ['stock','wizard','batch','bins'];
+    if (!validTabs.includes(tab)) tab = 'stock';
+
+    // Pre-fill wizard fields from URL
+    if (tab === 'wizard') {
+      var sku = params.get('sku') || '';
+      var room = params.get('room') || '';
+      var aisle = params.get('aisle') || '';
+      var bay = params.get('bay') || '';
+      var bin = params.get('bin') || '';
+      var subtab = params.get('subtab') || 'putaway';
+      // Store for later application after DOM ready
+      window.__deepLink = { tab: tab, sku: sku, room: room, aisle: aisle, bay: bay, bin: bin, subtab: subtab };
+    } else if (tab === 'bins') {
+      var sku = params.get('sku') || '';
+      var room = params.get('room') || '';
+      var aisle = params.get('aisle') || '';
+      var bay = params.get('bay') || '';
+      var bin = params.get('bin') || '';
+      window.__deepLink = { tab: 'bins', sku: sku, room: room, aisle: aisle, bay: bay, bin: bin };
+    }
+  })();
+
+  /* ================================================================
+     TAB NAVIGATION (main tabs + wizard sub-tabs)
+     ================================================================ */
+  function showTab(tabName){
+    // Main tabs
+    document.querySelectorAll('.tab-btn').forEach(function(b){
+      var isActive = b.dataset.tab === tabName;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-selected', isActive);
+    });
+    document.querySelectorAll('.tab-pane').forEach(function(p){
+      p.classList.toggle('active', p.id === 'pane-' + tabName);
+    });
+
+    // Update URL without reload
+    var url = new URL(window.location.href);
+    url.searchParams.set('tab', tabName);
+    window.history.replaceState({}, '', url);
+
+    // Lazy-render hooks
+    if (tabName === 'stock' && !window.__stockRendered) renderStock();
+    if (tabName === 'batch' && !window.__batchBuilt) buildBatchGrid();
+    if (tabName === 'wizard') applyDeepLinkWizard();
+    if (tabName === 'bins') applyDeepLinkBins();
   }
 
-  // ── Aggregation ──
-  // Produces one row per unique SKU. "Added to Bin" concatenates all
-  // (room,aisle,bay,bin,quantity) entries for that SKU.
-  function aggregate(snapshot) {
+  function showWizardSubtab(subtab){
+    document.querySelectorAll('.wizard-subtab-btn').forEach(function(b){
+      var isActive = b.dataset.subtab === subtab;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-selected', isActive);
+    });
+    document.querySelectorAll('.wizard-subtab').forEach(function(p){
+      p.classList.toggle('active', p.id === 'wizard-' + subtab);
+    });
+    // Update URL
+    var url = new URL(window.location.href);
+    url.searchParams.set('subtab', subtab);
+    window.history.replaceState({}, '', url);
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ showTab(b.dataset.tab); });
+  });
+  document.querySelectorAll('.wizard-subtab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ showWizardSubtab(b.dataset.subtab); });
+  });
+
+  /* ================================================================
+     APPLY DEEP-LINK PRE-FILL
+     ================================================================ */
+  function applyDeepLinkWizard(){
+    var dl = window.__deepLink;
+    if (!dl || dl.tab !== 'wizard') return;
+    showWizardSubtab(dl.subtab || 'putaway');
+    if (dl.sku) D('pa-sku').value = dl.sku;
+    if (dl.sku) D('count-sku').value = dl.sku;
+    if (dl.sku) D('tf-sku').value = dl.sku;
+    if (dl.room) D('pa-room').value = dl.room;
+    if (dl.aisle) D('pa-aisle').value = dl.aisle;
+    if (dl.bay) D('pa-bay').value = dl.bay;
+    if (dl.bin) D('pa-bin').value = dl.bin;
+    if (dl.room) D('tf-s-room').value = dl.room;
+    if (dl.aisle) D('tf-s-aisle').value = dl.aisle;
+    if (dl.bay) D('tf-s-bay').value = dl.bay;
+    if (dl.bin) D('tf-s-bin').value = dl.bin;
+    if (dl.room) D('tf-d-room').value = dl.room;
+    if (dl.aisle) D('tf-d-aisle').value = dl.aisle;
+    if (dl.bay) D('tf-d-bay').value = dl.bay;
+    if (dl.bin) D('tf-d-bin').value = dl.bin;
+    window.__deepLink = null; // consume once
+  }
+
+  function applyDeepLinkBins(){
+    var dl = window.__deepLink;
+    if (!dl || dl.tab !== 'bins') return;
+    if (dl.sku) D('qr-sku').value = dl.sku;
+    if (dl.room) D('qr-room').value = dl.room;
+    if (dl.aisle) D('qr-aisle').value = dl.aisle;
+    if (dl.bay) D('qr-bay').value = dl.bay;
+    if (dl.bin) D('qr-bin').value = dl.bin;
+    if (dl.sku && dl.room && dl.aisle && dl.bay && dl.bin) {
+      addQrToGrid();
+    }
+    window.__deepLink = null;
+  }
+
+  /* ================================================================
+     AUTH GUARD (shared)
+     ================================================================ */
+  auth.onAuthStateChanged(function(u){
+    if (u) {
+      currentUser = u;
+      D('login-overlay').classList.add('hidden');
+      D('user-badge').classList.remove('hidden'); D('user-badge').textContent = u.email;
+      D('btn-logout').classList.remove('hidden');
+      startStockSync();
+    } else {
+      currentUser = null;
+      D('login-overlay').classList.remove('hidden');
+      D('user-badge').classList.add('hidden'); D('btn-logout').classList.add('hidden');
+      if (stockUnsub) { stockUnsub(); stockUnsub = null; }
+      stockItems = []; renderStock();
+    }
+  });
+  D('login-form').addEventListener('submit', function(e){
+    e.preventDefault();
+    var em = D('login-email').value.trim(), pw = D('login-password').value;
+    D('login-error').classList.add('hidden');
+    var b = D('login-btn'); b.textContent = 'Signing in…'; b.disabled = true;
+    auth.signInWithEmailAndPassword(em, pw)
+      .catch(function(err){
+        var msgs = { 'auth/user-not-found':'No account found.', 'auth/wrong-password':'Incorrect password.', 'auth/invalid-email':'Invalid email.', 'auth/too-many-requests':'Too many attempts. Try later.' };
+        D('login-error').textContent = msgs[err.code] || err.message;
+        D('login-error').classList.remove('hidden');
+      })
+      .finally(function(){ b.textContent = 'Sign In'; b.disabled = false; });
+  });
+  D('btn-logout').addEventListener('click', function(){ auth.signOut(); });
+
+  /* ================================================================
+     PANE 1 — LIVE STOCK DASHBOARD
+     ================================================================ */
+  function startStockSync(){
+    if (stockUnsub) stockUnsub();
+    stockUnsub = db.collection('inventory').onSnapshot(function(snap){
+      aggregateStock(snap);
+      renderStock();
+    }, function(err){
+      console.error('Stock sync error:', err);
+      toast('DB sync error: ' + (err.message || err.code), 'error');
+    });
+  }
+
+  function aggregateStock(snapshot){
     var skuMap = new Map();
-    snapshot.forEach(function(doc) {
+    snapshot.forEach(function(doc){
       var d = doc.data();
       var s = (d.sku || '').trim();
       if (!s) return;
@@ -157,51 +559,45 @@
       var qty = Math.max(0, Number(d.quantity) || 0);
       var r = (d.room||'').trim(), a = (d.aisle||'').trim(), ba = (d.bay||'').trim(), bn = (d.bin||'').trim();
       row.total += qty;
-      if (r || a || ba || bn) {
-        row.bins.push({ room:r, aisle:a, bay:ba, bin:bn, qty:qty });
-      }
+      if (r || a || ba || bn) row.bins.push({ room:r, aisle:a, bay:ba, bin:bn, qty:qty });
     });
 
-    items = [];
-    skuMap.forEach(function(v) {
-      // Deduplicate bin entries: same location string → group
+    stockItems = [];
+    skuMap.forEach(function(v){
       var locMap = new Map();
-      v.bins.forEach(function(b) {
+      v.bins.forEach(function(b){
         var key = [b.room,b.aisle,b.bay,b.bin].join('|');
-        if (locMap.has(key)) {
-          locMap.get(key).qty += b.qty;
-        } else {
-          locMap.set(key, b);
-        }
+        if (locMap.has(key)) locMap.get(key).qty += b.qty;
+        else locMap.set(key, b);
       });
       var unique = Array.from(locMap.values());
       var addedToBin = unique.length
-        ? unique.map(function(x) {
-            return 'R' + (x.room||'-') + '-A' + (x.aisle||'-') + '-B' + (x.bay||'-') + '-B' + (x.bin||'-') + ' (Qty:' + x.qty + ')';
+        ? unique.map(function(x){
+            return 'R'+(x.room||'-')+'-A'+(x.aisle||'-')+'-B'+(x.bay||'-')+'-B'+(x.bin||'-')+' (Qty:'+x.qty+')';
           }).join(' | ')
         : '—';
-
-      items.push({ sku:v.sku, name:v.name, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount });
+      stockItems.push({ sku:v.sku, name:v.name, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount });
     });
-
-    items.sort(function(a,b) { return a.sku.localeCompare(b.sku); });
+    stockItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
+    window.__stockRendered = true;
   }
 
-  // ── Render ──
-  var FILTER = '';
-  function render() {
-    var filtered = items;
-    if (FILTER) {
-      var q = FILTER.toLowerCase();
-      filtered = items.filter(function(i) {
+  function renderStock(){
+    var filtered = stockItems;
+    if (stockFilter) {
+      var q = stockFilter.toLowerCase();
+      filtered = stockItems.filter(function(i){
         return i.sku.toLowerCase().indexOf(q) >= 0
             || i.name.toLowerCase().indexOf(q) >= 0
             || i.binsAdded.toLowerCase().indexOf(q) >= 0;
       });
     }
-    if (!filtered.length) { tableBody.innerHTML=''; emptyState.classList.remove('hidden'); }
-    else { emptyState.classList.add('hidden'); }
-    tableBody.innerHTML = filtered.map(function(i) {
+    var tbody = D('table-body');
+    var empty = D('empty-state');
+    if (!filtered.length) { tbody.innerHTML=''; empty.classList.remove('hidden'); }
+    else { empty.classList.add('hidden'); }
+
+    tbody.innerHTML = filtered.map(function(i){
       return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">'
         + '<td class="px-3 py-2 font-mono font-semibold text-indigo-700 dark:text-indigo-400 text-xs whitespace-nowrap">' + esc(i.sku) + '</td>'
         + '<td class="px-3 py-2 font-medium">' + esc(i.name) + '</td>'
@@ -214,78 +610,351 @@
     var totalDocs = filtered.reduce(function(s,i){return s+i.docCount;},0);
     var totalUnits = filtered.reduce(function(s,i){return s+i.total;},0);
     var totalBins = filtered.reduce(function(s,i){return s+i.binCount;},0);
-    statSkus.textContent = filtered.length.toLocaleString();
-    statUnits.textContent = totalUnits.toLocaleString();
-    statBins.textContent = totalBins.toLocaleString();
-    statDocs.textContent = totalDocs.toLocaleString();
+    D('stat-skus').textContent = filtered.length.toLocaleString();
+    D('stat-units').textContent = totalUnits.toLocaleString();
+    D('stat-bins').textContent = totalBins.toLocaleString();
+    D('stat-docs').textContent = totalDocs.toLocaleString();
   }
 
-  // ── Firestore live sync ──
-  var unsub = null;
-  function startSync() {
-    if (unsub) unsub();
-    unsub = db.collection('inventory').onSnapshot(function(snap){
-      aggregate(snap);
-      render();
-    }, function(err) {
-      console.error('Sync error:', err);
-      toast('DB sync error: ' + (err.message || err.code), 'error');
-    });
-  }
-
-  // ── Auth ──
-  auth.onAuthStateChanged(function(user) {
-    if (user) {
-      loginOverlay.classList.add('hidden');
-      userBadge.classList.remove('hidden');
-      userBadge.textContent = user.email;
-      btnLogout.classList.remove('hidden');
-      startSync();
-    } else {
-      loginOverlay.classList.remove('hidden');
-      userBadge.classList.add('hidden');
-      btnLogout.classList.add('hidden');
-      if (unsub) { unsub(); unsub=null; }
-      items = [];
-      render();
-    }
+  D('search-input').addEventListener('input', function(){
+    stockFilter = D('search-input').value.trim();
+    renderStock();
   });
 
-  // ── Login form ──
-  loginForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    var email = loginEmail.value.trim(), pw = loginPassword.value;
-    loginError.classList.add('hidden');
-    loginBtn.textContent = 'Signing in…'; loginBtn.disabled = true;
-    auth.signInWithEmailAndPassword(email, pw)
-      .catch(function(err) {
-        var msgs = { 'auth/user-not-found':'No account found.', 'auth/wrong-password':'Incorrect password.', 'auth/invalid-email':'Invalid email.', 'auth/too-many-requests':'Too many attempts. Try later.' };
-        loginError.textContent = msgs[err.code] || err.message;
-        loginError.classList.remove('hidden');
-      })
-      .finally(function() { loginBtn.textContent='Sign In'; loginBtn.disabled=false; });
-  });
-
-  btnLogout.addEventListener('click', function() { auth.signOut(); });
-
-  // ── Search ──
-  searchInput.addEventListener('input', function() {
-    FILTER = searchInput.value.trim();
-    render();
-  });
-
-  // ── Print ──
-  btnPrint.addEventListener('click', function() {
+  D('btn-print').addEventListener('click', function(){
     var div = document.createElement('div');
     div.style.cssText = 'position:fixed;top:0;left:0;width:100%;visibility:hidden;';
     div.innerHTML = '<p class="print-date">Logsheet printed: ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' GMT</p>' + D('dashboard-table').outerHTML;
     document.body.appendChild(div);
     window.print();
-    setTimeout(function(){div.remove();}, 200);
+    setTimeout(function(){ div.remove(); }, 200);
   });
 
-  // ── Password visibility for mobile ──
-  loginPassword.addEventListener('input', function() { loginError.classList.add('hidden'); });
+  /* ================================================================
+     PANE 2 — TASK WIZARD (OCR, Search & Count, Putaway, Transfer)
+     ================================================================ */
+
+  // OCR Camera
+  D('ocr-toggle-sku').addEventListener('click', function(){ ocrTarget='sku'; D('ocr-status').textContent='→ SKU'; D('ocr-toggle-sku').classList.add('bg-indigo-100'); D('ocr-toggle-loc').classList.remove('bg-indigo-100'); });
+  D('ocr-toggle-loc').addEventListener('click', function(){ ocrTarget='loc'; D('ocr-status').textContent='→ Location'; D('ocr-toggle-loc').classList.add('bg-indigo-100'); D('ocr-toggle-sku').classList.remove('bg-indigo-100'); });
+
+  function stopCamera(){
+    if (cameraStream) { cameraStream.getTracks().forEach(function(t){ t.stop(); }); cameraStream = null; }
+    D('camera-video').classList.add('hidden'); D('btn-capture').classList.add('hidden'); D('btn-camera-close').classList.add('hidden');
+  }
+  D('btn-camera-close').addEventListener('click', stopCamera);
+
+  function startCamera(){
+    stopCamera();
+    navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } })
+      .then(function(stream){
+        cameraStream = stream; D('camera-video').srcObject = stream;
+        D('camera-video').classList.remove('hidden'); D('btn-capture').classList.remove('hidden'); D('btn-camera-close').classList.remove('hidden');
+      })
+      .catch(function(e){ toast('Camera error: '+e.message,'error'); });
+  }
+  D('ocr-toggle-sku').addEventListener('dblclick', startCamera);
+  D('ocr-toggle-loc').addEventListener('dblclick', startCamera);
+
+  D('btn-capture').addEventListener('click', function(){
+    var vid = D('camera-video'), cnv = D('camera-canvas');
+    if (!vid.srcObject) { toast('No camera active','error'); return; }
+    cnv.width = vid.videoWidth; cnv.height = vid.videoHeight;
+    var ctx = cnv.getContext('2d'); ctx.drawImage(vid, 0, 0, cnv.width, cnv.height);
+    var dataUrl = cnv.toDataURL('image/png');
+    D('ocr-status').textContent = 'OCR running…';
+    Tesseract.recognize(dataUrl, 'eng', { logger: function(m){ if (m.status === 'recognizing text') D('ocr-status').textContent = 'OCR ' + (Math.round(m.progress*100)) + '%'; } })
+      .then(function(r){
+        var txt = (r.data.text || '').trim();
+        if (ocrTarget === 'sku') {
+          var m = txt.match(/[A-Z0-9\-_.]{2,60}/i);
+          D('count-sku').value = m ? m[0].toUpperCase() : txt.substr(0,60);
+        } else {
+          var parts = txt.split(/[\s,\-|\/]+/).filter(Boolean).map(function(s){ return s.trim().toUpperCase(); });
+          if (parts.length >= 4) { D('pa-room').value=parts[0]; D('pa-aisle').value=parts[1]; D('pa-bay').value=parts[2]; D('pa-bin').value=parts[3]; }
+          else if (parts.length >= 1) { var p0=parts[0]; if (p0.match(/^[A-Z]\d?/)) D('pa-aisle').value=p0; else D('pa-room').value=p0; }
+          D('pa-sku').value = D('count-sku').value;
+        }
+        D('ocr-status').textContent = 'OK ✓'; toast('OCR captured','success'); stopCamera();
+      })
+      .catch(function(e){ D('ocr-status').textContent = 'FAIL'; toast('OCR failed: '+e.message,'error'); });
+  });
+
+  // ── Search & Count ──
+  D('btn-count-search').addEventListener('click', function(){
+    var sku = S(D('count-sku').value);
+    if (!sku) { toast('Enter a SKU','error'); return; }
+    var name = (D('count-name').value || '').trim() || 'Unknown-'+sku;
+
+    db.collection('inventory').where('sku','==',sku).get()
+      .then(function(snap){
+        var locs = [];
+        snap.forEach(function(d){
+          locs.push({ id:d.id, room:d.data().room||'', aisle:d.data().aisle||'', bay:d.data().bay||'', bin:d.data().bin||'', qty:Number(d.data().quantity)||0, sku:d.data().sku, name:d.data().item_name||d.data().name||name });
+        });
+        var el = D('count-results'); el.classList.remove('hidden');
+        if (!locs.length) {
+          D('count-title').textContent = sku + ' — no existing bin records (use Putaway tab)';
+          D('count-locs').innerHTML = '';
+        } else {
+          D('count-title').textContent = sku + ' (' + (locs[0].name || '') + ') — ' + locs.length + ' bin record(s)';
+          D('count-locs').innerHTML = locs.map(function(l){
+            var safeId = l.id.replace(/[^a-zA-Z0-9_]/g,'_');
+            return '<div class="flex items-center gap-2 flex-wrap bg-slate-50 dark:bg-slate-700/50 rounded-lg p-2 border border-slate-200 dark:border-slate-600">'
+              + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[120px]">R'+(l.room||'-')+'-A'+(l.aisle||'-')+'-B'+(l.bay||'-')+'-B'+(l.bin||'-')+'</span>'
+              + '<span class="text-xs text-slate-500">Qty recorded:</span>'
+              + '<input id="lq-' + safeId + '" type="number" min="0" value="'+l.qty+'" class="w-20 px-2 py-1.5 rounded-lg border border-slate-300 mono text-sm text-center font-bold" />'
+              + '<button onclick="verifyOne(\''+l.id+'\','+l.qty+',\''+l.sku+'\',\''+(l.name||'').replace(/'/g,"\\'")+'\')" class="px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-200 transition">OK</button>'
+              + '</div>';
+          }).join('');
+        }
+      })
+      .catch(function(e){ toast('DB error: '+e.message,'error'); });
+  });
+
+  window.verifyOne = function(id, oldQty, sku, name){
+    var elId = 'lq-' + id.replace(/[^a-zA-Z0-9_]/g,'_');
+    var inp = document.getElementById(elId);
+    var newQty = Math.max(0, parseInt(inp.value,10)||0);
+    if (isNaN(newQty)) { toast('Invalid qty','error'); return; }
+    db.runTransaction(function(tx){
+      return tx.get(db.collection('inventory').doc(id)).then(function(doc){
+        if (!doc.exists) throw new Error('Doc '+id+' vanished');
+        var q = Math.max(0, Number(doc.data().quantity)||0);
+        tx.update(doc.ref, { quantity:newQty, updated_at:firebase.firestore.FieldValue.serverTimestamp() });
+        if (newQty !== q) {
+          var logRef = db.collection('discrepancies').doc();
+          tx.set(logRef, { inventory_id:id, sku:sku, name:name, expected_qty:q, actual_qty:newQty, variance:newQty-q, worker_uid:auth.currentUser.uid, timestamp:firebase.firestore.FieldValue.serverTimestamp() });
+        }
+      });
+    }).then(function(){ toast(id.substr(0,12)+'… updated to '+newQty,'success'); inp.value = newQty; })
+    .catch(function(e){ toast('Tx failed: '+e.message,'error'); });
+  };
+
+  // ── Putaway / Assign ──
+  D('btn-putaway').addEventListener('click', function(){
+    var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
+    var sku = S(D('pa-sku').value), name = (D('pa-name').value || '').trim(), qty = Math.max(1, parseInt(D('pa-qty').value,10)||1);
+    if (!sku || !room || !aisle || !bay || !bin) { toast('Fill all SKU + Room/Aisle/Bay/Bin','error'); return; }
+    if (!name) { toast('Item name required for new SKU','error'); return; }
+
+    var docId = normId(sku, room, aisle, bay, bin);
+    var ref = db.collection('inventory').doc(docId);
+    db.runTransaction(function(tx){
+      return tx.get(ref).then(function(doc){
+        var oldQty = doc.exists ? Math.max(0, Number(doc.data().quantity)||0) : 0;
+        var newQty = oldQty + qty;
+        tx.set(ref, { sku:sku, item_name:name, room:room, aisle:aisle, bay:bay, bin:bin, quantity:newQty, updated_at:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+        document.querySelectorAll('#wizard-putaway input').forEach(function(i){ i.value=''; });
+        D('pa-qty').value = 1;
+      });
+    }).then(function(){ toast('Putaway OK: '+sku+' +'+qty+' → R'+room+'-A'+aisle+'-B'+bay+'-B'+bin,'success'); })
+    .catch(function(e){ toast('Tx error: '+e.message,'error'); });
+  });
+
+  // ── Bin-to-Bin Transfer ──
+  D('btn-transfer').addEventListener('click', function(){
+    var sRoom = S(D('tf-s-room').value), sAisle = S(D('tf-s-aisle').value), sBay = S(D('tf-s-bay').value), sBin = S(D('tf-s-bin').value);
+    var dRoom = S(D('tf-d-room').value), dAisle = S(D('tf-d-aisle').value), dBay = S(D('tf-d-bay').value), dBin = S(D('tf-d-bin').value);
+    var sku = S(D('tf-sku').value), name = (D('tf-name').value || '').trim(), qty = Math.max(1, parseInt(D('tf-qty').value,10)||1);
+    if (!sku || !sRoom || !sAisle || !sBay || !sBin || !dRoom || !dAisle || !dBay || !dBin) { toast('Fill all source + dest coordinates','error'); return; }
+    if (!name) { toast('Item name required','error'); return; }
+    if (sRoom===dRoom && sAisle===dAisle && sBay===dBay && sBin===dBin) { toast('Source == destination','error'); return; }
+
+    var srcId = normId(sku, sRoom, sAisle, sBay, sBin), dstId = normId(sku, dRoom, dAisle, dBay, dBin);
+    var srcRef = db.collection('inventory').doc(srcId), dstRef = db.collection('inventory').doc(dstId);
+    db.runTransaction(function(tx){
+      return tx.get(srcRef).then(function(srcDoc){
+        if (!srcDoc.exists || (Number(srcDoc.data().quantity)||0) < qty) throw new Error('Not enough stock at source (has '+(srcDoc.exists?(Number(srcDoc.data().quantity)||0):0)+')');
+        var srcQtyNow = Math.max(0, (Number(srcDoc.data().quantity)||0) - qty);
+        tx.update(srcRef, { quantity:srcQtyNow, updated_at:firebase.firestore.FieldValue.serverTimestamp() });
+        return tx.get(dstRef);
+      }).then(function(dstDoc){
+        var dstQtyNow = (dstDoc.exists ? Math.max(0, Number(dstDoc.data().quantity)||0) : 0) + qty;
+        tx.set(dstRef, { sku:sku, item_name:name, room:dRoom, aisle:dAisle, bay:dBay, bin:dBin, quantity:dstQtyNow, updated_at:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+        if (srcQtyNow <= 0) tx.delete(srcRef); else tx.update(srcRef, { quantity:srcQtyNow, updated_at:firebase.firestore.FieldValue.serverTimestamp() });
+        document.querySelectorAll('#wizard-transfer input').forEach(function(i){ i.value=''; });
+        D('tf-qty').value = 1;
+      });
+    }).then(function(){ toast('Transfer OK: '+qty+' '+sku+' moved','success'); })
+    .catch(function(e){ toast('Tx failed: '+e.message,'error'); });
+  });
+
+  /* ================================================================
+     PANE 3 — BATCH ENTRY (keyboard firehose)
+     ================================================================ */
+  function buildBatchGrid(){
+    var html = '';
+    for (var i = 0; i < batchRows; i++) {
+      html += '<div class="batch-row grid grid-cols-7 gap-2 items-center px-1" data-row="'+i+'">'
+        + '<input data-col="sku"     class="mono px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="SKU" maxlength="60" autocapitalize="characters" spellcheck="false" />'
+        + '<input data-col="name"    class="px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Item name" maxlength="200" />'
+        + '<input data-col="room"    class="mono px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="R" maxlength="4" autocapitalize="characters" />'
+        + '<input data-col="aisle"   class="mono px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="A" maxlength="4" autocapitalize="characters" />'
+        + '<input data-col="bay"     class="mono px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="B" maxlength="4" autocapitalize="characters" />'
+        + '<input data-col="bin"     class="mono px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="B" maxlength="4" autocapitalize="characters" />'
+        + '<input data-col="qty"     class="mono px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs text-center font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Qty" type="number" min="1" value="1" />'
+        + '</div>';
+    }
+    D('batch-rows').innerHTML = html;
+
+    D('batch-rows').addEventListener('keydown', function(e){
+      if (e.key !== 'Enter') return;
+      var inp = e.target, row = inp.closest('.batch-row');
+      if (!row || inp.tagName !== 'INPUT') return;
+      e.preventDefault();
+
+      var isQty = inp.dataset.col === 'qty';
+      if (isQty) commitBatchRow(row);
+      else {
+        var inputs = Array.from(row.querySelectorAll('input'));
+        var idx = inputs.indexOf(inp);
+        if (idx < inputs.length - 1) { inputs[idx+1].focus(); inputs[idx+1].select(); }
+      }
+    });
+    window.__batchBuilt = true;
+  }
+
+  function getBatchRowData(row){
+    var d = { sku:'', name:'', room:'', aisle:'', bay:'', bin:'', qty:0 };
+    ['sku','name','room','aisle','bay','bin','qty'].forEach(function(c){
+      var inp = row.querySelector('[data-col="'+c+'"]');
+      if (inp) {
+        var v = inp.value;
+        if (c==='sku'||c==='room'||c==='aisle'||c==='bay'||c==='bin') d[c] = S(v);
+        else if (c==='name') d[c] = String(v).trim();
+        else if (c==='qty') d[c] = Math.max(1, parseInt(v,10)||1);
+      }
+    });
+    return d;
+  }
+
+  function commitBatchRow(row){
+    var d = getBatchRowData(row);
+    if (!d.sku || !d.room || !d.aisle || !d.bay || !d.bin) { toast('Fill all position fields','error'); return; }
+    if (!d.name) { toast('Item name required','error'); return; }
+
+    var docId = normId(d.sku, d.room, d.aisle, d.bay, d.bin);
+    var ref = db.collection('inventory').doc(docId);
+
+    batchPending++; D('stat-pending').textContent = batchPending;
+    row.querySelectorAll('input').forEach(function(i){ i.disabled=true; i.classList.add('bg-green-50','dark:bg-green-900/20'); });
+
+    db.runTransaction(function(tx){
+      return tx.get(ref).then(function(doc){
+        var oldQty = doc.exists ? Math.max(0, Number(doc.data().quantity)||0) : 0;
+        var newQty = oldQty + d.qty;
+        tx.set(ref, { sku:d.sku, item_name:d.name, room:d.room, aisle:d.aisle, bay:d.bay, bin:d.bin, quantity:newQty, updated_at:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+        addBatchAudit(docId.substr(0,8)+'… +'+d.qty+' ('+oldQty+'→'+newQty+')');
+      });
+    }).then(function(){
+      batchCommitted++; batchPending--;
+      D('stat-committed').textContent = batchCommitted;
+      D('stat-pending').textContent = batchPending;
+      D('stat-last').textContent = d.sku;
+
+      row.querySelectorAll('input').forEach(function(i){ i.disabled=false; i.classList.remove('bg-green-50','dark:bg-green-900/20'); });
+      ['sku','name','room','aisle','bay','bin','qty'].forEach(function(c){
+        var inp = row.querySelector('[data-col="'+c+'"]');
+        if (inp) { if (c==='qty') inp.value=1; else inp.value=''; }
+      });
+
+      var ri = parseInt(row.dataset.row,10);
+      if (ri < batchRows-1) {
+        var nxt = D('batch-rows').querySelector('.batch-row[data-row="'+(ri+1)+'"] input[data-col="sku"]');
+        if (nxt) { nxt.focus(); nxt.select(); }
+      } else {
+        var top = D('batch-rows').querySelector('.batch-row[data-row="0"] input[data-col="sku"]');
+        if (top) { top.focus(); top.select(); }
+        toast('Wrapped to top row','info');
+      }
+    }).catch(function(e){
+      batchPending--; D('stat-pending').textContent = batchPending;
+      row.querySelectorAll('input').forEach(function(i){ i.disabled=false; i.classList.remove('bg-green-50','dark:bg-green-900/20'); });
+      toast('Tx failed: '+e.message,'error');
+    });
+  }
+
+  function addBatchAudit(line){
+    var div = document.createElement('div');
+    div.textContent = (batchAuditCount+1) + '. ' + line;
+    D('audit-log').prepend(div);
+    batchAuditCount++;
+    D('audit-count').textContent = batchAuditCount;
+  }
+
+  function commitAllBatch(){
+    var all = Array.from(D('batch-rows').querySelectorAll('.batch-row'));
+    all.forEach(function(row){
+      var inp = row.querySelector('input[data-col="sku"]');
+      if (inp && inp.value.trim() && !inp.disabled) commitBatchRow(row);
+    });
+  }
+  D('btn-commit-all').addEventListener('click', commitAllBatch);
+  D('btn-clear').addEventListener('click', function(){
+    D('batch-rows').querySelectorAll('input').forEach(function(i){ i.value=''; i.disabled=false; i.classList.remove('bg-green-50','dark:bg-green-900/20'); });
+    var top = D('batch-rows').querySelector('.batch-row[data-row="0"] input[data-col="sku"]');
+    if (top) top.focus();
+    toast('Grid cleared','info');
+  });
+
+  /* ================================================================
+     PANE 4 — BIN SETUP / QR CODE GRID
+     ================================================================ */
+  function addQrToGrid(){
+    var sku = S(D('qr-sku').value), room = S(D('qr-room').value), aisle = S(D('qr-aisle').value), bay = S(D('qr-bay').value), bin = S(D('qr-bin').value);
+    if (!sku || !room || !aisle || !bay || !bin) { toast('Fill all fields','error'); return; }
+
+    var docId = normId(sku, room, aisle, bay, bin);
+    var url = window.location.origin + window.location.pathname + '?tab=wizard&sku=' + encodeURIComponent(sku) + '&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin) + '&subtab=count';
+
+    qrItems.push({ docId: docId, url: url, label: sku + ' @ R' + room + '-A' + aisle + '-B' + bay + '-B' + bin });
+    renderQrGrid();
+
+    // Clear inputs
+    D('qr-sku').value=''; D('qr-room').value=''; D('qr-aisle').value=''; D('qr-bay').value=''; D('qr-bin').value='';
+  }
+
+  function renderQrGrid(){
+    var grid = D('qr-grid');
+    grid.innerHTML = qrItems.map(function(item, idx){
+      var canvasId = 'qr-canvas-' + idx;
+      // Generate QR code asynchronously
+      setTimeout(function(){
+        try { new QRCode(document.getElementById(canvasId), { text: item.url, width: 96, height: 96, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+      }, 0);
+      return '<div class="qr-card">'
+        + '<canvas id="' + canvasId + '"></canvas>'
+        + '<div class="label">' + esc(item.label) + '</div>'
+        + '</div>';
+    }).join('');
+    D('qr-count').textContent = qrItems.length;
+  }
+
+  D('btn-qr-add').addEventListener('click', addQrToGrid);
+  D('btn-qr-print').addEventListener('click', function(){ window.print(); });
+  D('btn-qr-clear').addEventListener('click', function(){ qrItems = []; renderQrGrid(); toast('QR grid cleared','info'); });
+
+  /* ================================================================
+     INITIAL TAB FROM URL
+     ================================================================ */
+  (function initTabFromUrl(){
+    var params = new URLSearchParams(window.location.search);
+    var tab = params.get('tab') || 'stock';
+    var validTabs = ['stock','wizard','batch','bins'];
+    if (!validTabs.includes(tab)) tab = 'stock';
+    showTab(tab);
+  })();
+
+  /* ================================================================
+     PWA SERVICE WORKER REGISTRATION
+     ================================================================ */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+        .catch(function(e){ console.warn('SW registration failed:', e); });
+    });
+  }
   </script>
 </body>
 </html>
