@@ -157,27 +157,43 @@
             const qty = parseFloat(d.quantity || 0);
             
             if (d.room !== undefined || d.bin !== undefined) {
-               // New explicit 4-field schema
+               // New explicit 4-field schema — each doc is one physical bin allocation
                const locStr = `${d.room || '-'}-${d.aisle || '-'}-${d.bay || '-'}-${d.bin || '-'}`;
                item.totalStock += qty;
                item.buildingStock += qty; // Assume explicit bins are in Building
                item._bins.add(locStr);
+               // Also track in locationStock so locStock()/totalStockFromLocs() stay
+               // consistent across mixed explicit+legacy doc sets.
+               if (item.locationStock === undefined) item.locationStock = {};
+               item.locationStock[locStr] = (item.locationStock[locStr] || 0) + qty;
             } else {
-               // Legacy flat document schema
-               item.totalStock = d.totalStock || 0;
-               item.buildingStock = d.buildingStock || 0;
-               item.depotStock = d.depotStock || 0;
-               
-               if (d.locationStock) {
-                 item.locationStock = d.locationStock;
-                 Object.keys(item.locationStock).forEach(k => {
-                   if (k !== LOC_DEPOT && k !== LOC_BUILDING) {
-                     item._bins.add(k);
+               // Legacy / aggregated document — ACCUMULATE (never assign) so that
+               // multiple docs sharing the same SKU don't overwrite each other.
+               if (item.locationStock === undefined) item.locationStock = {};
+
+               if (d.locationStock && typeof d.locationStock === 'object') {
+                 // Per-location map: iterate and accumulate each bin's quantity
+                 for (const [k, v] of Object.entries(d.locationStock)) {
+                   const num = Math.max(0, Number(v) || 0);
+                   item.locationStock[k] = (item.locationStock[k] || 0) + num;
+                   if (k === LOC_DEPOT) {
+                     item.depotStock += num;
+                   } else {
+                     item.buildingStock += num;
+                     if (k !== LOC_BUILDING) item._bins.add(k);
                    }
-                 });
+                 }
                } else {
-                 item.locationStock = undefined; // Important: triggers legacy totalStock fallback
+                 // No locationStock map — use scalar buildingStock/depotStock fields
+                 const bQty = Math.max(0, Number(d.buildingStock) || 0);
+                 const dQty = Math.max(0, Number(d.depotStock) || 0);
+                 item.buildingStock += bQty;
+                 item.depotStock   += dQty;
+                 item.locationStock[LOC_BUILDING] = (item.locationStock[LOC_BUILDING] || 0) + bQty;
+                 item.locationStock[LOC_DEPOT]    = (item.locationStock[LOC_DEPOT]    || 0) + dQty;
                }
+               // Always add depot to totalStock (building was already added in the map branch)
+               item.totalStock = item.buildingStock + item.depotStock;
             }
           });
 
@@ -1176,11 +1192,17 @@
       const ceiling = totalStockFromLocs(item);
       const clampedBuilding = Math.min(num, ceiling);
       const newDepot = Math.max(0, ceiling - clampedBuilding);
-      ls[LOC_BUILDING] = clampedBuilding;
+      // Compute the "building" key value = total building minus explicit bin quantities
+      let explicitBinSum = 0;
+      for (const [k, v] of Object.entries(ls)) {
+        if (k !== LOC_DEPOT && k !== LOC_BUILDING) explicitBinSum += Math.max(0, Number(v) || 0);
+      }
+      ls[LOC_BUILDING] = Math.max(0, clampedBuilding - explicitBinSum);
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
       item.buildingStock = clampedBuilding;
       item.depotStock = newDepot;
+      item.totalStock = clampedBuilding + newDepot;
     } else if (field === 'depotStock') {
       const ls = { ...(item.locationStock || {}) };
       const cur = locStock(item, LOC_DEPOT);
@@ -1188,11 +1210,16 @@
       const ceiling = totalStockFromLocs(item);
       const clampedDepot = Math.min(num, ceiling);
       const newBuilding = Math.max(0, ceiling - clampedDepot);
+      let explicitBinSum = 0;
+      for (const [k, v] of Object.entries(ls)) {
+        if (k !== LOC_DEPOT && k !== LOC_BUILDING) explicitBinSum += Math.max(0, Number(v) || 0);
+      }
       ls[LOC_DEPOT] = clampedDepot;
-      ls[LOC_BUILDING] = newBuilding;
+      ls[LOC_BUILDING] = Math.max(0, newBuilding - explicitBinSum);
       item.locationStock = ls;
       item.depotStock = clampedDepot;
       item.buildingStock = newBuilding;
+      item.totalStock = newBuilding + clampedDepot;
     } else if (field === 'totalStock') {
       const currentTotal = totalStockFromLocs(item);
       if (currentTotal === num) return;
@@ -1202,11 +1229,25 @@
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
       item.depotStock = newDepot;
+      item.totalStock = num;
     } else {
       if (item[field] === num) return;
       item[field] = num;
     }
-    DAL.saveOne(item);
+
+    // Build a clean write payload — only building/depot keys in locationStock.
+    // Firestore set({merge:true}) does a nested map merge, so existing per-bin
+    // keys in the doc are preserved while building/depot values are updated.
+    // This prevents writing explicit-bin-quantities (tracked by their own docs)
+    // into the single aggregated doc, which would cause double-counting on re-sync.
+    const writeItem = { ...item };
+    if (writeItem.locationStock && typeof writeItem.locationStock === 'object') {
+      const cleanLS = {};
+      if (typeof writeItem.locationStock[LOC_BUILDING] === 'number') cleanLS[LOC_BUILDING] = writeItem.locationStock[LOC_BUILDING];
+      if (typeof writeItem.locationStock[LOC_DEPOT]    === 'number') cleanLS[LOC_DEPOT]    = writeItem.locationStock[LOC_DEPOT];
+      writeItem.locationStock = cleanLS;
+    }
+    DAL.saveOne(writeItem);
 
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
@@ -1276,11 +1317,16 @@
       const ceiling = totalStockFromLocs(item);
       const clampedBuilding = Math.min(num, ceiling);
       const newDepot = Math.max(0, ceiling - clampedBuilding);
-      ls[LOC_BUILDING] = clampedBuilding;
+      let explicitBinSum = 0;
+      for (const [k, v] of Object.entries(ls)) {
+        if (k !== LOC_DEPOT && k !== LOC_BUILDING) explicitBinSum += Math.max(0, Number(v) || 0);
+      }
+      ls[LOC_BUILDING] = Math.max(0, clampedBuilding - explicitBinSum);
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
       item.buildingStock = clampedBuilding;
       item.depotStock = newDepot;
+      item.totalStock = clampedBuilding + newDepot;
     } else if (field === 'totalStock') {
       const currentBuilding = locStock(item, LOC_BUILDING);
       const newDepot = Math.max(0, num - currentBuilding);
@@ -1288,10 +1334,20 @@
       ls[LOC_DEPOT] = newDepot;
       item.locationStock = ls;
       item.depotStock = newDepot;
+      item.totalStock = num;
     } else {
       item[field] = num;
     }
-    DAL.saveOne(item);
+
+    // Clean locationStock for write (preserve existing per-bin keys in the doc via merge)
+    const writeItem = { ...item };
+    if (writeItem.locationStock && typeof writeItem.locationStock === 'object') {
+      const cleanLS = {};
+      if (typeof writeItem.locationStock[LOC_BUILDING] === 'number') cleanLS[LOC_BUILDING] = writeItem.locationStock[LOC_BUILDING];
+      if (typeof writeItem.locationStock[LOC_DEPOT]    === 'number') cleanLS[LOC_DEPOT]    = writeItem.locationStock[LOC_DEPOT];
+      writeItem.locationStock = cleanLS;
+    }
+    DAL.saveOne(writeItem);
     renderDashboard();
     populateCategoryFilter();
     const row = dom.tableBody.querySelector(`tr[data-id="${id}"]`);
@@ -1371,7 +1427,19 @@
       item = { id: DAL.generateId(), ...merged, locationStock: mergedLS };
       State.items.push(item);
     }
-    if (item) result = DAL.saveOne(item);
+    if (item) {
+      // Clean locationStock for write — only building/depot keys.
+      // The aggregated item may contain explicit-bin keys (from mobile.html docs)
+      // that must NOT be written to this single doc (they'd double-count on re-sync).
+      const writeItem = { ...item };
+      if (writeItem.locationStock && typeof writeItem.locationStock === 'object') {
+        const cleanLS = {};
+        if (typeof writeItem.locationStock[LOC_BUILDING] === 'number') cleanLS[LOC_BUILDING] = writeItem.locationStock[LOC_BUILDING];
+        if (typeof writeItem.locationStock[LOC_DEPOT]    === 'number') cleanLS[LOC_DEPOT]    = writeItem.locationStock[LOC_DEPOT];
+        writeItem.locationStock = cleanLS;
+      }
+      result = DAL.saveOne(writeItem);
+    }
     State.editingId = null;
     applyFilters();
     renderDashboard();
