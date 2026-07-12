@@ -3524,7 +3524,6 @@
       }
     }
 
-    const unassigned = State.items.filter(i => !i.binCode && !i.archived);
 
     const grid = $('#bins-grid');
     grid.innerHTML = codes.map((code, idx) => {
