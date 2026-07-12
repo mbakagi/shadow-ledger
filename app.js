@@ -701,12 +701,16 @@
 
   // Get stock at a specific location for an item (0 if missing)
   function locStock(item, locId) {
-    if (!item.locationStock) return 0;
+    if (!item.locationStock) {
+      if (locId === LOC_BUILDING) return item.buildingStock || 0;
+      if (locId === LOC_DEPOT) return item.depotStock || 0;
+      return 0;
+    }
     if (locId === LOC_BUILDING) {
       // Building stock is the sum of all keys except depot
       let sum = 0;
       for (const [key, qty] of Object.entries(item.locationStock)) {
-        if (key !== LOC_DEPOT && key !== LOC_BUILDING) {
+        if (key !== LOC_DEPOT) {
           sum += Math.max(0, Number(qty) || 0);
         }
       }
@@ -718,11 +722,9 @@
   // Sum stock across all locations
   function totalStockFromLocs(item) {
     if (!item.locationStock) return item.totalStock || 0;
-    // Only sum actual physical locations (depot + specific bins)
-    // Avoid double counting if 'building' key happens to still exist in old records
     let sum = 0;
     for (const [key, qty] of Object.entries(item.locationStock)) {
-      if (key !== LOC_BUILDING) sum += Math.max(0, Number(qty) || 0);
+      sum += Math.max(0, Number(qty) || 0);
     }
     return sum;
   }
