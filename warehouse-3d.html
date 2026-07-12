@@ -296,7 +296,8 @@
         init3D();
         renderStats();
         document.getElementById('search-sku').disabled = false;
-        document.getElementById('search-sku').placeholder = 'Search SKU or bin code to highlight…';
+        document.getElementById('search-sku').placeholder = 'Search SKU or bin code to highlight.';
+        checkRouteQuery();
       }
     }, err => {
       info.innerHTML = `<div class="space-y-2"><p class="text-red-400 text-sm font-semibold">Database error</p><p class="text-red-300 text-xs">${esc(err.message)}</p></div>`;
@@ -980,6 +981,89 @@ function binColorFor(item) {
     camera.position.set(center.x, Math.max(8, size.y/2 + 4), size.z + size.length()*0.9);
     controls.target.set(center.x, center.y, center.z);
     controls.update();
+  }
+
+  // ───────────────────────────────────────────
+  // PICK PATH ROUTING
+  // ───────────────────────────────────────────
+  function generatePickRoute(skus) {
+    const waypoints = [];
+    
+    // Start at staging area (0,0)
+    const staging = new THREE.Vector3(0, 0, 0);
+    waypoints.push({ id: 'START (Staging)', point: staging, mesh: null });
+
+    skus.forEach(sku => {
+       const bins = binMeshes.filter(b => b.item && b.item.sku === sku);
+       if (bins.length === 0) return;
+       // Pick the first bin for simplicity
+       const targetBin = bins[0];
+       waypoints.push({ id: sku, point: targetBin.mesh.position.clone(), mesh: targetBin.mesh });
+    });
+
+    if (waypoints.length <= 1) {
+       toast('No physical bins found for the selected SKUs.');
+       return;
+    }
+
+    // Nearest Neighbor TSP
+    const unvisited = waypoints.slice(1);
+    const path = [waypoints[0]];
+    let current = waypoints[0];
+
+    while (unvisited.length > 0) {
+      let nearestIdx = -1;
+      let minDist = Infinity;
+      for (let i = 0; i < unvisited.length; i++) {
+        const dist = current.point.distanceTo(unvisited[i].point);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestIdx = i;
+        }
+      }
+      current = unvisited[nearestIdx];
+      path.push(current);
+      unvisited.splice(nearestIdx, 1);
+    }
+    
+    // Return to staging
+    path.push(waypoints[0]);
+
+    // Draw the 3D line
+    const points = path.map(p => new THREE.Vector3(p.point.x, p.point.y > 0 ? p.point.y : 0.1, p.point.z));
+    const mat = new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3 });
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geo, mat);
+    roomGroup.add(line);
+    
+    // Highlight waypoint meshes
+    path.forEach(p => {
+      if (p.mesh && p.mesh.material) {
+        p.mesh.material.emissive.setHex(0xf59e0b);
+        p.mesh.material.color.setHex(0xf59e0b);
+        highlightedMeshes.add(p.mesh);
+      }
+    });
+
+    toast(`Generated optimal pick path for ${skus.length} SKUs.`);
+  }
+
+  function checkRouteQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get('route');
+    if (!route) return;
+    
+    const ids = route.split(',');
+    
+    // Delay ensures binMeshes is fully populated by buildAllRooms
+    setTimeout(() => {
+      const skus = [];
+      ids.forEach(id => {
+         const item = inventory.find(i => i.id === id);
+         if (item) skus.push(item.sku);
+      });
+      generatePickRoute(skus);
+    }, 1500);
   }
 
   document.getElementById('btn-reset-view').addEventListener('click', () => { camera.position.set(35, 30, 35); controls.target.set(0, 4, 0); controls.update(); });

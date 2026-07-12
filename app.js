@@ -2862,6 +2862,11 @@
     // Manifest
     $('#btn-manifest').addEventListener('click', generateManifest);
     $('#btn-pick-sheet').addEventListener('click', generatePickSheet);
+    $('#btn-3d-route').addEventListener('click', () => {
+      if (State.selectedIds.size === 0) return toast('Select at least one item to route', 'error');
+      const ids = Array.from(State.selectedIds).join(',');
+      window.open(`warehouse-3d.html?route=${ids}`, '_blank');
+    });
     $('#btn-manifest-print').addEventListener('click', () => {
       const printWin = window.open('', '_blank', 'width=700,height=900');
       printWin.document.write(`<!DOCTYPE html><html><head><title>Carrier Manifest</title>
