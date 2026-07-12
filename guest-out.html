@@ -120,11 +120,22 @@
 
     function locStock(item, locId) {
       if (!item.locationStock) return 0;
+      if (locId === LOC_BUILDING) {
+        let sum = 0;
+        for (const [key, qty] of Object.entries(item.locationStock)) {
+          if (key !== LOC_DEPOT && key !== LOC_BUILDING) sum += Math.max(0, Number(qty) || 0);
+        }
+        return sum;
+      }
       return Math.max(0, Number(item.locationStock[locId]) || 0);
     }
     function totalStockFromLocs(item) {
       if (!item.locationStock) return item.totalStock || 0;
-      return Object.values(item.locationStock).reduce((s, v) => s + (Number(v) || 0), 0);
+      let sum = 0;
+      for (const [key, qty] of Object.entries(item.locationStock)) {
+        if (key !== LOC_BUILDING) sum += Math.max(0, Number(qty) || 0);
+      }
+      return sum;
     }
 
     const params = new URLSearchParams(location.search);
@@ -225,17 +236,31 @@
           if (!doc.exists) throw new Error('Item removed from inventory.');
           const data = doc.data();
           const ls = { ...(data.locationStock || {}) };
-          const ceiling = totalStockFromLocs(data);
-          const cur = ls[LOC_BUILDING] || 0;
-          const newBuilding = Math.max(0, cur - qty);
-          ls[LOC_BUILDING] = newBuilding;
-          ls[LOC_DEPOT]   = Math.max(0, ceiling - newBuilding);
+          
+          const cur = ls[loc] || 0;
+          const newQty = Math.max(0, cur - qty);
+          const actualDelta = cur - newQty; // how much was actually removed
+
+          if (newQty === 0 && actualDelta > 0) {
+             delete ls[loc]; // Clean up empty bins automatically
+          } else {
+             ls[loc] = newQty;
+          }
+          delete ls['building']; // cleanup legacy key
+
+          let newTotal = 0;
+          let newBuilding = 0;
+          for (const [k, v] of Object.entries(ls)) {
+            const num = Number(v) || 0;
+            newTotal += num;
+            if (k !== 'depot') newBuilding += num;
+          }
 
           const updatedData = {
             locationStock: ls,
             buildingStock: newBuilding,
-            depotStock:    ls[LOC_DEPOT] || 0,
-            totalStock:    ceiling,
+            depotStock:    Number(ls['depot']) || 0,
+            totalStock:    newTotal,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           };
           tx.set(itemRef, updatedData, { merge: true });

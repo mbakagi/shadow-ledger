@@ -155,26 +155,33 @@
 
         const data = doc.data();
         const ls = { ...(data.locationStock || {}) };
-        const ceiling = Object.values(ls).reduce((s, v) => s + (v || 0), 0);
-        const currentVal = ls[locId] || 0;
-        const rawNew = Math.max(0, currentVal + delta);
-        const newVal = Math.min(rawNew, ceiling);
-
+        
+        let targetLocId = locId;
         if (locId === 'building') {
-          ls['building'] = newVal;
-          ls['depot'] = Math.max(0, ceiling - newVal);
-        } else if (locId === 'depot') {
-          ls['depot'] = newVal;
-          ls['building'] = Math.max(0, ceiling - newVal);
-        } else {
-          ls[locId] = newVal;
+          const bins = Object.keys(ls).filter(k => k !== 'depot' && k !== 'building');
+          targetLocId = bins.length > 0 ? bins[0] : (data.binCode || 'UNASSIGNED_BIN');
+        }
+
+        const currentVal = Number(ls[targetLocId]) || 0;
+        const newVal = Math.max(0, currentVal + delta);
+        const actualDelta = newVal - currentVal;
+        
+        ls[targetLocId] = newVal;
+        delete ls['building']; // Cleanup legacy key
+
+        let newTotal = 0;
+        let newBuilding = 0;
+        for (const [k, v] of Object.entries(ls)) {
+          const qty = Number(v) || 0;
+          newTotal += qty;
+          if (k !== 'depot') newBuilding += qty;
         }
 
         const updatedData = {
           locationStock: ls,
-          buildingStock: ls['building'] || 0,
-          depotStock: ls['depot'] || 0,
-          totalStock: ceiling,
+          buildingStock: newBuilding,
+          depotStock: Number(ls['depot']) || 0,
+          totalStock: newTotal,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -184,17 +191,17 @@
           itemId: id,
           sku: data.sku || '',
           name: data.name || '',
-          qtyOut: Math.abs(delta),
+          qtyOut: Math.abs(actualDelta),
           type: 'adjust',
-          locationId: locId,
-          direction: delta < 0 ? 'out' : 'in',
+          locationId: targetLocId,
+          direction: actualDelta < 0 ? 'out' : 'in',
           remainingMap: ls,
           user: auth.currentUser?.email || 'unknown',
           userId: auth.currentUser?.uid || null,
           timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        return { locationStock: ls, buildingStock: updatedData.buildingStock, totalStock: updatedData.totalStock };
+        return { locationStock: ls, buildingStock: newBuilding, totalStock: newTotal };
       });
     },
 
@@ -333,32 +340,28 @@
       });
     },
 
-    // ─── WMS: Assign a bin and write all derived warehouse fields ───
-    // Single source of truth for bin writes — used by bins modal, warehouse-3d,
-    // and any future pick-path engine.
+    // ─── WMS: Assign a bin (adds to locationStock) ───
     assignBin(itemId, binCode) {
-      const parts      = String(binCode || '').split('-');
-      const isGeneral  = parts[0] === 'GENERAL';
-      const warehouseFields = isGeneral ? {} : {
-        warehouseRoom:  parts[0] || '',
-        warehouseAisle: parts[1] || '',
-        warehouseBay:   parseInt(parts[2], 10) || 0,
-        warehouseBin:   parseInt(parts[3], 10) || 0,
-        warehouseLevel: parts[4] || ''
-      };
+      if (!binCode) return Promise.resolve();
       return db.collection('inventory').doc(itemId).set({
-        binCode,
-        ...warehouseFields,
+        // Merge true does a deep merge, so it will add this key to the map without overwriting others
+        locationStock: { [binCode]: 0 },
+        // Null out legacy single-bin fields to prevent ghost data
+        binCode: firebase.firestore.FieldValue.delete(),
+        warehouseRoom: firebase.firestore.FieldValue.delete(),
+        warehouseAisle: firebase.firestore.FieldValue.delete(),
+        warehouseBay: firebase.firestore.FieldValue.delete(),
+        warehouseBin: firebase.firestore.FieldValue.delete(),
+        warehouseLevel: firebase.firestore.FieldValue.delete(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     },
 
-    clearBin(itemId) {
+    clearBin(itemId, binCode) {
+      if (!binCode) return Promise.resolve();
       return db.collection('inventory').doc(itemId).set({
-        binCode: '',
-        warehouseRoom: '', warehouseAisle: '',
-        warehouseBay: 0,  warehouseBin: 0, warehouseLevel: '',
-        reservedStock: 0,
+        // Delete the specific bin from the map
+        [`locationStock.${binCode}`]: firebase.firestore.FieldValue.delete(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     },
@@ -635,13 +638,29 @@
   // Get stock at a specific location for an item (0 if missing)
   function locStock(item, locId) {
     if (!item.locationStock) return 0;
+    if (locId === LOC_BUILDING) {
+      // Building stock is the sum of all keys except depot
+      let sum = 0;
+      for (const [key, qty] of Object.entries(item.locationStock)) {
+        if (key !== LOC_DEPOT && key !== LOC_BUILDING) {
+          sum += Math.max(0, Number(qty) || 0);
+        }
+      }
+      return sum;
+    }
     return Math.max(0, Number(item.locationStock[locId]) || 0);
   }
 
   // Sum stock across all locations
   function totalStockFromLocs(item) {
     if (!item.locationStock) return item.totalStock || 0;
-    return Object.values(item.locationStock).reduce((s, v) => s + (Number(v) || 0), 0);
+    // Only sum actual physical locations (depot + specific bins)
+    // Avoid double counting if 'building' key happens to still exist in old records
+    let sum = 0;
+    for (const [key, qty] of Object.entries(item.locationStock)) {
+      if (key !== LOC_BUILDING) sum += Math.max(0, Number(qty) || 0);
+    }
+    return sum;
   }
 
   // Get the friendly name of a location by id
@@ -896,11 +915,22 @@
     }
   }
 
+  // Extract all assigned bin codes for an item
+  function getItemBins(item) {
+    if (!item.locationStock) return [];
+    return Object.keys(item.locationStock).filter(k => k !== LOC_DEPOT && k !== LOC_BUILDING);
+  }
+
   function renderRow(item) {
-    const depot   = depotStock(item);
+    const depot   = locStock(item, LOC_DEPOT); // Use updated locStock instead of deprecated depotStock function
     const cAlert  = needsCarrier(item);
     const pAlert  = needsProcurement(item);
-    const gzWarn  = needsGoldenZoneWarning(item);
+    const bins    = getItemBins(item);
+    const primaryBin = bins.length > 0 ? bins[0] : (item.binCode || '—');
+    const binLabel = bins.length > 1 ? `${primaryBin} (+${bins.length - 1} more)` : primaryBin;
+    
+    // Check if any bin is a golden zone violation (for the warning)
+    const gzWarn  = isHighVelocity(item) && bins.length > 0 && !bins.some(isGoldenZone);
     const rowClass = [cAlert ? 'row-carrier' : '', pAlert ? 'row-procure' : '', gzWarn ? 'row-golden-zone' : ''].join(' ').trim();
 
     const buildingNow = locStock(item, LOC_BUILDING);
@@ -923,8 +953,8 @@
     const depotCls   = stockColor(depot, undefined);
 
     const binCell = gzWarn
-      ? `<span class="text-red-600 dark:text-red-400 font-bold" title="High-velocity item not in Golden Zone (Levels 2-4)">${esc(item.binCode)}</span><span class="ml-1 inline-block w-2 h-2 rounded-full bg-red-500"></span>`
-      : esc(item.binCode || '—');
+      ? `<span class="text-red-600 dark:text-red-400 font-bold" title="High-velocity item not in Golden Zone (Levels 2-4)">${esc(binLabel)}</span><span class="ml-1 inline-block w-2 h-2 rounded-full bg-red-500"></span>`
+      : esc(binLabel);
 
     return `
       <tr class="group hover:bg-gray-50/80 dark:hover:bg-surface-700/30 transition-colors ${rowClass}" data-id="${item.id}">
@@ -1210,8 +1240,23 @@
     const item = State.items.find(i => i.id === id);
     if (!item) return;
 
+    let targetLoc = LOC_BUILDING;
+    const bins = getItemBins(item);
+    if (bins.length > 1) {
+      const binList = bins.map((b, i) => `${i + 1}: ${b} (Qty: ${item.locationStock[b]})`).join('\n');
+      const pick = window.prompt(`This item is in multiple bins. Which bin do you want to adjust?\n\n${binList}\n\nEnter the number (1-${bins.length}):`);
+      if (!pick) return; // Cancelled
+      const idx = parseInt(pick, 10) - 1;
+      if (idx >= 0 && idx < bins.length) {
+        targetLoc = bins[idx];
+      } else {
+        toast('Invalid selection', 'error');
+        return;
+      }
+    }
+
     try {
-      const result = await DAL.adjustStockAtomic(id, delta, LOC_BUILDING);
+      const result = await DAL.adjustStockAtomic(id, delta, targetLoc);
       item.locationStock = result.locationStock;
       item.buildingStock = result.buildingStock;
       item.totalStock = result.totalStock;
@@ -3449,7 +3494,8 @@
 
   function openBinsModal() {
     const mode = getBinMode();
-    const existingBins = new Set(State.items.filter(i => i.binCode).map(i => i.binCode));
+    const existingBins = new Set();
+    State.items.forEach(i => getItemBins(i).forEach(b => existingBins.add(b)));
     let codes = [];
 
     if (mode === 'general') {
@@ -3506,31 +3552,34 @@
       </div>`;
     }).join('') + (codes.length === 0 ? '<p class="col-span-full text-gray-400 text-xs">No codes generated</p>' : '');
 
+    // "Unassigned" logic is now: items that have 0 bins
+    const unassigned = State.items.filter(i => getItemBins(i).length === 0 && !i.archived);
+
     const free = codes.filter(c => !existingBins.has(c));
     $('#bins-stats').textContent = `${free.length} free · ${codes.length - free.length} taken · ${unassigned.length} items without bins`;
 
     grid.querySelectorAll('.bin-cell.bin-free').forEach(cell => {
       cell.addEventListener('click', async () => {
-        if (unassigned.length === 0) { toast('No items without bins', 'info'); return; }
-        const item = unassigned.shift();
         const binCode = cell.dataset.bincode;
-        // Write binCode + all derived WMS warehouse fields (REP-003 §4.2)
-        const parts = String(binCode).split('-');
-        const isGeneral = parts[0] === 'GENERAL';
-        item.binCode = binCode;
-        if (!isGeneral) {
-          item.warehouseRoom  = parts[0] || '';
-          item.warehouseAisle = parts[1] || '';
-          item.warehouseBay   = parseInt(parts[2], 10) || 0;
-          item.warehouseBin   = parseInt(parts[3], 10) || 0;
-          item.warehouseLevel = parts[4] || '';
+        const skuInput = window.prompt(`Enter the exact SKU to assign to bin ${binCode}:\n(Type SKU carefully, case-insensitive)`);
+        if (!skuInput) return;
+        
+        const targetSku = skuInput.trim().toUpperCase();
+        const item = State.items.find(i => i.sku.toUpperCase() === targetSku);
+        if (!item) {
+          toast(`SKU "${targetSku}" not found in inventory.`, 'error');
+          return;
         }
-        await DAL.saveOne(item);
+
+        await DAL.assignBin(item.id, binCode);
+        
         cell.classList.remove('bin-free');
         cell.classList.add('bin-taken');
         cell.querySelector('span:last-child').textContent = 'assigned';
         toast(`${item.sku} → ${binCode}`, 'success');
-        $('#bins-stats').textContent = `${free.length - 1 ? 'more' : 'no more'} free · ${unassigned.length} items without bins`;
+        
+        const newUnassignedCount = State.items.filter(i => getItemBins(i).length === 0 && !i.archived).length;
+        $('#bins-stats').textContent = `${free.length - 1 ? 'more' : 'no more'} free · ${newUnassignedCount} items without bins`;
       });
     });
 

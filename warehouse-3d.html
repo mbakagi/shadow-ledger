@@ -307,25 +307,29 @@
     warehouse.rooms = {};
 
     inventory.forEach(item => {
-      if (!item.binCode) return;
-      const parts = String(item.binCode).split('-');
+      if (!item.locationStock) return;
+      const bins = Object.keys(item.locationStock).filter(k => k !== 'depot' && k !== 'building');
+      
+      bins.forEach(binCode => {
+        const parts = String(binCode).split('-');
 
-      if (parts[0] === 'GENERAL') {
-        const roomKey = parts[1] || 'GENERAL';
-        if (!warehouse.rooms[roomKey]) warehouse.rooms[roomKey] = { _isGeneral: true, zones: new Set(), labels: new Map() };
-        if (parts[2]) warehouse.rooms[roomKey].zones.add(parts[2]);
-        warehouse.rooms[roomKey].labels.set(item.binCode, { item, code: item.binCode });
-        return;
-      }
-      // Format: ROOM-AISLE-BAY-BIN-LEVEL-ACTION
-      const [room, aisle, bayStr, binStr, level, action] = parts;
-      if (!room) return;
-      if (!warehouse.rooms[room]) warehouse.rooms[room] = { aisles: new Set(), bays: new Set(), bins: new Set(), levels: new Set(), items: new Map() };
-      if (aisle) warehouse.rooms[room].aisles.add(aisle);
-      if (bayStr) warehouse.rooms[room].bays.add(parseInt(bayStr,10) || 0);
-      if (binStr) warehouse.rooms[room].bins.add(parseInt(binStr,10) || 0);
-      if (level) warehouse.rooms[room].levels.add(level);
-      warehouse.rooms[room].items.set(item.binCode, { item, code: item.binCode });
+        if (parts[0] === 'GENERAL') {
+          const roomKey = parts[1] || 'GENERAL';
+          if (!warehouse.rooms[roomKey]) warehouse.rooms[roomKey] = { _isGeneral: true, zones: new Set(), labels: new Map() };
+          if (parts[2]) warehouse.rooms[roomKey].zones.add(parts[2]);
+          warehouse.rooms[roomKey].labels.set(binCode, { item, code: binCode });
+          return;
+        }
+        // Format: ROOM-AISLE-BAY-BIN-LEVEL-ACTION
+        const [room, aisle, bayStr, binStr, level, action] = parts;
+        if (!room) return;
+        if (!warehouse.rooms[room]) warehouse.rooms[room] = { aisles: new Set(), bays: new Set(), bins: new Set(), levels: new Set(), items: new Map() };
+        if (aisle) warehouse.rooms[room].aisles.add(aisle);
+        if (bayStr) warehouse.rooms[room].bays.add(parseInt(bayStr,10) || 0);
+        if (binStr) warehouse.rooms[room].bins.add(parseInt(binStr,10) || 0);
+        if (level) warehouse.rooms[room].levels.add(level);
+        warehouse.rooms[room].items.set(binCode, { item, code: binCode });
+      });
     });
 
     // If no rooms exist, seed one example so user sees structure
