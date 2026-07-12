@@ -1090,7 +1090,7 @@
       </div>
 
       <!-- Form -->
-      <form id="login-form">
+      <form id="login-form" onsubmit="return false">
         <div style="margin-bottom:14px;">
           <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.08em;">Email Address</label>
           <input id="login-email" type="email" placeholder="yourname@company.com" required autocomplete="email"
@@ -1113,7 +1113,7 @@
         <div id="login-error" style="display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);
              border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:#fca5a5;"></div>
 
-        <button type="submit" id="login-btn"
+        <button type="button" id="login-btn"
           style="width:100%; padding:15px; background:linear-gradient(135deg,#6366f1,#9333ea); border:none;
                  border-radius:12px; color:white; font-size:15px; font-weight:700; cursor:pointer;
                  transition:opacity 0.2s, transform 0.1s; box-shadow:0 4px 20px rgba(99,102,241,0.4);

@@ -660,32 +660,36 @@ items.forEach(item => {
     });
 
     // ─── Login form ───
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
+    document.getElementById('login-form').addEventListener('submit', (e) => { e.preventDefault(); });
+    document.getElementById('login-btn').addEventListener('click', async () => {
       const email    = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
       const errEl    = document.getElementById('login-error');
       const btn      = document.getElementById('login-btn');
 
+      if (!email || !password) { errEl.textContent = 'Enter email and password'; errEl.style.display = 'block'; return; }
       errEl.style.display = 'none';
       btn.textContent = 'Signing in…';
       btn.disabled = true;
 
-      try {
-        await auth.signInWithEmailAndPassword(email, password);
-      } catch (err) {
-        const msgs = {
-          'auth/user-not-found':  'No account found with this email.',
-          'auth/wrong-password':  'Incorrect password.',
-          'auth/invalid-email':   'Please enter a valid email address.',
-          'auth/too-many-requests': 'Too many failed attempts. Try again later.',
-        };
-        errEl.textContent = msgs[err.code] || err.message;
-        errEl.style.display = 'block';
-      } finally {
-        btn.textContent = 'Sign In to St3s';
-        btn.disabled = false;
-      }
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          btn.textContent = 'Signed in ✓';
+          setTimeout(() => { btn.textContent = 'Sign In'; btn.disabled = false; }, 600);
+        })
+        .catch(err => {
+          const msgs = {
+            'auth/user-not-found':  'No account found with this email.',
+            'auth/wrong-password':  'Incorrect password.',
+            'auth/invalid-email':   'Please enter a valid email address.',
+            'auth/too-many-requests': 'Too many failed attempts. Try again later.',
+            'auth/invalid-credential': 'Invalid credentials.',
+            'auth/network-request-failed': 'Network error. Check connection.'
+          };
+          errEl.textContent = msgs[err.code] || err.message;
+          errEl.style.display = 'block';
+          btn.textContent = 'Sign In'; btn.disabled = false;
+        });
     });
 
     // Google sign-in

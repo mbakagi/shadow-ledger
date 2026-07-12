@@ -64,7 +64,7 @@
         <input id="login-password" type="password" placeholder="Password" required autocomplete="current-password"
                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
         <div id="login-error" class="text-red-500 text-xs font-semibold hidden"></div>
-        <button id="login-btn" type="submit"
+        <button id="login-btn" type="button"
                 class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition">Sign In</button>
       </form>
     </div>
@@ -619,16 +619,31 @@
   });
   D('login-form').addEventListener('submit', function(e){
     e.preventDefault();
+  });
+
+  D('login-btn').addEventListener('click', function(){
     var em = D('login-email').value.trim(), pw = D('login-password').value;
+    if (!em || !pw) { var el=D('login-error'); el.textContent = 'Enter email and password'; el.classList.remove('hidden'); return; }
     D('login-error').classList.add('hidden');
     var b = D('login-btn'); b.textContent = 'Signing in…'; b.disabled = true;
     auth.signInWithEmailAndPassword(em, pw)
+      .then(function(userCred){
+        b.textContent = 'Signed in ✓';
+        setTimeout(function(){ b.textContent = 'Sign In'; b.disabled = false; }, 800);
+      })
       .catch(function(err){
-        var msgs = { 'auth/user-not-found':'No account found.', 'auth/wrong-password':'Incorrect password.', 'auth/invalid-email':'Invalid email.', 'auth/too-many-requests':'Too many attempts. Try later.' };
+        var msgs = {
+          'auth/user-not-found':'No account found.',
+          'auth/wrong-password':'Incorrect password.',
+          'auth/invalid-email':'Invalid email.',
+          'auth/too-many-requests':'Too many attempts. Try later.',
+          'auth/invalid-credential':'Invalid credentials.',
+          'auth/network-request-failed':'Network error. Check connection.'
+        };
         D('login-error').textContent = msgs[err.code] || err.message;
         D('login-error').classList.remove('hidden');
-      })
-      .finally(function(){ b.textContent = 'Sign In'; b.disabled = false; });
+        b.textContent = 'Sign In'; b.disabled = false;
+      });
   });
   D('btn-logout').addEventListener('click', function(){ auth.signOut(); });
 

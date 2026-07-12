@@ -21,7 +21,7 @@
         <p class="text-slate-400">Warehouse Mobility Client</p>
       </div>
       <div id="login-container" class="space-y-4">
-        <form id="login-form" class="space-y-4">
+        <form id="login-form" class="space-y-4" onsubmit="return false">
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-1">Email</label>
             <input type="email" id="auth-email" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="worker@shadow.local">
@@ -30,7 +30,7 @@
             <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
             <input type="password" id="auth-pass" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="••••••••">
           </div>
-          <button type="submit" id="auth-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg px-4 py-3 transition shadow-lg mt-4">Sign In</button>
+          <button type="button" id="auth-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg px-4 py-3 transition shadow-lg mt-4">Sign In</button>
         </form>
 
         <div class="relative flex py-2 items-center">
@@ -306,25 +306,29 @@
     }
 
     // --- AUTH GATEWAY ---
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
+    document.getElementById('login-form').addEventListener('submit', (e) => { e.preventDefault(); });
+    document.getElementById('auth-btn').addEventListener('click', async () => {
       const email = document.getElementById('auth-email').value;
       const pass = document.getElementById('auth-pass').value;
       const btn = document.getElementById('auth-btn');
       const err = document.getElementById('auth-error');
-      
+
+      if (!email || !pass) { err.textContent = 'Enter email and password'; err.classList.remove('hidden'); return; }
       btn.textContent = 'Verifying...';
       btn.disabled = true;
       err.classList.add('hidden');
-      
-      try {
-        await signInWithEmailAndPassword(auth, email, pass);
-      } catch (error) {
-        err.textContent = error.message;
-        err.classList.remove('hidden');
-        btn.textContent = 'Sign In';
-        btn.disabled = false;
-      }
+
+      signInWithEmailAndPassword(auth, email, pass)
+        .then(() => {
+          btn.textContent = 'Signed in ✓';
+          setTimeout(() => { btn.textContent = 'Sign In'; btn.disabled = false; }, 600);
+        })
+        .catch(error => {
+          err.textContent = error.message;
+          err.classList.remove('hidden');
+          btn.textContent = 'Sign In';
+          btn.disabled = false;
+        });
     });
 
     document.getElementById('btn-google-login').addEventListener('click', async () => {
