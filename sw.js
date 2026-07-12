@@ -3,24 +3,29 @@
    Cache-first for app shell, network-first for Firebase
    ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'sl-v15';
-const CACHE_NAME = 'st3s-' + CACHE_VERSION;
-const FIREBASE_V = '10.13.2';
+const CACHE_VERSION = 'sl-v16';
+const CACHE_NAME   = 'st3s-' + CACHE_VERSION;
+const FIREBASE_V   = '10.13.2';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/app.js',
   '/firebase-config.js',
+  '/firebase-inv.js',
   '/manifest.json',
   '/sw.js',
   '/icon.svg',
   '/warehouse-3d.html',
   '/mobile.html',
   '/guest-out.html',
+  '/proofinv.html',
+  '/wizard.html',
+  '/batch-entry.html',
   `https://www.gstatic.com/firebasejs/${FIREBASE_V}/firebase-app-compat.js`,
   `https://www.gstatic.com/firebasejs/${FIREBASE_V}/firebase-auth-compat.js`,
   `https://www.gstatic.com/firebasejs/${FIREBASE_V}/firebase-firestore-compat.js`,
-  'https://cdn.tailwindcss.com/3.4.16'
+  'https://cdn.tailwindcss.com/3.4.16',
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'
 ];
 
 self.addEventListener('install', event => {

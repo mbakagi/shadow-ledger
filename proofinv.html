@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>proofinv — Master Inventory Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="firebase-inv.js"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .scrollbar-thin::-webkit-scrollbar { width: 5px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+
+    /* PRINT — paper logsheet */
+    @media print {
+      body { background: white !important; color: black !important; font-size: 10pt; }
+      nav, button, input, select, .no-print, #login-overlay { display: none !important; }
+      #dashboard-table { border-collapse: collapse; width: 100%; }
+      #dashboard-table th, #dashboard-table td {
+        border: 1px solid #000; padding: 4px 6px; font-size: 9pt; text-align: left;
+      }
+      #dashboard-table th { background: #eee; font-weight: 700; }
+      #dashboard-table tr:nth-child(even) { background: #fafafa; }
+      h1 { font-size: 14pt; margin-bottom: 6px; }
+      .print-date { font-size: 8pt; color: #555; margin-bottom: 10px; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen">
+
+  <!-- Auth overlay -->
+  <div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 space-y-4">
+      <div class="text-center">
+        <h1 class="text-2xl font-black text-slate-800 dark:text-slate-100">proofinv</h1>
+        <p class="text-sm text-slate-500 mt-1">Sign in to access inventory</p>
+      </div>
+      <form id="login-form" class="space-y-3">
+        <input id="login-email" type="email" placeholder="Email" required
+               class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <input id="login-password" type="password" placeholder="Password" required
+               class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <div id="login-error" class="text-red-500 text-xs font-semibold hidden"></div>
+        <button id="login-btn" type="submit"
+                class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <nav class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-4 flex-wrap">
+    <h1 class="text-lg font-black tracking-tight text-indigo-600 dark:text-indigo-400 mono">proofinv</h1>
+    <div class="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
+      <input id="search-input" type="text" placeholder="Search SKU, name, bin…" class="flex-1 min-w-[200px] px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
+      <button id="btn-print" class="no-print px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        Print Logsheet
+      </button>
+      <div id="user-badge" class="hidden ml-auto text-xs text-slate-500 dark:text-slate-400 truncate max-w-[160px] font-medium"></div>
+      <button id="btn-logout" class="hidden text-xs px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-600 dark:text-slate-300 transition">Sign out</button>
+    </div>
+  </nav>
+
+  <!-- Stats -->
+  <section class="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total SKUs</p>
+      <p id="stat-skus" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+    </div>
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total Units</p>
+      <p id="stat-units" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+    </div>
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Bins Used</p>
+      <p id="stat-bins" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+    </div>
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Docs</p>
+      <p id="stat-docs" class="text-xl font-black text-slate-800 dark:text-slate-100">0</p>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <div class="px-4 pb-8 overflow-x-auto">
+    <table id="dashboard-table" class="w-full text-sm border-collapse">
+      <thead>
+        <tr class="border-b border-slate-300 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold bg-slate-100 dark:bg-slate-800/50">
+          <th class="px-3 py-2.5">SKU</th>
+          <th class="px-3 py-2.5">Item Name</th>
+          <th class="px-3 py-2.5">Total Qty</th>
+          <th class="px-3 py-2.5">Bin Count</th>
+          <th class="px-3 py-2.5">Added to Bin</th>
+        </tr>
+      </thead>
+      <tbody id="table-body" class="divide-y divide-slate-200 dark:divide-slate-800"></tbody>
+    </table>
+    <div id="empty-state" class="hidden text-center py-12 text-slate-400 dark:text-slate-500">
+      <p class="text-lg font-semibold">No inventory records</p>
+      <p class="text-sm mt-1">Use the wizard or batch entry to add items</p>
+    </div>
+  </div>
+
+  <script>
+  'use strict';
+
+  // ── DOM ──
+  const D = id => document.getElementById(id);
+  const loginOverlay = D('login-overlay');
+  const loginForm    = D('login-form');
+  const loginEmail   = D('login-email');
+  const loginPassword = D('login-password');
+  const loginError   = D('login-error');
+  const loginBtn     = D('login-btn');
+  const userBadge    = D('user-badge');
+  const btnLogout    = D('btn-logout');
+  const searchInput  = D('search-input');
+  const btnPrint     = D('btn-print');
+  const tableBody    = D('table-body');
+  const emptyState   = D('empty-state');
+  const statSkus     = D('stat-skus');
+  const statUnits    = D('stat-units');
+  const statBins     = D('stat-bins');
+  const statDocs     = D('stat-docs');
+
+  let items = [];
+
+  // ── Helpers ──
+  function esc(v) { return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function toast(msg, type) {
+    var t = document.createElement('div');
+    t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full text-white text-xs font-semibold shadow-lg animate-pulse ' + (type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-700');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function(){t.remove();}, 2500);
+  }
+
+  // ── Aggregation ──
+  // Produces one row per unique SKU. "Added to Bin" concatenates all
+  // (room,aisle,bay,bin,quantity) entries for that SKU.
+  function aggregate(snapshot) {
+    var skuMap = new Map();
+    snapshot.forEach(function(doc) {
+      var d = doc.data();
+      var s = (d.sku || '').trim();
+      if (!s) return;
+      if (!skuMap.has(s)) {
+        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', total:0, bins:[], docCount:0 });
+      }
+      var row = skuMap.get(s);
+      row.docCount++;
+      var qty = Math.max(0, Number(d.quantity) || 0);
+      var r = (d.room||'').trim(), a = (d.aisle||'').trim(), ba = (d.bay||'').trim(), bn = (d.bin||'').trim();
+      row.total += qty;
+      if (r || a || ba || bn) {
+        row.bins.push({ room:r, aisle:a, bay:ba, bin:bn, qty:qty });
+      }
+    });
+
+    items = [];
+    skuMap.forEach(function(v) {
+      // Deduplicate bin entries: same location string → group
+      var locMap = new Map();
+      v.bins.forEach(function(b) {
+        var key = [b.room,b.aisle,b.bay,b.bin].join('|');
+        if (locMap.has(key)) {
+          locMap.get(key).qty += b.qty;
+        } else {
+          locMap.set(key, b);
+        }
+      });
+      var unique = Array.from(locMap.values());
+      var addedToBin = unique.length
+        ? unique.map(function(x) {
+            return 'R' + (x.room||'-') + '-A' + (x.aisle||'-') + '-B' + (x.bay||'-') + '-B' + (x.bin||'-') + ' (Qty:' + x.qty + ')';
+          }).join(' | ')
+        : '—';
+
+      items.push({ sku:v.sku, name:v.name, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount });
+    });
+
+    items.sort(function(a,b) { return a.sku.localeCompare(b.sku); });
+  }
+
+  // ── Render ──
+  var FILTER = '';
+  function render() {
+    var filtered = items;
+    if (FILTER) {
+      var q = FILTER.toLowerCase();
+      filtered = items.filter(function(i) {
+        return i.sku.toLowerCase().indexOf(q) >= 0
+            || i.name.toLowerCase().indexOf(q) >= 0
+            || i.binsAdded.toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    if (!filtered.length) { tableBody.innerHTML=''; emptyState.classList.remove('hidden'); }
+    else { emptyState.classList.add('hidden'); }
+    tableBody.innerHTML = filtered.map(function(i) {
+      return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">'
+        + '<td class="px-3 py-2 font-mono font-semibold text-indigo-700 dark:text-indigo-400 text-xs whitespace-nowrap">' + esc(i.sku) + '</td>'
+        + '<td class="px-3 py-2 font-medium">' + esc(i.name) + '</td>'
+        + '<td class="px-3 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right">' + i.total.toLocaleString() + '</td>'
+        + '<td class="px-3 py-2 font-mono text-slate-500 text-center">' + i.binCount + '</td>'
+        + '<td class="px-3 py-2 font-mono text-[11px] leading-tight text-slate-600 dark:text-slate-300 max-w-[420px] whitespace-normal break-words">' + esc(i.binsAdded) + '</td>'
+        + '</tr>';
+    }).join('');
+
+    var totalDocs = filtered.reduce(function(s,i){return s+i.docCount;},0);
+    var totalUnits = filtered.reduce(function(s,i){return s+i.total;},0);
+    var totalBins = filtered.reduce(function(s,i){return s+i.binCount;},0);
+    statSkus.textContent = filtered.length.toLocaleString();
+    statUnits.textContent = totalUnits.toLocaleString();
+    statBins.textContent = totalBins.toLocaleString();
+    statDocs.textContent = totalDocs.toLocaleString();
+  }
+
+  // ── Firestore live sync ──
+  var unsub = null;
+  function startSync() {
+    if (unsub) unsub();
+    unsub = db.collection('inventory').onSnapshot(function(snap){
+      aggregate(snap);
+      render();
+    }, function(err) {
+      console.error('Sync error:', err);
+      toast('DB sync error: ' + (err.message || err.code), 'error');
+    });
+  }
+
+  // ── Auth ──
+  auth.onAuthStateChanged(function(user) {
+    if (user) {
+      loginOverlay.classList.add('hidden');
+      userBadge.classList.remove('hidden');
+      userBadge.textContent = user.email;
+      btnLogout.classList.remove('hidden');
+      startSync();
+    } else {
+      loginOverlay.classList.remove('hidden');
+      userBadge.classList.add('hidden');
+      btnLogout.classList.add('hidden');
+      if (unsub) { unsub(); unsub=null; }
+      items = [];
+      render();
+    }
+  });
+
+  // ── Login form ──
+  loginForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var email = loginEmail.value.trim(), pw = loginPassword.value;
+    loginError.classList.add('hidden');
+    loginBtn.textContent = 'Signing in…'; loginBtn.disabled = true;
+    auth.signInWithEmailAndPassword(email, pw)
+      .catch(function(err) {
+        var msgs = { 'auth/user-not-found':'No account found.', 'auth/wrong-password':'Incorrect password.', 'auth/invalid-email':'Invalid email.', 'auth/too-many-requests':'Too many attempts. Try later.' };
+        loginError.textContent = msgs[err.code] || err.message;
+        loginError.classList.remove('hidden');
+      })
+      .finally(function() { loginBtn.textContent='Sign In'; loginBtn.disabled=false; });
+  });
+
+  btnLogout.addEventListener('click', function() { auth.signOut(); });
+
+  // ── Search ──
+  searchInput.addEventListener('input', function() {
+    FILTER = searchInput.value.trim();
+    render();
+  });
+
+  // ── Print ──
+  btnPrint.addEventListener('click', function() {
+    var div = document.createElement('div');
+    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;visibility:hidden;';
+    div.innerHTML = '<p class="print-date">Logsheet printed: ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' GMT</p>' + D('dashboard-table').outerHTML;
+    document.body.appendChild(div);
+    window.print();
+    setTimeout(function(){div.remove();}, 200);
+  });
+
+  // ── Password visibility for mobile ──
+  loginPassword.addEventListener('input', function() { loginError.classList.add('hidden'); });
+  </script>
+</body>
+</html>

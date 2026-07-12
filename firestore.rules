@@ -11,9 +11,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Inventory ──
+    // ── Inventory — proofinv per-bin docs (composite ID: SKU_Rroom_Aaisle_Bbay_Bbin) ──
     match /inventory/{itemId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && itemId.matches('^[A-Za-z0-9\\-_\\.]+_R[^_]+_A[^_]+_B[^_]+_B[^_]+$');
+
+      allow create: if request.auth != null
+        && request.resource.data.sku is string
+        && request.resource.data.sku.size() > 0
+        && request.resource.data.room is string
+        && request.resource.data.room.size() > 0
+        && request.resource.data.aisle is string
+        && request.resource.data.aisle.size() > 0
+        && request.resource.data.bay is string
+        && request.resource.data.bay.size() > 0
+        && request.resource.data.bin is string
+        && request.resource.data.bin.size() > 0
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity >= 0;
+
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['quantity','updated_at','item_name','sku'])
+        && (!('quantity' in request.resource.data) || request.resource.data.quantity is int);
+
+      allow delete: if request.auth != null;
+    }
+
+    // ── Inventory — existing scalar-aggregated docs (sl_* or random IDs) ──
+    match /inventory/{itemId} {
+      allow read: if request.auth != null
+        && !itemId.matches('^[A-Za-z0-9\\-_\\.]+_R[^_]+_A[^_]+_B[^_]+_B[^_]+$');
 
       allow create: if request.auth != null
         && request.resource.data.sku is string
@@ -73,7 +101,6 @@ service cloud.firestore {
     // ── Transactions (immutable audit ledger) ──
     match /transactions/{txId} {
       allow read: if request.auth != null;
-
       allow create: if request.auth != null
         && request.resource.data.itemId is string
         && request.resource.data.itemId.size() > 0
@@ -83,8 +110,20 @@ service cloud.firestore {
         && request.resource.data.qtyOut >= 0
         && request.resource.data.type is string
         && request.resource.data.type in ['scan-out', 'transfer', 'adjust'];
+      allow update: if false;
+      allow delete: if false;
+    }
 
-      // Immutable: no updates or deletes allowed after creation
+    // ── Discrepancies (proofinv count verification audit) ──
+    match /discrepancies/{discId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.inventory_id is string
+        && request.resource.data.inventory_id.size() > 0
+        && request.resource.data.expected_qty is int
+        && request.resource.data.actual_qty is int
+        && request.resource.data.variance is int
+        && request.resource.data.worker_uid is string;
       allow update: if false;
       allow delete: if false;
     }
