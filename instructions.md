@@ -500,13 +500,7 @@ Guest checkout (`guest-out.html` / `guest-move.html`) no longer compares input a
 
 > **Prerequisite:** `orgSecrets` is rule-locked (`allow read: if request.auth != null; allow write: if false;`). It must be seeded once before guest checkout works. The browser cannot write it.
 
-**Recommended path — Migration Wizard:**
-1. Open `https://<your-domain>/migration-wizard.html` and sign in with an admin account.
-2. Tab **4 · Guest PIN** → enter the new PIN + confirm → **Generate Hash**.
-3. Copy the produced Firebase CLI command (or the JSON) and run it in your terminal (or paste into the Firebase Console → Firestore → `orgSecrets` → `default`).
-4. Open any guest checkout link and confirm the PIN is accepted.
-
-**Fallback path — browser console snippet** (paste in a Firebase-authenticated tab):
+**Browser console snippet** (paste in a Firebase-authenticated tab):
 ```javascript
 (async () => {
   const pin = prompt('New guest master PIN?');             if (!pin) return;
@@ -522,11 +516,11 @@ Guest checkout (`guest-out.html` / `guest-move.html`) no longer compares input a
 })();
 ```
 
-**Rotation:** re-run either path with a new PIN; `orgSecrets/default` is overwritten. The guest pages pick up the new hash on their next verify (no code deploy needed).
+**Rotation:** re-run the snippet with a new PIN; `orgSecrets/default` is overwritten. The guest pages pick up the new hash on their next verify (no code deploy needed).
 
 ### 6.5 Warehouse Backend Seeding (REP-003 §5 / Phase 0 & 4)
 
-Run these admin tools in **`migration-wizard.html`** after signing in:
+> *(Removed — the Migration Wizard UI was unreliable. Use the Firebase Console or CLI for one-time seeding of `warehouseTemplates` and `orgSecrets` per §6.4.)*
 
 1. **Warehouse Template** (Tab 1):
    - Copy the provided Firebase CLI command and run it once to seed the immutable `warehouseTemplates/template-standard-v1` blueprint (rule-locked, write:false).
