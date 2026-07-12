@@ -1730,7 +1730,18 @@
     if (itemsToLabel.length === 0) return toast('No items to label', 'info');
 
     dom.printContainer.innerHTML = '';
-    dom.printContainer.className = size.isGrid ? 'a4-grid-mode' : (size.isA4Land ? 'a4-landscape-mode' : '');
+    const modeClass = size.isGrid ? 'a4-grid-mode' : (size.isA4Land ? 'a4-landscape-mode' : '');
+    
+    // CRITICAL: Unhide and position off-screen so canvas can render and img onload fires
+    dom.printContainer.className = modeClass;
+    dom.printContainer.classList.remove('hidden');
+    dom.printContainer.style.visibility = 'hidden';
+    dom.printContainer.style.position = 'fixed';
+    dom.printContainer.style.top = '-9999px';
+    dom.printContainer.style.left = '0';
+    dom.printContainer.style.background = 'white';
+    dom.printContainer.style.zIndex = '-1';
+
     itemsToLabel.forEach(({ item, overrides }) => {
       for (let c = 0; c < qty; c++) {
         const labelEl = buildLabelElement(item, {
@@ -1745,16 +1756,43 @@
     });
 
     if (size.isA4Land) document.body.classList.add('print-a4-landscape');
-    document.body.classList.add('printing-label');
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        document.body.classList.remove('printing-label');
-        document.body.classList.remove('print-a4-landscape');
-        dom.printContainer.innerHTML = '';
-        dom.printContainer.className = '';
-      }, 500);
-    }, 200);
+    
+    // Wait for all generated QR images to load
+    const imgs = dom.printContainer.querySelectorAll('img');
+    const loadPromises = [];
+    imgs.forEach(img => {
+      if (!img.complete) {
+        loadPromises.push(new Promise(res => {
+          img.onload = res;
+          img.onerror = res;
+          setTimeout(res, 800); // 800ms fallback
+        }));
+      }
+    });
+
+    Promise.all(loadPromises).then(() => {
+      // Restore flow and hand off to print CSS
+      dom.printContainer.style.visibility = '';
+      dom.printContainer.style.position = '';
+      dom.printContainer.style.top = '';
+      dom.printContainer.style.left = '';
+      dom.printContainer.style.background = '';
+      dom.printContainer.style.zIndex = '';
+      
+      document.body.classList.add('printing-label');
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          window.print();
+          setTimeout(() => {
+            document.body.classList.remove('printing-label');
+            document.body.classList.remove('print-a4-landscape');
+            dom.printContainer.innerHTML = '';
+            dom.printContainer.className = 'hidden';
+            dom.printContainer.style.cssText = '';
+          }, 600);
+        }, 80);
+      });
+    });
 
     toast(`Generated ${itemsToLabel.length * qty} label${itemsToLabel.length * qty === 1 ? '' : 's'}`, 'success');
   }
@@ -3295,60 +3333,100 @@
       const grid = $('#bins-grid');
       const labels = grid.querySelectorAll('.bin-cell');
       if (!labels.length) { toast('No bins to print', 'error'); return; }
+
       dom.printContainer.innerHTML = '';
       dom.printContainer.className = 'print-grid';
+
+      // CRITICAL: remove 'hidden' BEFORE generating QRs.
+      // qrcodejs creates a canvas then converts to an <img> via canvas.toDataURL().
+      // If the container is display:none the canvas context can still work, but
+      // the img.onload fires asynchronously — we need the element to be in the
+      // layout so we can wait for every img to fully load before printing.
+      dom.printContainer.classList.remove('hidden');
+      dom.printContainer.style.visibility = 'hidden'; // visible to paint engine but off-screen
+      dom.printContainer.style.position   = 'fixed';
+      dom.printContainer.style.top        = '-9999px';
+      dom.printContainer.style.left       = '0';
+      dom.printContainer.style.background = 'white';
+      dom.printContainer.style.zIndex     = '-1';
+
       const qrTargets = [];
       labels.forEach(cell => {
         const code = cell.dataset.bincode;
         if (!code) return;
         const parts = code.split('-');
         const isGeneral = parts[0] === 'GENERAL';
-        const header = isGeneral ? parts[1] : `${parts[0]} · ${parts[1]}`;
-        const sub = isGeneral ? `${parts[2]}-${parts[3]}` : `${parts[2]}-${parts[3]}-${parts[4]}-${parts[5]}`;
+        const header = isGeneral ? `${parts[1]} · ${parts[2]}` : `${parts[0]} · ${parts[1]}`;
+        const sub    = isGeneral
+          ? `${parts[3] || ''}`
+          : `Bay ${parts[2] || ''} · Bin ${parts[3] || ''} · Lvl ${parts[4] || ''}`;
         const div = document.createElement('div');
         div.className = 'print-label-bin';
         const qrId = 'binqr-' + Math.random().toString(36).slice(2, 9);
         div.innerHTML = `
-          <div class="bin-print-code">${esc(header)}</div>
+          <div class="bin-print-header">${esc(header)}</div>
           <div class="bin-print-qr" id="${qrId}"></div>
           <div class="bin-print-sub">${esc(sub)}</div>
+          <div class="bin-print-code">${esc(code)}</div>
         `;
         dom.printContainer.appendChild(div);
-        // Find item assigned to this bin so the QR links to the right item
-        const assignedItem = State.items.find(i => (i.binCode || '').toUpperCase() === code);
+        const assignedItem = State.items.find(i => (i.binCode || '').toUpperCase() === code.toUpperCase());
         qrTargets.push({ id: qrId, code, itemId: assignedItem?.id || '' });
       });
-      dom.printContainer.style.setProperty('--label-w', size === 'a4-grid' ? 'auto' : size === '2x1' ? '2in' : '4in');
+
+      // Generate QRs and collect all img load promises
+      const loadPromises = [];
       qrTargets.forEach(({ id, code, itemId }) => {
         try {
-          const el = dom.printContainer.querySelector('#' + id);
-          if (el) {
-            // Always use GUEST_BASE_URL (GitHub Pages canonical path).
-            // If a specific item is assigned, encode its ID so guest-out loads
-            // directly. If the bin is unassigned, encode just the location code
-            // so a picker can scan and select an item at checkout time.
-            const url = itemId
-              ? guestUrl(itemId, code)
-              : `${GUEST_BASE_URL}/guest-out.html?loc=${encodeURIComponent(code)}`;
-            new QRCode(el, {
-              text: url,
-              width: 200, height: 200,
-              colorDark: '#000000', colorLight: '#ffffff',
-              correctLevel: QRCode.CorrectLevel.H
-            });
+          const el = document.getElementById(id); // direct getElementById — no selector escaping issues
+          if (!el) return;
+          const url = itemId
+            ? guestUrl(itemId, code)
+            : `${GUEST_BASE_URL}/guest-out.html?loc=${encodeURIComponent(code)}`;
+          new QRCode(el, {
+            text: url,
+            width: 120, height: 120,   // fits inside 1.8in label
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M  // M = shorter data → smaller code, more reliable
+          });
+          // Wait for the img qrcodejs inserts to fully load
+          const img = el.querySelector('img');
+          if (img && !img.complete) {
+            loadPromises.push(new Promise(res => {
+              img.onload  = res;
+              img.onerror = res;  // don't block on error
+              // Safety timeout: if img never fires, unblock after 800ms
+              setTimeout(res, 800);
+            }));
           }
         } catch (e) { console.warn('Bin QR render failed', e); }
       });
-      document.body.classList.add('printing-label');
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => {
-          document.body.classList.remove('printing-label');
-          dom.printContainer.innerHTML = '';
-          dom.printContainer.className = '';
-        }, 500);
-      }, 300);
-      toast(`Printed ${labels.length} bin labels with QR barcodes`, 'success');
+
+      // Wait for all QR images to be ready, then print
+      Promise.all(loadPromises).then(() => {
+        // Restore normal positioning, hand off to print CSS
+        dom.printContainer.style.visibility = '';
+        dom.printContainer.style.position   = '';
+        dom.printContainer.style.top        = '';
+        dom.printContainer.style.left       = '';
+        dom.printContainer.style.background = '';
+        dom.printContainer.style.zIndex     = '';
+        document.body.classList.add('printing-label');
+        // Small RAF delay to let the browser repaint before the print dialog
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            window.print();
+            setTimeout(() => {
+              document.body.classList.remove('printing-label');
+              dom.printContainer.innerHTML = '';
+              dom.printContainer.className = 'hidden';
+              dom.printContainer.style.cssText = '';
+            }, 600);
+          }, 80);
+        });
+      });
+
+      toast(`Printing ${labels.length} bin label${labels.length !== 1 ? 's' : ''} with QR codes`, 'success');
     });
 
     // Pareto tab switching
