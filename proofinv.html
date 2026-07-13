@@ -26,9 +26,34 @@
     .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
     .qr-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; text-align: center; }
     .qr-card canvas { max-width: 100%; height: auto; display: block; margin: 0 auto 4px; }
-    .qr-card .label { font-size: 10px; font-family: ui-monospace, monospace; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .qr-card .label { font-size: 10px; font-family: ui-monospace, monospace; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* PRINT — paper logsheet & QR grid */
+    /* OCR drop zone */
+    .ocr-drop {
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      padding: 24px 12px;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+      cursor: pointer;
+      background: rgba(148, 163, 184, 0.06);
+    }
+    .ocr-drop:hover, .ocr-drop.dragover { border-color: #6366f1; background: rgba(99, 102, 241, 0.08); }
+    .ocr-drop img.preview { max-height: 200px; margin: 8px auto; border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.2); }
+
+    /* Bin matrix grid */
+    .bin-matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; }
+    .bin-cell {
+      padding: 8px 4px; border: 1px solid #cbd5e1; border-radius: 8px;
+      text-align: center; font-family: ui-monospace, monospace; font-size: 10px;
+      background: white; cursor: pointer; transition: all 0.15s;
+    }
+    .bin-cell:hover { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .bin-cell.selected { background: #6366f1; color: white; border-color: #4f46e5; }
+    .bin-cell .loc { font-weight: 700; }
+    .bin-cell .qty { color: #64748b; font-size: 9px; margin-top: 2px; }
+
+    /* Print — paper logsheet & QR grid */
     @media print {
       body { background: white !important; color: black !important; font-size: 10pt; }
       nav, button, input, select, .no-print, #login-overlay, .tab-nav, .tab-btn, .btn-print, .btn-logout, .user-badge, #search-input { display: none !important; }
@@ -87,8 +112,14 @@
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="batch" role="tab" aria-selected="false" aria-controls="pane-batch">
         ⌨ Batch Entry
       </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="count" role="tab" aria-selected="false" aria-controls="pane-count">
+        🔢 Count & Verify
+      </button>
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="bins" role="tab" aria-selected="false" aria-controls="pane-bins">
-        🏷 Bin Setup / QR
+        🗂 Bins
+      </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="labels" role="tab" aria-selected="false" aria-controls="pane-labels">
+        🏷 Labels
       </button>
     </div>
 
@@ -155,6 +186,7 @@
     <!-- Sub-tab nav inside Wizard -->
     <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Wizard tasks">
       <button class="wizard-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="count" role="tab" aria-selected="true" aria-controls="wizard-count">🔍 Search & Count</button>
+      <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="ocrimg" role="tab" aria-selected="false" aria-controls="wizard-ocrimg">📷 Image OCR</button>
       <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="putaway" role="tab" aria-selected="false" aria-controls="wizard-putaway">📦 Putaway / Assign</button>
       <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="transfer" role="tab" aria-selected="false" aria-controls="wizard-transfer">↔ Bin-to-Bin Transfer</button>
     </div>
@@ -194,6 +226,54 @@
       <div id="count-results" class="hidden mt-2 border-t border-slate-200 dark:border-slate-700 pt-2 space-y-2">
         <p id="count-title" class="text-sm font-bold text-slate-600 dark:text-slate-300"></p>
         <div id="count-locs" class="space-y-1.5 max-h-72 overflow-y-auto scrollbar-thin"></div>
+      </div>
+    </section>
+
+    <!-- Sub-tab: Image OCR (upload/drag-drop image, extract text) -->
+    <section id="wizard-ocrimg" class="wizard-subtab hidden space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">📷 Extract Text from Image</h2>
+      <p class="text-xs text-slate-500">Upload or drag a photo of a part number label, bin location, or packing slip. Tesseract.js extracts text → auto-fill fields below.</p>
+
+      <!-- Drop zone -->
+      <div id="ocr-drop" class="ocr-drop no-print" tabindex="0" role="button" aria-label="Upload image for OCR">
+        <input id="ocr-file-input" type="file" accept="image/*" capture="environment" class="hidden" />
+        <div id="ocr-drop-prompt">
+          <svg class="w-8 h-8 mx-auto text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <p class="text-sm font-bold text-slate-600 dark:text-slate-300">Drop image here or click to upload</p>
+          <p class="text-xs text-slate-400 mt-0.5">PNG, JPG, WEBP — part labels, bin tags, packing lists</p>
+        </div>
+        <img id="ocr-preview" class="preview hidden" alt="Preview" />
+        <canvas id="ocr-canvas" class="hidden"></canvas>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="btn-ocr-run" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">🔍 Run OCR</button>
+        <button id="btn-ocr-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear</button>
+        <span id="ocr-img-status" class="text-xs text-slate-400 font-semibold"></span>
+      </div>
+
+      <!-- Extracted text output -->
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold text-slate-500">Extracted text (edit if needed):</label>
+        <textarea id="ocr-raw-text" rows="4" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="OCR result will appear here…"></textarea>
+
+        <!-- Parse controls -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <button id="btn-ocr-parse" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">⚡ Parse → Fill Fields</button>
+          <button id="btn-ocr-to-putaway" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition">→ Putaway</button>
+          <button id="btn-ocr-to-count" class="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm transition">→ Count</button>
+        </div>
+
+        <!-- Parsed fields preview -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600">
+          <div><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">SKU</label><input id="ocr-p-sku" type="text" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs focus:ring-1 focus:ring-indigo-500 outline-none" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Name</label><input id="ocr-p-name" type="text" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs focus:ring-1 focus:ring-indigo-500 outline-none" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Room</label><input id="ocr-p-room" type="text" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Aisle</label><input id="ocr-p-aisle" type="text" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Bay</label><input id="ocr-p-bay" type="text" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Bin</label><input id="ocr-p-bin" type="text" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div class="col-span-2 md:col-span-6"><label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Quantity</label><input id="ocr-p-qty" type="number" min="1" value="1" class="mono w-24 px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-center font-bold focus:ring-1 focus:ring-indigo-500 outline-none" /></div>
+        </div>
       </div>
     </section>
 
@@ -289,16 +369,68 @@
     </div>
   </section>
 
-  <!-- Pane: Bin Setup / QR Code & Labels -->
-  <section id="pane-bins" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-bins">
-    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Bin Setup / QR Code & Labels</h2>
-    <p class="text-xs text-slate-500">Generate printable QR codes for composite locations, bin location labels, or item labels.</p>
+  <!-- Pane: Count & Verify (per-bin quantity counts) -->
+  <section id="pane-count" class="tab-pane p-4 max-w-5xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-count">
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Count & Verify</h2>
+    <p class="text-xs text-slate-500">Look up a SKU, see every bin where it's stored with recorded quantity, verify each bin, log discrepancies.</p>
 
-    <!-- Sub-tabs for Bin Setup -->
-    <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Bin setup modes">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label>
+          <input id="cv-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div class="flex items-end">
+          <button id="btn-cv-search" class="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Search Bins</button>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div id="cv-summary" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-2 no-print">
+        <div class="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">
+          <p class="text-[9px] uppercase text-slate-400 font-semibold">SKU</p>
+          <p id="cv-sum-sku" class="mono text-xs font-bold truncate">—</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">
+          <p class="text-[9px] uppercase text-slate-400 font-semibold">Bins</p>
+          <p id="cv-sum-bins" class="text-base font-black text-indigo-600">0</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">
+          <p class="text-[9px] uppercase text-slate-400 font-semibold">Recorded</p>
+          <p id="cv-sum-recorded" class="text-base font-black text-amber-500">0</p>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">
+          <p class="text-[9px] uppercase text-slate-400 font-semibold">Counted</p>
+          <p id="cv-sum-counted" class="text-base font-black text-emerald-500">0</p>
+        </div>
+      </div>
+
+      <!-- Bin rows -->
+      <div id="cv-bins" class="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin"></div>
+
+      <!-- Bulk commit count -->
+      <div id="cv-bulk" class="hidden flex items-center gap-2 flex-wrap border-t border-slate-200 dark:border-slate-700 pt-2 no-print">
+        <button id="btn-cv-commit-all" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Commit All Counts</button>
+        <button id="btn-cv-zero" class="px-4 py-2 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 text-sm font-bold transition">Zero All Empty</button>
+        <span id="cv-pending" class="text-xs text-slate-400">0 pending</span>
+      </div>
+
+      <div id="cv-empty" class="hidden text-center py-6 text-slate-400 dark:text-slate-500">
+        <p class="text-sm">Enter a SKU above to see all bin locations and quantities.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pane: Bins (location labels + QR codes generator) -->
+  <section id="pane-bins" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-bins">
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Bins — Location Labels & QR Codes</h2>
+    <p class="text-xs text-slate-500">Generate printable QR codes & adhesive location labels for physical bins. Scan with Wizard OCR to prefill Putaway/Transfer.</p>
+
+    <!-- Sub-tabs for Bins -->
+    <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Bins generator modes">
       <button class="bins-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="qr" role="tab" aria-selected="true" aria-controls="bins-qr">📱 QR Codes</button>
       <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="binlabels" role="tab" aria-selected="false" aria-controls="bins-binlabels">🏷 Bin Labels</button>
-      <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="itemlabels" role="tab" aria-selected="false" aria-controls="bins-itemlabels">📦 Item Labels</button>
+      <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="matrix" role="tab" aria-selected="false" aria-controls="bins-matrix">🔲 Matrix Grid</button>
     </div>
 
     <!-- Sub-tab: QR Codes (existing) -->
@@ -363,12 +495,47 @@
       <div id="bl-grid" class="qr-grid print-grid"></div>
     </section>
 
-    <!-- Sub-tab: Item Labels (Search & Add, Single/Multi) -->
-    <section id="bins-itemlabels" class="bins-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
-      <h3 class="font-bold text-sm">Item Labels — Search & Add</h3>
-      <p class="text-xs text-slate-500">Search SKUs, add to selection, choose single or multi-label mode, print.</p>
+    <!-- Sub-tab: Bin Matrix Grid (visual grid of all bins in a room/aisle) -->
+    <section id="bins-matrix" class="bins-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h3 class="font-bold text-sm">Bin Matrix Grid</h3>
+      <p class="text-xs text-slate-500">Visualize all bins in a Room/Aisle. Shows live stock count per bin. Click cells to select for QR/label generation.</p>
 
-      <!-- Mode toggle -->
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Room</label><input id="bx-room" type="text" placeholder="1" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs uppercase focus:ring-1 focus:ring-indigo-500 outline-none" maxlength="4" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Aisle</label><input id="bx-aisle" type="text" placeholder="A" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs uppercase focus:ring-1 focus:ring-indigo-500 outline-none" maxlength="4" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Bay Start</label><input id="bx-bay-start" type="text" placeholder="01" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs uppercase focus:ring-1 focus:ring-indigo-500 outline-none" maxlength="4" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Bay End</label><input id="bx-bay-end" type="text" placeholder="10" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs uppercase focus:ring-1 focus:ring-indigo-500 outline-none" maxlength="4" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Bin Start</label><input id="bx-bin-start" type="text" placeholder="01" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs uppercase focus:ring-1 focus:ring-indigo-500 outline-none" maxlength="4" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Bin End</label><input id="bx-bin-end" type="text" placeholder="04" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs uppercase focus:ring-1 focus:ring-indigo-500 outline-none" maxlength="4" /></div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="btn-bx-render" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">Render Grid</button>
+        <button id="btn-bx-select-all" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-indigo-100 text-slate-600 dark:text-slate-300 text-xs font-bold transition">Select All</button>
+        <button id="btn-bx-clear-sel" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-xs font-bold transition">Clear Selection</button>
+        <button id="btn-bx-to-qr" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition">→ Add to QR</button>
+        <button id="btn-bx-to-labels" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition">→ Add to Labels</button>
+        <span id="bx-sel-count" class="text-xs text-slate-400 font-mono">0 selected</span>
+      </div>
+
+      <div id="bx-grid" class="bin-matrix no-print"></div>
+    </section>
+  </section>
+
+  <!-- Pane: Labels (item labels generator, search & add, batch current) -->
+  <section id="pane-labels" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-labels">
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Labels — Item Label Generator</h2>
+    <p class="text-xs text-slate-500">Search SKUs, add to selection, choose single or multi-label mode, batch label all current stock items, print.</p>
+
+    <!-- Sub-tabs for Labels -->
+    <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Label modes">
+      <button class="labels-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="itemlabels" role="tab" aria-selected="true" aria-controls="labels-itemlabels">📦 Item Labels</button>
+      <button class="labels-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="batchstock" role="tab" aria-selected="false" aria-controls="labels-batchstock">📊 Batch Current Stock</button>
+    </div>
+
+    <!-- Sub-tab: Item Labels (Search & Add, Single/Multi) -->
+    <section id="labels-itemlabels" class="labels-subtab active space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <!-- Mode toggle + Size + QR toggle + Qty -->
       <div class="flex items-center gap-3 flex-wrap">
         <div class="flex items-center gap-2">
           <span class="text-xs font-semibold text-slate-500">Mode:</span>
@@ -381,6 +548,19 @@
             <option value="2x1">2″ × 1″ (SKU + Name)</option>
             <option value="3x1">3″ × 1″ (SKU + Name + Qty)</option>
             <option value="4x2">4″ × 2″ (Full detail)</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-slate-500 flex items-center gap-1">
+            <input id="il-qr-toggle" type="checkbox" checked class="accent-indigo-600" /> QR
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Field:</span>
+          <select id="il-field" class="px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="both">SKU + Name</option>
+            <option value="sku">SKU only</option>
+            <option value="name">Name only</option>
           </select>
         </div>
         <div class="flex items-center gap-2">
@@ -411,6 +591,42 @@
       </div>
 
       <div id="il-grid" class="qr-grid print-grid"></div>
+    </section>
+
+    <!-- Sub-tab: Batch Current Stock (one label per SKU in current stock) -->
+    <section id="labels-batchstock" class="labels-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h3 class="font-bold text-sm">Batch Current Stock Labels</h3>
+      <p class="text-xs text-slate-500">Generate one label per SKU currently in stock. Great for complete inventory labeling runs.</p>
+
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Label Size:</span>
+          <select id="bs-size" class="px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="2x1">2″ × 1″</option>
+            <option value="3x1">3″ × 1″</option>
+            <option value="4x2">4″ × 2″ (full)</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-slate-500 flex items-center gap-1">
+            <input id="bs-qr-toggle" type="checkbox" checked class="accent-indigo-600" /> QR
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-slate-500 flex items-center gap-1">
+            <input id="bs-include-qty" type="checkbox" checked class="accent-indigo-600" /> Include Qty
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input id="bs-filter" type="text" placeholder="Filter SKU/name…" class="mono flex-1 min-w-[160px] px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <button id="btn-bs-generate" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Generate Batch</button>
+        <button id="btn-bs-print" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Print</button>
+        <button id="btn-bs-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear</button>
+      </div>
+
+      <div id="bs-summary" class="text-xs text-slate-500"></div>
+      <div id="bs-grid" class="qr-grid print-grid"></div>
     </section>
   </section>
 
@@ -482,6 +698,11 @@
   var ilMode = 'single';
   var ilAllItems = []; // cached SKU list
   var ilSearchDebounce = null;
+  var bxSelected = new Set(); // matrix grid selected bin keys
+  var bxStockByBin = {}; // live stock counts for matrix
+  var bsItems = []; // batch stock labels
+  var cvBins = []; // count-verify bin rows
+  var cvDiscrepancies = []; // pending discrepancy logs
 
   /* ================================================================
      URL PARAM DEEP-LINK ROUTER
@@ -489,7 +710,7 @@
   (function routeFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','batch','bins'];
+    var validTabs = ['stock','wizard','count','batch','bins','labels'];
     if (!validTabs.includes(tab)) tab = 'stock';
 
     // Pre-fill wizard fields from URL
@@ -509,6 +730,9 @@
       var bay = params.get('bay') || '';
       var bin = params.get('bin') || '';
       window.__deepLink = { tab: 'bins', sku: sku, room: room, aisle: aisle, bay: bay, bin: bin };
+    } else if (tab === 'count') {
+      var sku = params.get('sku') || '';
+      window.__deepLink = { tab: 'count', sku: sku };
     }
   })();
 
@@ -536,6 +760,17 @@
     if (tabName === 'batch' && !window.__batchBuilt) buildBatchGrid();
     if (tabName === 'wizard') applyDeepLinkWizard();
     if (tabName === 'bins') applyDeepLinkBins();
+    if (tabName === 'labels' && !window.__labelsBuilt) buildLabelsTab();
+    if (tabName === 'count' && !window.__countBuilt) buildCountTab();
+    if (tabName === 'count') applyDeepLinkCount();
+  }
+
+  function applyDeepLinkCount(){
+    var dl = window.__deepLink;
+    if (!dl || dl.tab !== 'count') return;
+    if (dl.sku) D('cv-sku').value = dl.sku;
+    if (dl.sku) D('btn-cv-search').click();
+    window.__deepLink = null;
   }
 
   function showWizardSubtab(subtab){
@@ -545,7 +780,9 @@
       b.setAttribute('aria-selected', isActive);
     });
     document.querySelectorAll('.wizard-subtab').forEach(function(p){
-      p.classList.toggle('active', p.id === 'wizard-' + subtab);
+      var isActive = p.id === 'wizard-' + subtab;
+      p.classList.toggle('active', isActive);
+      p.classList.toggle('hidden', !isActive);
     });
     // Update URL
     var url = new URL(window.location.href);
@@ -796,6 +1033,131 @@
       .catch(function(e){ D('ocr-status').textContent = 'FAIL'; toast('OCR failed: '+e.message,'error'); });
   });
 
+  /* ── Image OCR (upload / drag-drop) ── */
+  var ocrImageDataUrl = null;
+
+  D('ocr-drop').addEventListener('click', function(){ D('ocr-file-input').click(); });
+  D('ocr-drop').addEventListener('keydown', function(e){ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); D('ocr-file-input').click(); } });
+
+  D('ocr-drop').addEventListener('dragover', function(e){ e.preventDefault(); this.classList.add('dragover'); });
+  D('ocr-drop').addEventListener('dragleave', function(e){ this.classList.remove('dragover'); });
+  D('ocr-drop').addEventListener('drop', function(e){
+    e.preventDefault(); this.classList.remove('dragover');
+    var file = e.dataTransfer.files[0];
+    if (file) handleOcrFile(file);
+  });
+
+  D('ocr-file-input').addEventListener('change', function(){
+    if (this.files && this.files[0]) handleOcrFile(this.files[0]);
+  });
+
+  function handleOcrFile(file){
+    if (!file.type.startsWith('image/')) { toast('Please select an image file','error'); return; }
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      ocrImageDataUrl = ev.target.result;
+      var prev = D('ocr-preview');
+      prev.src = ocrImageDataUrl;
+      prev.classList.remove('hidden');
+      D('ocr-drop-prompt').classList.add('hidden');
+      D('ocr-img-status').textContent = 'Image loaded — click Run OCR';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  D('btn-ocr-run').addEventListener('click', function(){
+    if (!ocrImageDataUrl) { toast('Upload an image first','error'); return; }
+    D('ocr-img-status').textContent = 'OCR running…';
+    Tesseract.recognize(ocrImageDataUrl, 'eng', {
+      logger: function(m){ if (m.status === 'recognizing text') D('ocr-img-status').textContent = 'OCR ' + Math.round(m.progress*100) + '%'; }
+    }).then(function(r){
+      var txt = (r.data.text || '').trim();
+      D('ocr-raw-text').value = txt;
+      D('ocr-img-status').textContent = 'OCR done ✓ — ' + txt.length + ' chars';
+      parseOcrText(txt);
+      toast('OCR complete','success');
+    }).catch(function(e){
+      D('ocr-img-status').textContent = 'OCR failed';
+      toast('OCR error: ' + e.message, 'error');
+    });
+  });
+
+  function parseOcrText(txt){
+    if (!txt) { toast('No text to parse','error'); return; }
+    var lines = txt.split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var allText = txt.toUpperCase().replace(/\s+/g, ' ');
+
+    // Try SKU: alphanumeric with dashes, 3+ chars
+    var skuMatch = txt.match(/[A-Z0-9][A-Z0-9\-_.]{2,40}/i);
+    if (skuMatch) D('ocr-p-sku').value = skuMatch[0].toUpperCase();
+
+    // Try R-A-B-B location pattern
+    var locMatch = allText.match(/R\s*(\w{1,4})\s*[-\s]*A\s*(\w{1,4})\s*[-\s]*B\s*(\w{1,4})\s*[-\s]*B\s*(\w{1,4})/);
+    if (locMatch) {
+      D('ocr-p-room').value = locMatch[1];
+      D('ocr-p-aisle').value = locMatch[2];
+      D('ocr-p-bay').value = locMatch[3];
+      D('ocr-p-bin').value = locMatch[4];
+    } else {
+      // Try 4 consecutive tokens
+      var tokens = txt.split(/[\s,\-|\/:]+/).filter(Boolean);
+      if (tokens.length >= 4) {
+        D('ocr-p-room').value = tokens[0].toUpperCase();
+        D('ocr-p-aisle').value = tokens[1].toUpperCase();
+        D('ocr-p-bay').value = tokens[2].toUpperCase();
+        D('ocr-p-bin').value = tokens[3].toUpperCase();
+      }
+    }
+
+    // Try quantity: QTY: 50 or Qty 50 or just a number
+    var qtyMatch = allText.match(/QTY[:\s]*(\d+)/);
+    if (qtyMatch) D('ocr-p-qty').value = qtyMatch[1];
+
+    // Try item name: first long text line
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].length > 4 && !lines[i].match(/^[A-Z0-9\-_.]{2,40}$/i) && !lines[i].match(/QTY/i)) {
+        D('ocr-p-name').value = lines[i].substr(0, 200);
+        break;
+      }
+    }
+  }
+
+  D('btn-ocr-parse').addEventListener('click', function(){
+    var txt = D('ocr-raw-text').value;
+    if (!txt) { toast('No text — run OCR first','error'); return; }
+    parseOcrText(txt);
+    toast('Parsed','success');
+  });
+
+  D('btn-ocr-to-putaway').addEventListener('click', function(){
+    if (D('ocr-p-sku').value) D('pa-sku').value = D('ocr-p-sku').value;
+    if (D('ocr-p-name').value) D('pa-name').value = D('ocr-p-name').value;
+    if (D('ocr-p-room').value) D('pa-room').value = D('ocr-p-room').value;
+    if (D('ocr-p-aisle').value) D('pa-aisle').value = D('ocr-p-aisle').value;
+    if (D('ocr-p-bay').value) D('pa-bay').value = D('ocr-p-bay').value;
+    if (D('ocr-p-bin').value) D('pa-bin').value = D('ocr-p-bin').value;
+    if (D('ocr-p-qty').value) D('pa-qty').value = D('ocr-p-qty').value;
+    showWizardSubtab('putaway');
+    toast('Sent to Putaway','success');
+  });
+
+  D('btn-ocr-to-count').addEventListener('click', function(){
+    if (D('ocr-p-sku').value) D('count-sku').value = D('ocr-p-sku').value;
+    if (D('ocr-p-name').value) D('count-name').value = D('ocr-p-name').value;
+    showWizardSubtab('count');
+    toast('Sent to Count','success');
+  });
+
+  D('btn-ocr-clear').addEventListener('click', function(){
+    ocrImageDataUrl = null;
+    D('ocr-preview').classList.add('hidden');
+    D('ocr-drop-prompt').classList.remove('hidden');
+    D('ocr-raw-text').value = '';
+    D('ocr-img-status').textContent = '';
+    ['ocr-p-sku','ocr-p-name','ocr-p-room','ocr-p-aisle','ocr-p-bay','ocr-p-bin'].forEach(function(id){ D(id).value = ''; });
+    D('ocr-p-qty').value = 1;
+  });
+
   // ── Search & Count ──
   D('btn-count-search').addEventListener('click', function(){
     var sku = S(D('count-sku').value);
@@ -1015,6 +1377,300 @@
   });
 
   /* ================================================================
+     PANE 2b — COUNT & VERIFY (per-bin quantities)
+     ================================================================ */
+  D('btn-cv-search').addEventListener('click', function(){
+    var sku = S(D('cv-sku').value);
+    if (!sku) { toast('Enter a SKU','error'); return; }
+    cvBins = []; cvDiscrepancies = [];
+    db.collection('inventory').where('sku','==',sku).get()
+      .then(function(snap){
+        var rows = [];
+        snap.forEach(function(d){
+          var data = d.data();
+          rows.push({
+            id: d.id,
+            room: data.room || '', aisle: data.aisle || '', bay: data.bay || '', bin: data.bin || '',
+            name: data.item_name || data.name || '',
+            qty: Math.max(0, Number(data.quantity) || 0),
+            sku: data.sku || sku,
+            counted: null
+          });
+        });
+        cvBins = rows.sort(function(a,b){
+          return (a.room+a.aisle+a.bay+a.bin).localeCompare(b.room+b.aisle+b.bay+b.bin);
+        });
+        renderCvBins();
+      })
+      .catch(function(e){ toast('DB error: '+e.message,'error'); });
+  });
+
+  function renderCvBins(){
+    var empty = D('cv-empty');
+    var bins = D('cv-bins');
+    var summary = D('cv-summary');
+    var bulk = D('cv-bulk');
+    if (!cvBins.length) {
+      D('cv-sku').value = '';
+      bins.innerHTML = '';
+      summary.classList.add('hidden');
+      bulk.classList.add('hidden');
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    summary.classList.remove('hidden');
+    bulk.classList.remove('hidden');
+    var name = cvBins[0].name;
+    var totalRecorded = cvBins.reduce(function(s,r){ return s + r.qty; }, 0);
+    D('cv-sum-sku').textContent = cvBins[0].sku;
+    D('cv-sum-sku').title = name;
+    D('cv-sum-bins').textContent = cvBins.length;
+    D('cv-sum-recorded').textContent = totalRecorded.toLocaleString();
+    updateCvCounted();
+
+    bins.innerHTML = cvBins.map(function(r, idx){
+      var loc = 'R'+(r.room||'-')+'-A'+(r.aisle||'-')+'-B'+(r.bay||'-')+'-B'+(r.bin||'-');
+      var safeId = r.id.replace(/[^a-zA-Z0-9_]/g,'_');
+      return '<div class="flex items-center gap-2 flex-wrap bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">'
+        + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[130px]">' + loc + '</span>'
+        + '<span class="text-xs text-slate-400">Qty:</span>'
+        + '<span class="mono text-xs font-bold text-slate-600 dark:text-slate-300 min-w-[36px] text-center">' + r.qty + '</span>'
+        + '<span class="text-xs text-slate-400">→</span>'
+        + '<input id="cv-' + safeId + '" type="number" min="0" value="' + r.qty + '" class="w-20 px-2 py-1.5 mono rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none" />'
+        + '<button onclick="cvCommitOne(' + idx + ')" class="px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-200 transition">OK</button>'
+        + (r.counted !== null ? '<span class="text-xs font-bold text-emerald-600">✓ '+r.counted+'</span>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  function updateCvCounted(){
+    var c = cvBins.reduce(function(s,r){ return s + (r.counted !== null ? r.counted : r.qty); }, 0);
+    D('cv-sum-counted').textContent = c.toLocaleString();
+    var pending = cvBins.filter(function(r){ return r.counted === null; }).length;
+    D('cv-pending').textContent = pending + ' pending';
+  }
+
+  window.cvCommitOne = function(idx){
+    var r = cvBins[idx];
+    if (!r) { return; }
+    var safeId = r.id.replace(/[^a-zA-Z0-9_]/g,'_');
+    var inp = D('cv-' + safeId);
+    var newQty = Math.max(0, parseInt(inp.value, 10) || 0);
+    var oldQty = r.qty;
+    db.runTransaction(function(tx){
+      return tx.get(db.collection('inventory').doc(r.id)).then(function(doc){
+        var q = doc.exists ? Math.max(0, Number(doc.data().quantity) || 0) : 0;
+        tx.update(doc.ref, { quantity: newQty, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+        if (newQty !== q) {
+          tx.set(db.collection('discrepancies').doc(), {
+            inventory_id: r.id, sku: r.sku, name: r.name,
+            expected_qty: q, actual_qty: newQty, variance: newQty - q,
+            worker_uid: auth.currentUser.uid,
+            bin: 'R'+r.room+'-A'+r.aisle+'-B'+r.bay+'-B'+r.bin,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+    }).then(function(){
+      cvBins[idx].qty = newQty;
+      cvBins[idx].counted = newQty;
+      renderCvBins();
+      updateCvCounted();
+      var loc = 'R'+r.room+'-A'+r.aisle+'-B'+r.bay+'-B'+r.bin;
+      toast(loc + ' → ' + newQty, 'success');
+    }).catch(function(e){ toast('Tx failed: ' + e.message, 'error'); });
+  };
+
+  D('btn-cv-commit-all').addEventListener('click', function(){
+    cvBins.forEach(function(r, idx){
+      var safeId = r.id.replace(/[^a-zA-Z0-9_]/g,'_');
+      var inp = D('cv-' + safeId);
+      if (!inp) { return; }
+      var newQty = Math.max(0, parseInt(inp.value, 10) || 0);
+      if (newQty === r.qty && r.counted !== null) { return; }
+      cvCommitOne(idx);
+    });
+  });
+
+  D('btn-cv-zero').addEventListener('click', function(){
+    cvBins.forEach(function(r, idx){
+      var safeId = r.id.replace(/[^a-zA-Z0-9_]/g,'_');
+      var inp = D('cv-' + safeId);
+      if (inp) inp.value = 0;
+    });
+    toast('All set to 0 — click Commit All','info');
+  });
+
+  /* ================================================================
+     Bins matrix grid render
+     ================================================================ */
+  function renderBinMatrix(){
+    var grid = D('bx-grid');
+    var room = S(D('bx-room').value), aisle = S(D('bx-aisle').value);
+    var bayStart = parseInt(D('bx-bay-start').value, 10) || 1, bayEnd = parseInt(D('bx-bay-end').value, 10) || bayStart;
+    var binStart = parseInt(D('bx-bin-start').value, 10) || 1, binEnd = parseInt(D('bx-bin-end').value, 10) || binStart;
+    if (!room || !aisle) { toast('Room and Aisle required','error'); return; }
+    if (bayEnd < bayStart || binEnd < binStart) { toast('End must be >= Start','error'); return; }
+    var total = (bayEnd - bayStart + 1) * (binEnd - binStart + 1);
+    if (total > 500) { toast('Too many cells (max 500)','error'); return; }
+
+    bxSelected = new Set();
+    bxStockByBin = {};
+    stockItems.forEach(function(i){
+      var bins = i.binsAdded.split(' | ');
+      bins.forEach(function(b){
+        var m = b.match(/R(-?\w+)?-A(-?\w+)?-B(-?\w+)?-B(-?\w+)?/);
+        if (m) {
+          var r = m[1] || '-', a = m[2] || '-', bay = m[3] || '-', bin = m[4] || '-';
+          if (r === room && a === aisle) {
+            var key = bay + '-' + bin;
+            if (!bxStockByBin[key]) bxStockByBin[key] = 0;
+            var qm = b.match(/\(Qty:(\d+)\)/);
+            bxStockByBin[key] += qm ? parseInt(qm[1], 10) : 0;
+          }
+        }
+      });
+    });
+
+    var html = '';
+    for (var b = bayStart; b <= bayEnd; b++) {
+      var bay = String(b).padStart(2, '0');
+      for (var n = binStart; n <= binEnd; n++) {
+        var bin = String(n).padStart(2, '00');
+        var key = bay + '-' + bin;
+        var qty = bxStockByBin[key] || 0;
+        var loc = 'R' + room + '-A' + aisle + '-B' + bay + '-B' + bin;
+        html += '<div class="bin-cell" data-key="' + esc(key) + '" data-loc="' + esc(loc) + '" data-room="' + esc(room) + '" data-aisle="' + esc(aisle) + '" data-bay="' + esc(bay) + '" data-bin="' + esc(bin) + '">'
+          + '<div class="loc">' + (qty > 0 ? '<span style="color:#6366f1;">' + bay + '-' + bin + '</span>' : bay + '-' + bin) + '</div>'
+          + '<div class="qty">' + (qty > 0 ? qty + ' UN' : '—') + '</div>'
+          + '</div>';
+      }
+    }
+    grid.innerHTML = html;
+    grid.querySelectorAll('.bin-cell').forEach(function(cell){
+      cell.addEventListener('click', function(){
+        var k = this.dataset.key;
+        if (bxSelected.has(k)) { bxSelected.delete(k); this.classList.remove('selected'); }
+        else { bxSelected.add(k); this.classList.add('selected'); }
+        D('bx-sel-count').textContent = bxSelected.size + ' selected';
+      });
+    });
+  }
+
+  D('btn-bx-render').addEventListener('click', renderBinMatrix);
+  D('btn-bx-select-all').addEventListener('click', function(){
+    D('bx-grid').querySelectorAll('.bin-cell').forEach(function(c){
+      c.classList.add('selected');
+      bxSelected.add(c.dataset.key);
+    });
+    D('bx-sel-count').textContent = bxSelected.size + ' selected';
+  });
+  D('btn-bx-clear-sel').addEventListener('click', function(){
+    bxSelected = new Set();
+    D('bx-grid').querySelectorAll('.bin-cell').forEach(function(c){ c.classList.remove('selected'); });
+    D('bx-sel-count').textContent = '0 selected';
+  });
+  D('btn-bx-to-qr').addEventListener('click', function(){
+    if (!bxSelected.size) { toast('Select cells first','error'); return; }
+    var room = S(D('bx-room').value), aisle = S(D('bx-aisle').value);
+    D('bx-grid').querySelectorAll('.bin-cell.selected').forEach(function(c){
+      var bay = c.dataset.bay, bin = c.dataset.bin;
+      var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin) + '&subtab=putaway';
+      qrItems.push({ url: url, label: 'R' + room + '-A' + aisle + '-B' + bay + '-B' + bin });
+    });
+    toast(bxSelected.size + ' bins → QR codes', 'success');
+    bxSelected = new Set();
+    D('bx-grid').querySelectorAll('.bin-cell').forEach(function(c){ c.classList.remove('selected'); });
+    D('bx-sel-count').textContent = '0 selected';
+    showTab('bins');
+    showBinsSubtab('qr');
+    renderQrGrid();
+  });
+  D('btn-bx-to-labels').addEventListener('click', function(){
+    if (!bxSelected.size) { toast('Select cells first','error'); return; }
+    var room = S(D('bx-room').value), aisle = S(D('bx-aisle').value);
+    D('bx-grid').querySelectorAll('.bin-cell.selected').forEach(function(c){
+      var bay = c.dataset.bay, bin = c.dataset.bin;
+      var loc = 'R' + room + '-A' + aisle + '-B' + bay + '-B' + bin;
+      var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin) + '&subtab=putaway';
+      blItems.push({ loc: loc, url: url, room: room, aisle: aisle, bay: bay, bin: bin });
+    });
+    toast(bxSelected.size + ' bins → Bin Labels', 'success');
+    bxSelected = new Set();
+    D('bx-grid').querySelectorAll('.bin-cell').forEach(function(c){ c.classList.remove('selected'); });
+    D('bx-sel-count').textContent = '0 selected';
+    showTab('bins');
+    showBinsSubtab('binlabels');
+    renderBinLabels();
+  });
+
+  /* ================================================================
+     Batch Current Stock Labels
+     ================================================================ */
+  function rebuildBsCache(){
+    var seen = new Set();
+    ilAllItems.forEach(function(i){ seen.add(i.sku); });
+  }
+
+  function generateBatchStock(){
+    if (!stockItems.length) { toast('No stock loaded','error'); return; }
+    var size = D('bs-size').value;
+    var withQr = D('bs-qr-toggle').checked;
+    var includeQty = D('bs-include-qty').checked;
+    var filter = (D('bs-filter').value || '').toLowerCase().trim();
+    var dims = labelDims(size);
+
+    bsItems = stockItems.filter(function(i){
+      if (!filter) { return true; }
+      return i.sku.toLowerCase().includes(filter) || i.name.toLowerCase().includes(filter);
+    }).map(function(i){
+      return { sku: i.sku, name: i.name, qty: i.total };
+    });
+
+    D('bs-summary').textContent = bsItems.length + ' labels for current stock';
+    var grid = D('bs-grid');
+    grid.innerHTML = bsItems.map(function(item, idx){
+      var canvasId = 'bs-canvas-' + idx;
+      var url = window.location.origin + window.location.pathname + '?tab=wizard&sku=' + encodeURIComponent(item.sku) + '&subtab=count';
+      if (withQr) {
+        setTimeout(function(){
+          try { new QRCode(document.getElementById(canvasId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
+        }, 0);
+      }
+      var lines = [];
+      if (size === '4x2') {
+        lines.push('<div style="font-size:' + dims.font + 'px;font-weight:700;font-family:monospace;">' + esc(item.sku) + '</div>');
+        lines.push('<div style="font-size:' + (dims.font - 1) + 'px;margin-top:1px;">' + esc(item.name).substr(0, 30) + '</div>');
+        if (includeQty) lines.push('<div style="font-size:' + (dims.font - 1) + 'px;margin-top:1px;color:#64748b;">Total Qty: ' + item.qty + '</div>');
+      } else if (size === '3x1') {
+        lines.push('<div style="font-size:' + dims.font + 'px;font-weight:700;font-family:monospace;">' + esc(item.sku) + '</div>');
+        lines.push('<div style="font-size:' + (dims.font - 1) + 'px;margin-top:1px;">' + esc(item.name).substr(0, 24) + '</div>');
+        if (includeQty) lines.push('<div style="font-size:' + (dims.font - 2) + 'px;margin-top:1px;color:#64748b;">Qty: ' + item.qty + '</div>');
+      } else {
+        lines.push('<div style="font-size:' + dims.font + 'px;font-weight:700;font-family:monospace;">' + esc(item.sku) + '</div>');
+        lines.push('<div style="font-size:' + (dims.font - 1) + 'px;margin-top:1px;">' + esc(item.name).substr(0, 20) + '</div>');
+      }
+      return '<div class="qr-card" style="width:' + dims.w + 'mm;height:' + dims.h + 'mm;min-width:' + dims.w + 'mm;min-height:' + dims.h + 'mm;display:flex;flex-direction:column;justify-content:center;align-items:center;">'
+        + (withQr ? '<canvas id="' + canvasId + '" style="width:' + dims.qr + 'mm;height:' + dims.qr + 'mm;margin-bottom:2px;"></canvas>' : '')
+        + lines.join('')
+        + '</div>';
+    }).join('');
+  }
+
+  D('btn-bs-generate').addEventListener('click', generateBatchStock);
+  D('btn-bs-print').addEventListener('click', function(){
+    if (!bsItems.length) { toast('Generate batch first','error'); return; }
+    window.print();
+  });
+  D('btn-bs-clear').addEventListener('click', function(){
+    bsItems = [];
+    D('bs-grid').innerHTML = '';
+    D('bs-summary').textContent = '';
+    toast('Batch cleared', 'info');
+  });
+
+  /* ================================================================
      PANE 4 — BIN SETUP / QR CODE GRID
      ================================================================ */
   function addQrToGrid(){
@@ -1189,11 +1845,19 @@
     D('il-mode-single').classList.toggle('bg-indigo-100', mode==='single');
     D('il-mode-single').classList.toggle('text-indigo-600', mode==='single');
     D('il-mode-single').classList.toggle('dark:bg-indigo-900/30', mode==='single');
-    D('il-mode-single').classList.toggle('dark:text-indigo-400', mode==='single);
+    D('il-mode-single').classList.toggle('dark:text-indigo-400', mode==='single');
+    D('il-mode-single').classList.toggle('bg-slate-200', mode!=='single');
+    D('il-mode-single').classList.toggle('dark:bg-slate-700', mode!=='single');
+    D('il-mode-single').classList.toggle('text-slate-600', mode!=='single');
+    D('il-mode-single').classList.toggle('dark:text-slate-300', mode!=='single');
     D('il-mode-multi').classList.toggle('bg-indigo-100', mode==='multi');
     D('il-mode-multi').classList.toggle('text-indigo-600', mode==='multi');
     D('il-mode-multi').classList.toggle('dark:bg-indigo-900/30', mode==='multi');
     D('il-mode-multi').classList.toggle('dark:text-indigo-400', mode==='multi');
+    D('il-mode-multi').classList.toggle('bg-slate-200', mode!=='multi');
+    D('il-mode-multi').classList.toggle('dark:bg-slate-700', mode!=='multi');
+    D('il-mode-multi').classList.toggle('text-slate-600', mode!=='multi');
+    D('il-mode-multi').classList.toggle('dark:text-slate-300', mode!=='multi');
     if (mode==='single' && ilSelected.length>1) { ilSelected = ilSelected.slice(0,1); renderIlChips(); rebuildIlGrid(); }
   }
 
@@ -1201,33 +1865,41 @@
     var grid = D('il-grid'), size = D('il-size').value;
     if (!ilSelected.length) { grid.innerHTML = ''; return; }
     var dims = labelDims(size);
+    var withQr = D('il-qr-toggle').checked;
+    var field = D('il-field') ? D('il-field').value : 'both';
     grid.innerHTML = ilSelected.map(function(item, idx){
       var canvasId = 'il-canvas-'+idx;
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku='+encodeURIComponent(item.sku)+'&subtab=count';
-      setTimeout(function(){
-        try { new QRCode(document.getElementById(canvasId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
-      }, 0);
+      if (withQr) {
+        setTimeout(function(){
+          try { new QRCode(document.getElementById(canvasId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+        }, 0);
+      }
       var lines = [];
+      var showSku = field === 'both' || field === 'sku';
+      var showName = field === 'both' || field === 'name';
       if (size==='4x2') {
-        lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
-        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name)+'</div>');
+        if (showSku) lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
+        if (showName) lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name)+'</div>');
         lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;color:#64748b;">Qty: '+item.qty+'</div>');
       } else if (size==='3x1') {
-        lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
-        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,24)+'</div>');
+        if (showSku) lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
+        if (showName) lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,24)+'</div>');
         lines.push('<div style="font-size:'+(dims.font-2)+'px;margin-top:1px;color:#64748b;">Qty: '+item.qty+'</div>');
       } else {
-        lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
-        lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,20)+'</div>');
+        if (showSku) lines.push('<div style="font-size:'+dims.font+'px;font-weight:700;font-family:monospace;">'+esc(item.sku)+'</div>');
+        if (showName) lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,20)+'</div>');
       }
       return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;display:flex;flex-direction:column;justify-content:center;align-items:center;">'
-        + '<canvas id="'+canvasId+'" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin-bottom:2px;"></canvas>'
+        + (withQr ? '<canvas id="'+canvasId+'" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin-bottom:2px;"></canvas>' : '')
         + lines.join('')
         + '</div>';
     }).join('');
   }
 
   D('il-size').addEventListener('change', rebuildIlGrid);
+  D('il-qr-toggle').addEventListener('change', rebuildIlGrid);
+  if (D('il-field')) D('il-field').addEventListener('change', rebuildIlGrid);
   D('il-qty').addEventListener('change', function(){
     if (ilMode==='single' && ilSelected.length) { ilSelected[0].qty = parseInt(this.value,10)||1; rebuildIlGrid(); }
   });
@@ -1245,14 +1917,46 @@
       b.setAttribute('aria-selected', active);
     });
     document.querySelectorAll('.bins-subtab').forEach(function(p){
-      p.classList.toggle('active', p.id==='bins-'+sub);
+      var isActive = p.id === 'bins-' + sub;
+      p.classList.toggle('active', isActive);
+      p.classList.toggle('hidden', !isActive);
     });
     // Rebuild item cache when entering itemlabels
     if (sub==='itemlabels') rebuildIlItemCache();
+    // Render matrix on entering matrix sub-tab
+    if (sub==='matrix' && !window.__bxRendered) { window.__bxRendered = true; }
   }
   document.querySelectorAll('.bins-subtab-btn').forEach(function(b){
     b.addEventListener('click', function(){ showBinsSubtab(b.dataset.subtab); });
   });
+
+  /* Labels sub-tab switching */
+  function showLabelsSubtab(sub){
+    document.querySelectorAll('.labels-subtab-btn').forEach(function(b){
+      var active = b.dataset.subtab===sub;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', active);
+    });
+    document.querySelectorAll('.labels-subtab').forEach(function(p){
+      var isActive = p.id === 'labels-' + sub;
+      p.classList.toggle('active', isActive);
+      p.classList.toggle('hidden', !isActive);
+    });
+    if (sub==='itemlabels') rebuildIlItemCache();
+    if (sub==='batchstock') rebuildBsCache();
+  }
+  document.querySelectorAll('.labels-subtab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ showLabelsSubtab(b.dataset.subtab); });
+  });
+
+  function buildLabelsTab(){
+    window.__labelsBuilt = true;
+    rebuildIlItemCache();
+  }
+
+  function buildCountTab(){
+    window.__countBuilt = true;
+  }
 
   /* ================================================================
      INITIAL TAB FROM URL
@@ -1260,7 +1964,7 @@
   (function initTabFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','batch','bins'];
+    var validTabs = ['stock','wizard','count','batch','bins','labels'];
     if (!validTabs.includes(tab)) tab = 'stock';
     showTab(tab);
   })();
