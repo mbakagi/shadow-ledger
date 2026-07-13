@@ -53,21 +53,28 @@
     .bin-cell .loc { font-weight: 700; }
     .bin-cell .qty { color: #64748b; font-size: 9px; margin-top: 2px; }
 
-    /* Print — paper logsheet & QR grid */
+    /* Print — only active pane/ sub-tab, with page breaks */
+    .print-only { display: none; }
     @media print {
       body { background: white !important; color: black !important; font-size: 10pt; }
       nav, button, input, select, .no-print, #login-overlay, .tab-nav, .tab-btn, .btn-print, .btn-logout, .user-badge, #search-input { display: none !important; }
-      .tab-pane { display: block !important; page-break-after: avoid; }
+      .tab-pane { display: none !important; }
+      .tab-pane.active { display: block !important; }
+      .wizard-subtab, .bins-subtab, .labels-subtab { display: none !important; }
+      .wizard-subtab.active, .bins-subtab.active, .labels-subtab.active { display: block !important; }
       #dashboard-table { border-collapse: collapse; width: 100%; }
       #dashboard-table th, #dashboard-table td {
         border: 1px solid #000; padding: 4px 6px; font-size: 9pt; text-align: left;
       }
       #dashboard-table th { background: #eee; font-weight: 700; }
       #dashboard-table tr:nth-child(even) { background: #fafafa; }
+      #dashboard-table tr { page-break-inside: avoid; }
       h1 { font-size: 14pt; margin-bottom: 6px; }
+      h2, h3 { page-break-after: avoid; }
+      .print-only { display: block !important; }
       .print-date { font-size: 8pt; color: #555; margin-bottom: 10px; }
       .qr-grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
-      .qr-card { border: 1px solid #999 !important; page-break-inside: avoid; }
+      .qr-card { border: 1px solid #999 !important; page-break-inside: avoid; break-inside: avoid; }
       .qr-card .label { font-size: 8pt !important; color: #000 !important; }
     }
   </style>
@@ -975,12 +982,12 @@
   });
 
   D('btn-print').addEventListener('click', function(){
-    var div = document.createElement('div');
-    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;visibility:hidden;';
-    div.innerHTML = '<p class="print-date">Logsheet printed: ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' GMT</p>' + D('dashboard-table').outerHTML;
-    document.body.appendChild(div);
+    var dateEl = document.createElement('p');
+    dateEl.className = 'print-date print-only';
+    dateEl.textContent = 'Logsheet printed: ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' GMT';
+    D('pane-stock').prepend(dateEl);
     window.print();
-    setTimeout(function(){ div.remove(); }, 200);
+    setTimeout(function(){ dateEl.remove(); }, 300);
   });
 
   /* ================================================================
