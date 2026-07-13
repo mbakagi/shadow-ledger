@@ -27,6 +27,8 @@
     .qr-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; text-align: center; }
     .qr-card canvas { max-width: 100%; height: auto; display: block; margin: 0 auto 4px; }
       .qr-card .label { font-size: 10px; font-family: ui-monospace, monospace; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .qr-box { display: inline-block; }
+      .qr-box canvas, .qr-box img { max-width: 100% !important; height: auto !important; display: block; margin: 0 auto; }
 
     /* OCR drop zone */
     .ocr-drop {
@@ -57,11 +59,13 @@
     .print-only { display: none; }
     @media print {
       body { background: white !important; color: black !important; font-size: 10pt; }
-      nav, button, input, select, .no-print, #login-overlay, .tab-nav, .tab-btn, .btn-print, .btn-logout, .user-badge, #search-input { display: none !important; }
-      .tab-pane { display: none !important; }
-      .tab-pane.active { display: block !important; }
-      .wizard-subtab, .bins-subtab, .labels-subtab { display: none !important; }
-      .wizard-subtab.active, .bins-subtab.active, .labels-subtab.active { display: block !important; }
+      body.print-area-mode > * { display: none !important; }
+      body.print-area-mode > #print-root { display: block !important; }
+      body:not(.print-area-mode) nav, body:not(.print-area-mode) button, body:not(.print-area-mode) input, body:not(.print-area-mode) select, body:not(.print-area-mode) .no-print, body:not(.print-area-mode) #login-overlay, body:not(.print-area-mode) .tab-nav, body:not(.print-area-mode) .tab-btn, body:not(.print-area-mode) .btn-print, body:not(.print-area-mode) .btn-logout, body:not(.print-area-mode) .user-badge, body:not(.print-area-mode) #search-input { display: none !important; }
+      body:not(.print-area-mode) .tab-pane { display: none !important; }
+      body:not(.print-area-mode) .tab-pane.active { display: block !important; }
+      body:not(.print-area-mode) .wizard-subtab, body:not(.print-area-mode) .bins-subtab, body:not(.print-area-mode) .labels-subtab { display: none !important; }
+      body:not(.print-area-mode) .wizard-subtab.active, body:not(.print-area-mode) .bins-subtab.active, body:not(.print-area-mode) .labels-subtab.active { display: block !important; }
       #dashboard-table { border-collapse: collapse; width: 100%; }
       #dashboard-table th, #dashboard-table td {
         border: 1px solid #000; padding: 4px 6px; font-size: 9pt; text-align: left;
@@ -80,6 +84,9 @@
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen">
+
+  <!-- Print root: cloned target content goes here (print-area mode) -->
+  <div id="print-root"></div>
 
   <!-- ──────────────────────────────────────────────────────────────
        SHARED AUTH OVERLAY (single instance)
@@ -686,6 +693,118 @@
     setTimeout(function(){ t.remove(); }, 2500);
   };
 
+  /* Scoped print — only the given element prints (cloned into #print-root) */
+  var printArea = function(elOrId, title){
+    var src = typeof elOrId === 'string' ? D(elOrId) : elOrId;
+    if (!src) { toast('Nothing to print', 'error'); return; }
+    var root = D('print-root');
+    root.innerHTML = '';
+    var heading = '';
+    if (title) heading = '<h1 style="font-size:14pt;margin-bottom:6px;">' + esc(title) + '</h1>';
+    heading += '<p class="print-date">Printed: ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' GMT</p>';
+    root.innerHTML = heading + src.outerHTML;
+    document.body.classList.add('print-area-mode');
+    var done = function(){
+      document.body.classList.remove('print-area-mode');
+      root.innerHTML = '';
+    };
+    if (window.matchMedia('print').matches) done();
+    window.addEventListener('mousemove', done, { once: true });
+    setTimeout(done, 15000);
+    window.print();
+    setTimeout(done, 500);
+  };
+
+  /* ================================================================
+     AUTOCOMPLETE INFRASTRUCTURE
+     - SKU autocomplete on any text input (predict/complete SKUs and names)
+     - Bin location autocomplete for Room/Aisle/Bay/Bin from existing bin docs
+     ================================================================ */
+  var skuCache = [];          // [{ sku, name, total }]
+  var binLocCache = { rooms: [], aisles: [], bays: [], bins: [] };
+
+  function rebuildSkuCache(){
+    var seen = new Set();
+    skuCache = [];
+    stockItems.forEach(function(i){
+      if (!seen.has(i.sku)) { seen.add(i.sku); skuCache.push({ sku:i.sku, name:i.name, total:i.total, bins:i.binCount }); }
+    });
+    skuCache.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
+  }
+
+  function rebuildBinLocCache(){
+    var rs = new Set(), as = new Set(), bs = new Set(), is = new Set();
+    stockItems.forEach(function(item){
+      var parts = String(item.binsAdded || '').split(' | ');
+      parts.forEach(function(p){
+        var m = p.match(/R(-?\w+)?-A(-?\w+)?-B(-?\w+)?-B(-?\w+)?/);
+        if (m) {
+          if (m[1]) rs.add(m[1]);
+          if (m[2]) as.add(m[2]);
+          if (m[3]) bs.add(m[3]);
+          if (m[4]) is.add(m[4]);
+        }
+      });
+    });
+    binLocCache.rooms = Array.from(rs).sort();
+    binLocCache.aisles = Array.from(as).sort();
+    binLocCache.bays = Array.from(bs).sort();
+    binLocCache.bins = Array.from(is).sort();
+  }
+
+  function attachSkuAutocomplete(inputEl, onPick){
+    if (!inputEl) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'relative absolute z-[60] w-full max-h-56 overflow-y-auto scrollbar-thin bg-white dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-600 shadow-lg hidden text-xs';
+    wrap.style.top = '100%';
+    wrap.style.left = '0';
+    wrap.style.marginTop = '2px';
+    inputEl.parentElement.style.position = 'relative';
+    inputEl.parentElement.appendChild(wrap);
+    var debounce = null;
+
+    inputEl.addEventListener('input', function(){
+      clearTimeout(debounce);
+      var q = (inputEl.value || '').toLowerCase().trim();
+      if (!q) { wrap.classList.add('hidden'); return; }
+      debounce = setTimeout(function(){
+        var results = skuCache.filter(function(c){
+          return c.sku.toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
+        }).slice(0, 12);
+        if (!results.length) { wrap.classList.add('hidden'); return; }
+        wrap.innerHTML = results.map(function(r){
+          return '<div class="px-3 py-2 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border-b border-slate-200/50 last:border-0 flex items-center justify-between" data-sku="' + esc(r.sku) + '" data-name="' + esc(r.name) + '">'
+            + '<div class="flex-1 min-w-0">'
+            + '<span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">' + esc(r.sku) + '</span>'
+            + '<span class="ml-2 truncate text-slate-600 dark:text-slate-300">' + esc(r.name) + '</span>'
+            + '</div>'
+            + '<span class="text-slate-400 ml-2">T:' + r.total + (r.bins ? ' / ' + r.bins + 'bins' : '') + '</span>'
+            + '</div>';
+        }).join('');
+        wrap.classList.remove('hidden');
+        wrap.querySelectorAll('[data-sku]').forEach(function(row){
+          row.addEventListener('click', function(){
+            inputEl.value = this.dataset.sku;
+            wrap.classList.add('hidden');
+            if (typeof onPick === 'function') onPick(this.dataset.sku, this.dataset.name);
+          });
+        });
+      }, 120);
+    });
+
+    inputEl.addEventListener('blur', function(){ setTimeout(function(){ wrap.classList.add('hidden'); }, 180); });
+  }
+
+  function attachBinAutocomplete(inputEl, valuesArr){
+    if (!inputEl) return;
+    var listId = 'dl-' + Math.random().toString(36).substr(2, 9);
+    var dl = document.createElement('datalist');
+    dl.id = listId;
+    valuesArr.forEach(function(v){ var o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+    document.body.appendChild(dl);
+    inputEl.setAttribute('list', listId);
+  }
+
   /* ================================================================
      SHARED STATE
      ================================================================ */
@@ -940,6 +1059,9 @@
     });
     stockItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
     window.__stockRendered = true;
+    rebuildSkuCache();
+    rebuildBinLocCache();
+    document.dispatchEvent(new CustomEvent('stockUpdated'));
   }
 
   function renderStock(){
@@ -982,12 +1104,7 @@
   });
 
   D('btn-print').addEventListener('click', function(){
-    var dateEl = document.createElement('p');
-    dateEl.className = 'print-date print-only';
-    dateEl.textContent = 'Logsheet printed: ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' GMT';
-    D('pane-stock').prepend(dateEl);
-    window.print();
-    setTimeout(function(){ dateEl.remove(); }, 300);
+    printArea('dashboard-table', 'Stock Logsheet');
   });
 
   /* ================================================================
@@ -1638,11 +1755,11 @@
     D('bs-summary').textContent = bsItems.length + ' labels for current stock';
     var grid = D('bs-grid');
     grid.innerHTML = bsItems.map(function(item, idx){
-      var canvasId = 'bs-canvas-' + idx;
+      var boxId = 'bs-box-' + idx;
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku=' + encodeURIComponent(item.sku) + '&subtab=count';
       if (withQr) {
         setTimeout(function(){
-          try { new QRCode(document.getElementById(canvasId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
+          try { new QRCode(document.getElementById(boxId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
         }, 0);
       }
       var lines = [];
@@ -1659,7 +1776,7 @@
         lines.push('<div style="font-size:' + (dims.font - 1) + 'px;margin-top:1px;">' + esc(item.name).substr(0, 20) + '</div>');
       }
       return '<div class="qr-card" style="width:' + dims.w + 'mm;height:' + dims.h + 'mm;min-width:' + dims.w + 'mm;min-height:' + dims.h + 'mm;display:flex;flex-direction:column;justify-content:center;align-items:center;">'
-        + (withQr ? '<canvas id="' + canvasId + '" style="width:' + dims.qr + 'mm;height:' + dims.qr + 'mm;margin-bottom:2px;"></canvas>' : '')
+        + (withQr ? '<div id="' + boxId + '" class="qr-box" style="width:' + dims.qr + 'mm;height:' + dims.qr + 'mm;margin:0 auto 2px;"></div>' : '')
         + lines.join('')
         + '</div>';
     }).join('');
@@ -1668,7 +1785,7 @@
   D('btn-bs-generate').addEventListener('click', generateBatchStock);
   D('btn-bs-print').addEventListener('click', function(){
     if (!bsItems.length) { toast('Generate batch first','error'); return; }
-    window.print();
+    printArea('bs-grid', 'Batch Stock Labels');
   });
   D('btn-bs-clear').addEventListener('click', function(){
     bsItems = [];
@@ -1697,13 +1814,12 @@
   function renderQrGrid(){
     var grid = D('qr-grid');
     grid.innerHTML = qrItems.map(function(item, idx){
-      var canvasId = 'qr-canvas-' + idx;
-      // Generate QR code asynchronously
+      var boxId = 'qr-box-' + idx;
       setTimeout(function(){
-        try { new QRCode(document.getElementById(canvasId), { text: item.url, width: 96, height: 96, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+        try { new QRCode(document.getElementById(boxId), { text: item.url, width: 96, height: 96, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
       }, 0);
       return '<div class="qr-card">'
-        + '<canvas id="' + canvasId + '"></canvas>'
+        + '<div id="' + boxId + '" class="qr-box"></div>'
         + '<div class="label">' + esc(item.label) + '</div>'
         + '</div>';
     }).join('');
@@ -1711,7 +1827,7 @@
   }
 
   D('btn-qr-add').addEventListener('click', addQrToGrid);
-  D('btn-qr-print').addEventListener('click', function(){ window.print(); });
+  D('btn-qr-print').addEventListener('click', function(){ printArea('qr-grid', 'QR Codes'); });
   D('btn-qr-clear').addEventListener('click', function(){ qrItems = []; renderQrGrid(); toast('QR grid cleared','info'); });
 
   /* ================================================================
@@ -1742,13 +1858,13 @@
   function renderBinLabels(){
     var grid = D('bl-grid'), size = D('bl-size').value;
     grid.innerHTML = blItems.map(function(item, idx){
-      var canvasId = 'bl-canvas-'+idx;
+      var boxId = 'bl-box-'+idx;
       var dims = labelDims(size);
       setTimeout(function(){
-        try { new QRCode(document.getElementById(canvasId), { text: item.url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+        try { new QRCode(document.getElementById(boxId), { text: item.url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
       }, 0);
       return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;">'
-        + '<canvas id="'+canvasId+'" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;"></canvas>'
+        + '<div id="'+boxId+'" class="qr-box" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin:0 auto;"></div>'
         + '<div class="label" style="font-size:'+dims.font+'px;margin-top:2px;">'+esc(item.loc)+'</div>'
         + '<div class="label" style="font-size:'+(dims.font-1)+'px;color:#64748b;">Room '+item.room+' · Aisle '+item.aisle+' · Bay '+item.bay+' · Bin '+item.bin+'</div>'
         + '</div>';
@@ -1763,7 +1879,7 @@
   }
 
   D('btn-bl-generate').addEventListener('click', generateBinLabels);
-  D('btn-bl-print').addEventListener('click', function(){ window.print(); });
+  D('btn-bl-print').addEventListener('click', function(){ printArea('bl-grid', 'Bin Labels'); });
   D('btn-bl-clear').addEventListener('click', function(){ blItems = []; renderBinLabels(); toast('Bin labels cleared','info'); });
 
   /* ================================================================
@@ -1772,14 +1888,13 @@
   var ilMode = 'single'; // 'single' or 'multi'
   var ilSelected = []; // array of {sku, name, qty}
   var ilSearchDebounce = null;
-  var ilAllItems = []; // cached from stockItems
 
   function rebuildIlItemCache(){
     // Build unique SKU list from stockItems
     var seen = new Set();
     ilAllItems = [];
     stockItems.forEach(function(i){
-      if (!seen.has(i.sku)) { seen.add(i.sku); ilAllItems.push({ sku:i.sku, name:i.name }); }
+      if (!seen.has(i.sku)) { seen.add(i.sku); ilAllItems.push({ sku:i.sku, name:i.name, total:i.total }); }
     });
     ilAllItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
   }
@@ -1875,11 +1990,11 @@
     var withQr = D('il-qr-toggle').checked;
     var field = D('il-field') ? D('il-field').value : 'both';
     grid.innerHTML = ilSelected.map(function(item, idx){
-      var canvasId = 'il-canvas-'+idx;
+      var boxId = 'il-box-'+idx;
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku='+encodeURIComponent(item.sku)+'&subtab=count';
       if (withQr) {
         setTimeout(function(){
-          try { new QRCode(document.getElementById(canvasId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+          try { new QRCode(document.getElementById(boxId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
         }, 0);
       }
       var lines = [];
@@ -1898,7 +2013,7 @@
         if (showName) lines.push('<div style="font-size:'+(dims.font-1)+'px;margin-top:1px;">'+esc(item.name).substr(0,20)+'</div>');
       }
       return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;display:flex;flex-direction:column;justify-content:center;align-items:center;">'
-        + (withQr ? '<canvas id="'+canvasId+'" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin-bottom:2px;"></canvas>' : '')
+        + (withQr ? '<div id="'+boxId+'" class="qr-box" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin:0 auto 2px;"></div>' : '')
         + lines.join('')
         + '</div>';
     }).join('');
@@ -1911,7 +2026,7 @@
     if (ilMode==='single' && ilSelected.length) { ilSelected[0].qty = parseInt(this.value,10)||1; rebuildIlGrid(); }
   });
 
-  D('btn-il-print').addEventListener('click', function(){ if (!ilSelected.length) { toast('Add items first','error'); return; } window.print(); });
+  D('btn-il-print').addEventListener('click', function(){ if (!ilSelected.length) { toast('Add items first','error'); return; } printArea('il-grid', 'Item Labels'); });
   D('btn-il-clear').addEventListener('click', function(){ ilSelected = []; renderIlChips(); rebuildIlGrid(); toast('Selection cleared','info'); });
 
   /* ================================================================
@@ -1977,7 +2092,7 @@
   })();
 
   /* ================================================================
-     PWA SERVICE WORKER REGISTRATION
+PWA SERVICE WORKER REGISTRATION
      ================================================================ */
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function(){
@@ -1985,6 +2100,58 @@
         .catch(function(e){ console.warn('SW registration failed:', e); });
     });
   }
-  </script>
+
+  /* ================================================================
+     AUTOCOMPLETE WIRING — attach to every SKU + bin input on page
+     ================================================================ */
+  (function wireAutocomplete(){
+    function safe(id, onPick){ var el = D(id); if (el) attachSkuAutocomplete(el, onPick); }
+    safe('count-sku', function(sku, name){ if (D('count-name')) D('count-name').value = name; });
+    safe('pa-sku', function(sku, name){ if (D('pa-name')) D('pa-name').value = name; });
+    safe('tf-sku', function(sku, name){ if (D('tf-name')) D('tf-name').value = name; });
+    safe('cv-sku');
+    safe('ocr-p-sku', function(sku, name){ if (D('ocr-p-name')) D('ocr-p-name').value = name; });
+    safe('qr-sku');
+
+    function wireBin(prefix){
+      var rEl = D(prefix+'-room'), aEl = D(prefix+'-aisle'), bEl = D(prefix+'-bay'), nEl = D(prefix+'-bin');
+      if (rEl) attachBinAutocomplete(rEl, binLocCache.rooms);
+      if (aEl) attachBinAutocomplete(aEl, binLocCache.aisles);
+      if (bEl) attachBinAutocomplete(bEl, binLocCache.bays);
+      if (nEl) attachBinAutocomplete(nEl, binLocCache.bins);
+    }
+    wireBin('pa');
+    wireBin('tf-s');
+    wireBin('tf-d');
+    wireBin('qr');
+    wireBin('bl');
+    wireBin('bx');
+  })();
+
+  // Re-attach datalist options after cache update (debounced)
+  var __acRefreshTimer = null;
+  function refreshBinDatalists(){
+    clearTimeout(__acRefreshTimer);
+    __acRefreshTimer = setTimeout(function(){
+      document.querySelectorAll('input[list]').forEach(function(inp){
+        var listId = inp.getAttribute('list');
+        var dl = document.getElementById(listId);
+        if (!dl) return;
+        // Detect which bin field this is by placeholder/id heuristic
+        var which = (inp.placeholder || '').toLowerCase();
+        var src = binLocCache.bins;
+        var ph = (inp.placeholder || inp.id || '').toLowerCase();
+        if (ph.indexOf('room') >= 0) src = binLocCache.rooms;
+        else if (ph.indexOf('aisle') >= 0) src = binLocCache.aisles;
+        else if (ph.indexOf('bay') >= 0) src = binLocCache.bays;
+        else if (ph.indexOf('bin') >= 0) src = binLocCache.bins;
+        // Rebuild
+        dl.innerHTML = '';
+        src.forEach(function(v){ var o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+      });
+    }, 400);
+  }
+  document.addEventListener('stockUpdated', refreshBinDatalists);
+</script>
 </body>
 </html>
