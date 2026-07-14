@@ -200,10 +200,11 @@
   <section id="pane-wizard" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-wizard">
     <!-- Sub-tab nav inside Wizard -->
     <div class="flex gap-2 flex-wrap no-print" role="tablist" aria-label="Wizard tasks">
-      <button class="wizard-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="count" role="tab" aria-selected="true" aria-controls="wizard-count">🔍 Search & Count</button>
-      <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="ocrimg" role="tab" aria-selected="false" aria-controls="wizard-ocrimg">📷 Image OCR</button>
+      <button class="wizard-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="additem" role="tab" aria-selected="true" aria-controls="wizard-additem">➕ Add SKU / Item</button>
       <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="putaway" role="tab" aria-selected="false" aria-controls="wizard-putaway">📦 Putaway / Assign</button>
+      <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="count" role="tab" aria-selected="false" aria-controls="wizard-count">🔍 Search & Count</button>
       <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="transfer" role="tab" aria-selected="false" aria-controls="wizard-transfer">↔ Bin-to-Bin Transfer</button>
+      <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="ocrimg" role="tab" aria-selected="false" aria-controls="wizard-ocrimg">📷 Image OCR</button>
     </div>
 
     <!-- Shared WMS Camera Scanner (dynamic, shown above active tab) -->
@@ -225,8 +226,45 @@
       </div>
     </div>
 
+    <!-- Sub-tab: Add SKU / Item -->
+    <section id="wizard-additem" class="wizard-subtab space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Create / Add New Item</h2>
+        <button id="btn-add-scan" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+          Open Scanner Camera
+        </button>
+      </div>
+      <p class="text-xs text-slate-400">Register a new SKU and its name in the WMS system database.</p>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">SKU (required)</label>
+          <input id="add-sku" type="text" placeholder="e.g. SKU-1002" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Item Name (required)</label>
+          <input id="add-name" type="text" placeholder="e.g. Hex Bolt M8x50" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+      </div>
+
+      <div class="bg-slate-50 dark:bg-slate-700/20 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Initial Location & Quantity (Optional)</div>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room</label><input id="add-room" type="text" placeholder="e.g. 1" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="add-aisle" type="text" placeholder="e.g. A" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bay</label><input id="add-bay" type="text" placeholder="e.g. 01" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bin</label><input id="add-bin" type="text" placeholder="e.g. 02" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Initial Qty</label><input id="add-qty" type="number" min="0" value="0" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        </div>
+        <p class="text-[10px] text-slate-400">If no location is selected, the item will be initialized in the database at Room: <span class="font-bold">NONE</span> with quantity <span class="font-bold">0</span>.</p>
+      </div>
+
+      <button id="btn-add-item-submit" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Create Item Record</button>
+    </section>
+
     <!-- Sub-tab: Search & Count -->
-    <section id="wizard-count" class="wizard-subtab active space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+    <section id="wizard-count" class="wizard-subtab hidden space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
       <div class="flex items-center justify-between flex-wrap gap-2">
         <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Search & Count</h2>
         <button id="btn-count-scan" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5">
@@ -550,6 +588,7 @@
       <button class="bins-subtab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="qr" role="tab" aria-selected="true" aria-controls="bins-qr">📱 QR Codes</button>
       <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="binlabels" role="tab" aria-selected="false" aria-controls="bins-binlabels">🏷 Bin Labels</button>
       <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="matrix" role="tab" aria-selected="false" aria-controls="bins-matrix">🔲 Matrix Grid</button>
+      <button class="bins-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="binsearch" role="tab" aria-selected="false" aria-controls="bins-binsearch">🔍 Bin Contents Search</button>
     </div>
 
     <!-- Sub-tab: QR Codes (existing) -->
@@ -638,6 +677,41 @@
       </div>
 
       <div id="bx-grid" class="bin-matrix no-print"></div>
+    </section>
+
+    <!-- Sub-tab: Bin Contents Search -->
+    <section id="bins-binsearch" class="bins-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <h3 class="font-bold text-sm">Bin Contents Search</h3>
+      <p class="text-xs text-slate-500">Query a specific physical bin location to see which items are stored inside.</p>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-700/20 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Room (req)</label><input id="bs-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Aisle</label><input id="bs-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bay</label><input id="bs-bay" type="text" placeholder="e.g. 01" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bin</label><input id="bs-bin" type="text" placeholder="e.g. 04" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+      </div>
+      <button id="btn-bs-search" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Query Bin Contents</button>
+
+      <div id="bs-results" class="hidden space-y-3">
+        <h4 id="bs-results-title" class="font-bold text-sm text-slate-600 dark:text-slate-300"></h4>
+        <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-100 dark:bg-slate-700 text-slate-500 uppercase font-semibold text-[10px]">
+              <tr>
+                <th class="px-3 py-2">SKU</th>
+                <th class="px-3 py-2">Item Name</th>
+                <th class="px-3 py-2 text-right">Quantity</th>
+                <th class="px-3 py-2 text-center w-24">Action</th>
+              </tr>
+            </thead>
+            <tbody id="bs-results-tbody" class="divide-y divide-slate-200 dark:divide-slate-700">
+              <tr>
+                <td colspan="4" class="text-center py-4 text-slate-400">No items found in this bin.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </section>
 
@@ -876,7 +950,7 @@
   function attachSkuAutocomplete(inputEl, onPick){
     if (!inputEl) return;
     var wrap = document.createElement('div');
-    wrap.className = 'relative absolute z-[60] w-full max-h-56 overflow-y-auto scrollbar-thin bg-white dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-600 shadow-lg hidden text-xs';
+    wrap.className = 'absolute z-[60] left-0 right-0 w-full max-h-56 overflow-y-auto scrollbar-thin bg-white dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-600 shadow-lg hidden text-xs';
     wrap.style.top = '100%';
     wrap.style.left = '0';
     wrap.style.marginTop = '2px';
@@ -1057,22 +1131,17 @@
   function applyDeepLinkWizard(){
     var dl = window.__deepLink;
     if (!dl || dl.tab !== 'wizard') return;
-    showWizardSubtab(dl.subtab || 'putaway');
-    if (dl.sku) D('pa-sku').value = dl.sku;
-    if (dl.sku) D('count-sku').value = dl.sku;
-    if (dl.sku) D('tf-sku').value = dl.sku;
-    if (dl.room) D('pa-room').value = dl.room;
-    if (dl.aisle) D('pa-aisle').value = dl.aisle;
-    if (dl.bay) D('pa-bay').value = dl.bay;
-    if (dl.bin) D('pa-bin').value = dl.bin;
-    if (dl.room) D('tf-s-room').value = dl.room;
-    if (dl.aisle) D('tf-s-aisle').value = dl.aisle;
-    if (dl.bay) D('tf-s-bay').value = dl.bay;
-    if (dl.bin) D('tf-s-bin').value = dl.bin;
-    if (dl.room) D('tf-d-room').value = dl.room;
-    if (dl.aisle) D('tf-d-aisle').value = dl.aisle;
-    if (dl.bay) D('tf-d-bay').value = dl.bay;
-    if (dl.bin) D('tf-d-bin').value = dl.bin;
+    showWizardSubtab(dl.subtab || 'additem');
+    if (dl.sku) {
+      D('add-sku').value = dl.sku;
+      D('pa-sku').value = dl.sku;
+      D('count-sku').value = dl.sku;
+      D('tf-sku').value = dl.sku;
+    }
+    if (dl.room) { D('add-room').value = dl.room; D('pa-room').value = dl.room; D('tf-s-room').value = dl.room; D('tf-d-room').value = dl.room; }
+    if (dl.aisle) { D('add-aisle').value = dl.aisle; D('pa-aisle').value = dl.aisle; D('tf-s-aisle').value = dl.aisle; D('tf-d-aisle').value = dl.aisle; }
+    if (dl.bay) { D('add-bay').value = dl.bay; D('pa-bay').value = dl.bay; D('tf-s-bay').value = dl.bay; D('tf-d-bay').value = dl.bay; }
+    if (dl.bin) { D('add-bin').value = dl.bin; D('pa-bin').value = dl.bin; D('tf-s-bin').value = dl.bin; D('tf-d-bin').value = dl.bin; }
     window.__deepLink = null; // consume once
   }
 
@@ -1365,6 +1434,18 @@
         if (cached && D('count-name')) D('count-name').value = cached.name;
         D('btn-count-search').click();
       }
+    } else if (activeSubtab === 'additem') {
+      if (room) {
+        D('add-room').value = cleanLocVal(room);
+        D('add-aisle').value = cleanLocVal(aisle);
+        D('add-bay').value = cleanLocVal(bay);
+        D('add-bin').value = cleanLocVal(bin);
+      }
+      if (sku) {
+        D('add-sku').value = sku;
+        var cached = skuCache.find(function(c){ return c.sku === sku; });
+        if (cached) D('add-name').value = cached.name;
+      }
     } else if (activeSubtab === 'putaway') {
       if (room) {
         D('pa-room').value = cleanLocVal(room);
@@ -1389,6 +1470,7 @@
   D('btn-scanner-mode-ocr-sku').addEventListener('click', function(){ startScanner('ocr-sku'); });
   D('btn-scanner-mode-ocr-loc').addEventListener('click', function(){ startScanner('ocr-loc'); });
 
+  D('btn-add-scan').addEventListener('click', function(){ startScanner('qr'); });
   D('btn-count-scan').addEventListener('click', function(){ startScanner('qr'); });
   D('btn-pa-scan').addEventListener('click', function(){ startScanner('qr'); });
 
@@ -1713,15 +1795,16 @@
 
   D('btn-pa-list-add').addEventListener('click', function(){
     var sku = S(D('pa-m-sku').value);
-    var name = (D('pa-m-name').value || '').trim();
     var qty = Math.max(1, parseInt(D('pa-m-qty').value, 10) || 1);
     if (!sku) { toast('Enter a SKU', 'error'); return; }
     
     var cached = skuCache.find(function(c){ return c.sku === sku; });
-    if (!cached && !name) { toast('Item name required for new SKU', 'error'); return; }
-    var itemName = name || (cached ? cached.name : 'Unknown');
+    if (!cached) {
+      toast('SKU "' + sku + '" is not registered. Add it via "Add SKU / Item" tab first.', 'error');
+      return;
+    }
 
-    paList.push({ sku: sku, name: itemName, qty: qty });
+    paList.push({ sku: sku, name: cached.name, qty: qty });
     renderPaListTable();
     
     D('pa-m-sku').value = '';
@@ -1736,17 +1819,76 @@
     toast('List cleared', 'info');
   });
 
+  // Create/Add Item Submit Action
+  D('btn-add-item-submit').addEventListener('click', function(){
+    var sku = S(D('add-sku').value);
+    var name = D('add-name').value.trim();
+    var room = S(D('add-room').value);
+    var aisle = S(D('add-aisle').value);
+    var bay = S(D('add-bay').value);
+    var bin = S(D('add-bin').value);
+    var qty = Math.max(0, parseInt(D('add-qty').value, 10) || 0);
+
+    if (!sku) { toast('SKU is required', 'error'); return; }
+    if (!name) { toast('Item Name is required', 'error'); return; }
+
+    var r = room || 'NONE';
+    var a = aisle || '-';
+    var ba = bay || '-';
+    var bn = bin || '-';
+
+    var docId = normId(sku, r, a, ba, bn);
+    var ref = db.collection('inventory').doc(docId);
+    var btn = D('btn-add-item-submit');
+    btn.disabled = true;
+    btn.textContent = 'Registering item…';
+
+    db.runTransaction(function(tx){
+      return tx.get(ref).then(function(doc){
+        var oldQty = doc.exists ? Math.max(0, Number(doc.data().quantity) || 0) : 0;
+        var newQty = oldQty + qty;
+        tx.set(ref, {
+          sku: sku,
+          item_name: name,
+          room: r,
+          aisle: a,
+          bay: ba,
+          bin: bn,
+          quantity: newQty,
+          updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+    }).then(function(){
+      toast('Item registered successfully: ' + sku, 'success');
+      D('add-sku').value = '';
+      D('add-name').value = '';
+      D('add-room').value = '';
+      D('add-aisle').value = '';
+      D('add-bay').value = '';
+      D('add-bin').value = '';
+      D('add-qty').value = 0;
+      btn.disabled = false;
+      btn.textContent = 'Create Item Record';
+    }).catch(function(e){
+      toast('Registration failed: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Create Item Record';
+    });
+  });
+
   // Single putaway action
   D('btn-putaway').addEventListener('click', function(){
     var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
-    var sku = S(D('pa-sku').value), name = (D('pa-name').value || '').trim(), qty = Math.max(1, parseInt(D('pa-qty').value,10)||1);
+    var sku = S(D('pa-sku').value), qty = Math.max(1, parseInt(D('pa-qty').value,10)||1);
     
     if (!room) { toast('Room is required','error'); return; }
     if (!sku) { toast('SKU is required','error'); return; }
     
     var cached = skuCache.find(function(c){ return c.sku === sku; });
-    if (!cached && !name) { toast('Item name required for new SKU','error'); return; }
-    var itemName = name || (cached ? cached.name : 'Unknown');
+    if (!cached) {
+      toast('SKU "' + sku + '" is not registered. Add it via "Add SKU / Item" tab first.', 'error');
+      return;
+    }
     
     var r = room;
     var a = aisle || '-';
@@ -1762,7 +1904,7 @@
         var newQty = oldQty + qty;
         tx.set(ref, {
           sku: sku,
-          item_name: itemName,
+          item_name: cached.name,
           room: r,
           aisle: a,
           bay: ba,
@@ -2638,6 +2780,7 @@ PWA SERVICE WORKER REGISTRATION
   (function wireAutocomplete(){
     function safe(id, onPick){ var el = D(id); if (el) attachSkuAutocomplete(el, onPick); }
     safe('count-sku', function(sku, name){ if (D('count-name')) D('count-name').value = name; });
+    safe('add-sku', function(sku, name){ if (D('add-name')) D('add-name').value = name; });
     safe('pa-sku', function(sku, name){ if (D('pa-name')) D('pa-name').value = name; });
     safe('pa-m-sku', function(sku, name){ if (D('pa-m-name')) D('pa-m-name').value = name; });
     safe('tf-sku', function(sku, name){ if (D('tf-name')) D('tf-name').value = name; });
@@ -2652,13 +2795,51 @@ PWA SERVICE WORKER REGISTRATION
       if (bEl) attachBinAutocomplete(bEl, binLocCache.bays);
       if (nEl) attachBinAutocomplete(nEl, binLocCache.bins);
     }
+    wireBin('add');
     wireBin('pa');
     wireBin('tf-s');
     wireBin('tf-d');
     wireBin('qr');
     wireBin('bl');
     wireBin('bx');
+    wireBin('bs');
   })();
+
+  // ── Bin Contents Search Query ──
+  D('btn-bs-search').addEventListener('click', function(){
+    var room = S(D('bs-room').value);
+    var aisle = S(D('bs-aisle').value) || '-';
+    var bay = S(D('bs-bay').value) || '-';
+    var bin = S(D('bs-bin').value) || '-';
+    
+    if (!room) { toast('Room is required','error'); return; }
+    
+    var filtered = rawInventoryDocs.filter(function(doc){
+      return doc.room === room && doc.aisle === aisle && doc.bay === bay && doc.bin === bin;
+    });
+    
+    D('bs-results').classList.remove('hidden');
+    var locShort = formatLocationShort(room, aisle, bay, bin);
+    var locLong = formatLocation(room, aisle, bay, bin);
+    D('bs-results-title').textContent = 'Items inside Bin: ' + locShort + ' (' + locLong + ') — ' + filtered.length + ' item(s)';
+    
+    var tbody = D('bs-results-tbody');
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400">No items found in this bin.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = filtered.map(function(doc){
+      return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">'
+        + '<td class="px-3 py-2 font-mono font-bold text-indigo-700 dark:text-indigo-400">' + esc(doc.sku) + '</td>'
+        + '<td class="px-3 py-2 font-medium">' + esc(doc.name) + '</td>'
+        + '<td class="px-3 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right">' + doc.quantity.toLocaleString() + '</td>'
+        + '<td class="px-3 py-2 text-center">'
+        + '<button onclick="deleteAssignment(\'' + doc.id + '\'); D(\'btn-bs-search\').click();" class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/40 text-red-600 hover:bg-red-200 transition font-bold text-[10px]">Delete</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  });
 
   // Re-attach datalist options after cache update (debounced)
   var __acRefreshTimer = null;
