@@ -3057,6 +3057,12 @@
   var dropzone = D('import-dropzone');
   var fileInput = D('import-file');
 
+  dropzone.addEventListener('click', function(e){
+    if (e.target !== fileInput) {
+      fileInput.click();
+    }
+  });
+
   dropzone.addEventListener('dragover', function(e){ e.preventDefault(); dropzone.classList.add('border-indigo-500', 'bg-indigo-50/10'); });
   dropzone.addEventListener('dragleave', function(){ dropzone.classList.remove('border-indigo-500', 'bg-indigo-50/10'); });
   dropzone.addEventListener('drop', function(e){
@@ -3105,28 +3111,48 @@
     var lines = rawText.split(/\r?\n/).filter(function(line){ return line.trim().length > 0; });
     if (!lines.length) { toast('CSV file is empty', 'error'); return; }
     
-    // Simple CSV parser supporting quotes
+    // Robust CSV parser supporting quotes and raw measurement symbols (e.g. 3/8" or M8x50)
     function parseCsvLine(line){
       var result = [];
-      var cur = '';
-      var inQuotes = false;
-      for (var i = 0; i < line.length; i++) {
-        var char = line[i];
-        if (char === '"') {
-          if (inQuotes && line[i+1] === '"') {
-            cur += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
+      var i = 0;
+      while (i < line.length) {
+        while (i < line.length && (line[i] === ' ' || line[i] === '\t')) i++;
+        if (i >= line.length) {
+          result.push('');
+          break;
+        }
+        
+        if (line[i] === '"') {
+          var cell = '';
+          i++; // skip open quote
+          while (i < line.length) {
+            if (line[i] === '"') {
+              if (line[i+1] === '"') {
+                cell += '"';
+                i += 2;
+              } else {
+                i++; // skip close quote
+                break;
+              }
+            } else {
+              cell += line[i];
+              i++;
+            }
           }
-        } else if (char === ',' && !inQuotes) {
-          result.push(cur.trim());
-          cur = '';
+          result.push(cell.trim());
+          while (i < line.length && line[i] !== ',') i++;
+          i++; // skip comma
         } else {
-          cur += char;
+          var commaIdx = line.indexOf(',', i);
+          if (commaIdx === -1) {
+            result.push(line.substring(i).trim());
+            break;
+          } else {
+            result.push(line.substring(i, commaIdx).trim());
+            i = commaIdx + 1;
+          }
         }
       }
-      result.push(cur.trim());
       return result;
     }
 
@@ -3143,6 +3169,11 @@
     setupMappingFields();
   }
 
+  // Register default checkbox globally once
+  D('import-use-default').addEventListener('change', function(){
+    D('import-mapping-fields').classList.toggle('hidden', this.checked);
+  });
+
   function setupMappingFields(){
     D('import-mapping-card').classList.remove('hidden');
     D('import-preview-block').classList.add('hidden');
@@ -3151,7 +3182,6 @@
     selects.forEach(function(selId){
       var sel = D(selId);
       sel.innerHTML = '';
-      // Add a blank placeholder or option
       var emptyOpt = document.createElement('option');
       emptyOpt.value = '';
       emptyOpt.textContent = '— Choose Column —';
@@ -3163,12 +3193,6 @@
         o.textContent = h;
         sel.appendChild(o);
       });
-    });
-
-    // Auto-predict mapping by field names
-    var useDefaultCheckbox = D('import-use-default');
-    useDefaultCheckbox.addEventListener('change', function(){
-      D('import-mapping-fields').classList.toggle('hidden', this.checked);
     });
 
     autoMapHeaders();
