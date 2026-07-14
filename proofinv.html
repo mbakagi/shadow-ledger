@@ -1719,16 +1719,16 @@
     
     qrBox.innerHTML = '';
     var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(r) + '&aisle=' + encodeURIComponent(a) + '&bay=' + encodeURIComponent(ba) + '&bin=' + encodeURIComponent(bn) + '&subtab=putaway';
-    qrLbl.textContent = r + '-' + a + '-' + ba + '-' + bn;
+    qrLbl.textContent = formatLocation(r, a, ba, bn);
     
     try {
       new QRCode(qrBox, {
         text: url,
-        width: 80,
-        height: 80,
+        width: 160,
+        height: 160,
         colorDark: '#000000',
         colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
+        correctLevel: QRCode.CorrectLevel.H
       });
     } catch(e) {
       console.error(e);
@@ -2432,7 +2432,7 @@
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku=' + encodeURIComponent(item.sku) + '&subtab=count';
       if (withQr) {
         setTimeout(function(){
-          try { new QRCode(document.getElementById(boxId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
+          try { new QRCode(document.getElementById(boxId), { text: url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H }); } catch (e) {}
         }, 0);
       }
       var lines = [];
@@ -2489,7 +2489,7 @@
     grid.innerHTML = qrItems.map(function(item, idx){
       var boxId = 'qr-box-' + idx;
       setTimeout(function(){
-        try { new QRCode(document.getElementById(boxId), { text: item.url, width: 96, height: 96, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+        try { new QRCode(document.getElementById(boxId), { text: item.url, width: 160, height: 160, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H }); } catch(e){}
       }, 0);
       return '<div class="qr-card">'
         + '<div id="' + boxId + '" class="qr-box"></div>'
@@ -2534,7 +2534,7 @@
       var boxId = 'bl-box-'+idx;
       var dims = labelDims(size);
       setTimeout(function(){
-        try { new QRCode(document.getElementById(boxId), { text: item.url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+        try { new QRCode(document.getElementById(boxId), { text: item.url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e){}
       }, 0);
       return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;">'
         + '<div id="'+boxId+'" class="qr-box" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin:0 auto;"></div>'
@@ -2667,7 +2667,7 @@
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku='+encodeURIComponent(item.sku)+'&subtab=count';
       if (withQr) {
         setTimeout(function(){
-          try { new QRCode(document.getElementById(boxId), { text: url, width: dims.qr, height: dims.qr, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); } catch(e){}
+          try { new QRCode(document.getElementById(boxId), { text: url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e){}
         }, 0);
       }
       var lines = [];
