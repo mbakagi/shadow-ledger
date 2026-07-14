@@ -1896,9 +1896,15 @@
           var w = canvas.width;
           var h = canvas.height;
           
-          var badgeText = previewStr || 'WMS';
+          var cleanR = cleanLocVal(r), cleanA = cleanLocVal(a), cleanBa = cleanLocVal(ba), cleanBn = cleanLocVal(bin);
+          var parts = [];
+          if (cleanR && cleanR !== '-') parts.push('R:' + cleanR);
+          if (cleanA && cleanA !== '-') parts.push('A:' + cleanA);
+          if (cleanBa && cleanBa !== '-') parts.push('B:' + cleanBa);
+          if (cleanBn && cleanBn !== '-') parts.push('B:' + cleanBn);
+          var badgeText = parts.length ? parts.join(' ') : 'WMS';
           
-          var badgeW = w * 0.74;
+          var badgeW = w * 0.82;
           var badgeH = h * 0.22;
           var badgeX = (w - badgeW) / 2;
           var badgeY = (h - badgeH) / 2;
