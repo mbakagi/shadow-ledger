@@ -1896,15 +1896,9 @@
           var w = canvas.width;
           var h = canvas.height;
           
-          var cleanR = cleanLocVal(r), cleanA = cleanLocVal(a), cleanBa = cleanLocVal(ba), cleanBn = cleanLocVal(bin);
-          var labelParts = [];
-          if (cleanR) labelParts.push(cleanR);
-          if (cleanA) labelParts.push(cleanA);
-          if (cleanBa) labelParts.push(cleanBa);
-          if (cleanBn) labelParts.push(cleanBn);
-          var badgeText = labelParts.length ? labelParts.join('-') : 'WMS';
+          var badgeText = previewStr || 'WMS';
           
-          var badgeW = w * 0.58;
+          var badgeW = w * 0.74;
           var badgeH = h * 0.22;
           var badgeX = (w - badgeW) / 2;
           var badgeY = (h - badgeH) / 2;
