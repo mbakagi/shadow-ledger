@@ -136,6 +136,9 @@
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="labels" role="tab" aria-selected="false" aria-controls="pane-labels">
         🏷 Labels
       </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="sync" role="tab" aria-selected="false" aria-controls="pane-sync">
+        📥 Import/Export
+      </button>
     </div>
 
     <div class="flex items-center gap-3 flex-wrap no-print">
@@ -823,6 +826,160 @@
     </section>
   </section>
 
+  <!-- Pane: Import/Export Data Sync -->
+  <section id="pane-sync" class="tab-pane hidden p-4 max-w-5xl mx-auto space-y-6 no-print" role="tabpanel" aria-labelledby="tab-sync">
+    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+      <div>
+        <h2 class="text-lg font-black text-slate-800 dark:text-slate-100">Import / Export WMS Data</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Bulk upload or download inventory records in CSV or JSON formats with custom column mapping.</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Card: Export Data -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+        <h3 class="font-bold text-sm text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          Export Inventory
+        </h3>
+        
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Export Format</label>
+          <div class="flex gap-2">
+            <button id="export-fmt-csv" class="flex-1 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white border border-indigo-600 transition" onclick="setExportFormat('csv')">CSV (Excel Compatible)</button>
+            <button id="export-fmt-json" class="flex-1 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-transparent transition" onclick="setExportFormat('json')">JSON</button>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700/50 pb-1 flex items-center justify-between">
+            <span>Customize Column Headers</span>
+            <button class="text-[10px] text-indigo-500 hover:underline capitalize" onclick="resetExportHeaders()">Reset to Default</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">SKU (sku)</label>
+              <input id="exp-h-sku" type="text" value="sku" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Item Name (item_name)</label>
+              <input id="exp-h-name" type="text" value="item_name" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Quantity (quantity)</label>
+              <input id="exp-h-qty" type="text" value="quantity" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Room (room)</label>
+              <input id="exp-h-room" type="text" value="room" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Aisle (aisle)</label>
+              <input id="exp-h-aisle" type="text" value="aisle" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Bay (bay)</label>
+              <input id="exp-h-bay" type="text" value="bay" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Bin (bin)</label>
+              <input id="exp-h-bin" type="text" value="bin" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-export-download" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition flex items-center justify-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Export & Download File
+        </button>
+      </div>
+
+      <!-- Card: Import Data -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+        <h3 class="font-bold text-sm text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+          Import Inventory
+        </h3>
+
+        <!-- Drag & Drop Zone -->
+        <div id="import-dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-500 transition-colors bg-slate-50/50 dark:bg-slate-700/20">
+          <input type="file" id="import-file" accept=".csv,.json" class="hidden" />
+          <svg class="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          <span class="block text-xs font-bold text-slate-700 dark:text-slate-200">Drag & drop CSV or JSON file here</span>
+          <span class="block text-[10px] text-slate-400 mt-1">or click to browse from system files</span>
+        </div>
+
+        <div id="import-mapping-card" class="hidden space-y-3">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700/50 pb-1 flex items-center justify-between">
+            <span>Match Column Headers</span>
+            <label class="flex items-center gap-1 text-[10px] text-slate-500 select-none">
+              <input id="import-use-default" type="checkbox" checked class="accent-indigo-600" /> Default Headers
+            </label>
+          </div>
+
+          <!-- Mapping Dropdowns -->
+          <div id="import-mapping-fields" class="grid grid-cols-2 gap-2 text-xs hidden">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">SKU (sku)</label>
+              <select id="map-sku" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Item Name (item_name)</label>
+              <select id="map-name" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Quantity (quantity)</label>
+              <select id="map-qty" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Room (room)</label>
+              <select id="map-room" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Aisle (aisle)</label>
+              <select id="map-aisle" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Bay (bay)</label>
+              <select id="map-bay" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">Bin (bin)</label>
+              <select id="map-bin" class="w-full px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 focus:outline-none"></select>
+            </div>
+          </div>
+          
+          <button id="btn-import-preview" class="w-full py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs transition">Preview Import Data</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Preview Block -->
+    <div id="import-preview-block" class="hidden bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 id="import-preview-title" class="font-bold text-sm text-slate-700 dark:text-slate-200">Import Preview</h4>
+        <button id="btn-import-commit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+          Confirm & Import to WMS
+        </button>
+      </div>
+
+      <div class="overflow-x-auto max-h-72 border border-slate-200 dark:border-slate-700 rounded-xl">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-100 dark:bg-slate-700 text-slate-500 uppercase font-semibold text-[10px] sticky top-0">
+            <tr>
+              <th class="px-3 py-2">SKU</th>
+              <th class="px-3 py-2">Item Name</th>
+              <th class="px-3 py-2">Location</th>
+              <th class="px-3 py-2 text-right">Quantity</th>
+            </tr>
+          </thead>
+          <tbody id="import-preview-tbody" class="divide-y divide-slate-200 dark:divide-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ──────────────────────────────────────────────────────────────
        SHARED JAVASCRIPT — GLOBAL INIT, STATE, HELPERS, TABS, TABS
        ────────────────────────────────────────────────────────────── -->
@@ -1037,7 +1194,7 @@
   (function routeFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','count','batch','bins','labels'];
+    var validTabs = ['stock','wizard','count','batch','bins','labels','sync'];
     if (!validTabs.includes(tab)) tab = 'stock';
 
     // Pre-fill wizard fields from URL
@@ -2797,12 +2954,390 @@
   }
 
   /* ================================================================
+     PANE 5 — IMPORT / EXPORT DATA SYNC
+     ================================================================ */
+  var exportFormat = 'csv';
+  var importParsedRecords = [];
+  var importFileHeaders = [];
+
+  window.setExportFormat = function(fmt){
+    exportFormat = fmt;
+    D('export-fmt-csv').classList.toggle('bg-indigo-600', fmt === 'csv');
+    D('export-fmt-csv').classList.toggle('text-white', fmt === 'csv');
+    D('export-fmt-csv').classList.toggle('bg-slate-100', fmt !== 'csv');
+    D('export-fmt-csv').classList.toggle('dark:bg-slate-700', fmt !== 'csv');
+    D('export-fmt-csv').classList.toggle('text-slate-600', fmt !== 'csv');
+    D('export-fmt-csv').classList.toggle('dark:text-slate-300', fmt !== 'csv');
+    D('export-fmt-csv').classList.toggle('border-indigo-600', fmt === 'csv');
+    D('export-fmt-csv').classList.toggle('border-transparent', fmt !== 'csv');
+
+    D('export-fmt-json').classList.toggle('bg-indigo-600', fmt === 'json');
+    D('export-fmt-json').classList.toggle('text-white', fmt === 'json');
+    D('export-fmt-json').classList.toggle('bg-slate-100', fmt !== 'json');
+    D('export-fmt-json').classList.toggle('dark:bg-slate-700', fmt !== 'json');
+    D('export-fmt-json').classList.toggle('text-slate-600', fmt !== 'json');
+    D('export-fmt-json').classList.toggle('dark:text-slate-300', fmt !== 'json');
+    D('export-fmt-json').classList.toggle('border-indigo-600', fmt === 'json');
+    D('export-fmt-json').classList.toggle('border-transparent', fmt !== 'json');
+  };
+
+  window.resetExportHeaders = function(){
+    D('exp-h-sku').value = 'sku';
+    D('exp-h-name').value = 'item_name';
+    D('exp-h-qty').value = 'quantity';
+    D('exp-h-room').value = 'room';
+    D('exp-h-aisle').value = 'aisle';
+    D('exp-h-bay').value = 'bay';
+    D('exp-h-bin').value = 'bin';
+    toast('Export headers reset', 'info');
+  };
+
+  // Export & Download
+  D('btn-export-download').addEventListener('click', function(){
+    if (!rawInventoryDocs.length) { toast('No data available to export', 'error'); return; }
+    
+    var hSku = D('exp-h-sku').value.trim() || 'sku';
+    var hName = D('exp-h-name').value.trim() || 'item_name';
+    var hQty = D('exp-h-qty').value.trim() || 'quantity';
+    var hRoom = D('exp-h-room').value.trim() || 'room';
+    var hAisle = D('exp-h-aisle').value.trim() || 'aisle';
+    var hBay = D('exp-h-bay').value.trim() || 'bay';
+    var hBin = D('exp-h-bin').value.trim() || 'bin';
+
+    var filename = 'wms_inventory_' + new Date().toISOString().slice(0, 10);
+    var contentBlob, filenameExt;
+
+    if (exportFormat === 'json') {
+      var records = rawInventoryDocs.map(function(doc){
+        var r = {};
+        r[hSku] = doc.sku;
+        r[hName] = doc.name;
+        r[hQty] = doc.quantity;
+        r[hRoom] = doc.room;
+        r[hAisle] = doc.aisle;
+        r[hBay] = doc.bay;
+        r[hBin] = doc.bin;
+        return r;
+      });
+      contentBlob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+      filenameExt = filename + '.json';
+    } else {
+      // CSV format
+      var headers = [hSku, hName, hQty, hRoom, hAisle, hBay, hBin];
+      var csvRows = [headers.map(function(h){ return '"' + h.replace(/"/g, '""') + '"'; }).join(',')];
+      
+      rawInventoryDocs.forEach(function(doc){
+        var row = [
+          doc.sku,
+          doc.name,
+          doc.quantity,
+          doc.room,
+          doc.aisle,
+          doc.bay,
+          doc.bin
+        ];
+        csvRows.push(row.map(function(val){ return '"' + String(val).replace(/"/g, '""') + '"'; }).join(','));
+      });
+      
+      contentBlob = new Blob([csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      filenameExt = filename + '.csv';
+    }
+
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(contentBlob);
+    link.download = filenameExt;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast('Export downloaded: ' + filenameExt, 'success');
+  });
+
+  // Drag & drop file event bindings
+  var dropzone = D('import-dropzone');
+  var fileInput = D('import-file');
+
+  dropzone.addEventListener('dragover', function(e){ e.preventDefault(); dropzone.classList.add('border-indigo-500', 'bg-indigo-50/10'); });
+  dropzone.addEventListener('dragleave', function(){ dropzone.classList.remove('border-indigo-500', 'bg-indigo-50/10'); });
+  dropzone.addEventListener('drop', function(e){
+    e.preventDefault();
+    dropzone.classList.remove('border-indigo-500', 'bg-indigo-50/10');
+    if (e.dataTransfer.files.length) {
+      handleImportFile(e.dataTransfer.files[0]);
+    }
+  });
+  fileInput.addEventListener('change', function(){
+    if (fileInput.files.length) {
+      handleImportFile(fileInput.files[0]);
+    }
+  });
+
+  function handleImportFile(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var raw = e.target.result;
+      if (file.name.endsWith('.json')) {
+        parseJsonImport(raw);
+      } else {
+        parseCsvImport(raw);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function parseJsonImport(rawText){
+    try {
+      var parsed = JSON.parse(rawText);
+      if (!Array.isArray(parsed)) { throw new Error('Root element is not a JSON Array'); }
+      importParsedRecords = parsed;
+      if (parsed.length) {
+        importFileHeaders = Object.keys(parsed[0]);
+        setupMappingFields();
+      } else {
+        toast('JSON array is empty', 'error');
+      }
+    } catch(e) {
+      toast('Invalid JSON: ' + e.message, 'error');
+    }
+  }
+
+  function parseCsvImport(rawText){
+    var lines = rawText.split(/\r?\n/).filter(function(line){ return line.trim().length > 0; });
+    if (!lines.length) { toast('CSV file is empty', 'error'); return; }
+    
+    // Simple CSV parser supporting quotes
+    function parseCsvLine(line){
+      var result = [];
+      var cur = '';
+      var inQuotes = false;
+      for (var i = 0; i < line.length; i++) {
+        var char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i+1] === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(cur.trim());
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    importFileHeaders = parseCsvLine(lines[0]);
+    importParsedRecords = lines.slice(1).map(function(line){
+      var cells = parseCsvLine(line);
+      var obj = {};
+      importFileHeaders.forEach(function(h, idx){
+        obj[h] = cells[idx] || '';
+      });
+      return obj;
+    });
+
+    setupMappingFields();
+  }
+
+  function setupMappingFields(){
+    D('import-mapping-card').classList.remove('hidden');
+    D('import-preview-block').classList.add('hidden');
+    
+    var selects = ['map-sku', 'map-name', 'map-qty', 'map-room', 'map-aisle', 'map-bay', 'map-bin'];
+    selects.forEach(function(selId){
+      var sel = D(selId);
+      sel.innerHTML = '';
+      // Add a blank placeholder or option
+      var emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '— Choose Column —';
+      sel.appendChild(emptyOpt);
+      
+      importFileHeaders.forEach(function(h){
+        var o = document.createElement('option');
+        o.value = h;
+        o.textContent = h;
+        sel.appendChild(o);
+      });
+    });
+
+    // Auto-predict mapping by field names
+    var useDefaultCheckbox = D('import-use-default');
+    useDefaultCheckbox.addEventListener('change', function(){
+      D('import-mapping-fields').classList.toggle('hidden', this.checked);
+    });
+
+    autoMapHeaders();
+  }
+
+  function autoMapHeaders(){
+    var mapping = {
+      'map-sku': ['sku', 'partnumber', 'part_number', 'item_code', 'itemcode', 'id'],
+      'map-name': ['item_name', 'name', 'itemname', 'description', 'desc'],
+      'map-qty': ['quantity', 'qty', 'count', 'units', 'total'],
+      'map-room': ['room', 'loc_room', 'rm'],
+      'map-aisle': ['aisle', 'loc_aisle', 'al'],
+      'map-bay': ['bay', 'loc_bay', 'by'],
+      'map-bin': ['bin', 'loc_bin', 'bn']
+    };
+
+    Object.keys(mapping).forEach(function(selId){
+      var sel = D(selId);
+      var candidates = mapping[selId];
+      var matched = importFileHeaders.find(function(h){
+        return candidates.includes(h.toLowerCase().trim());
+      });
+      if (matched) {
+        sel.value = matched;
+      } else {
+        // Fallback to exact match check
+        var exact = importFileHeaders.find(function(h){
+          return h.toLowerCase().trim().indexOf(candidates[0]) >= 0;
+        });
+        if (exact) sel.value = exact;
+      }
+    });
+  }
+
+  // Preview Import Records
+  D('btn-import-preview').addEventListener('click', function(){
+    if (!importParsedRecords.length) { toast('No records loaded', 'error'); return; }
+    
+    var useDefault = D('import-use-default').checked;
+    var mapping = {};
+    if (useDefault) {
+      mapping = {
+        sku: findHeader(['sku', 'partnumber', 'part_number', 'item_code', 'itemcode', 'id']),
+        name: findHeader(['item_name', 'name', 'itemname', 'description', 'desc']),
+        qty: findHeader(['quantity', 'qty', 'count', 'units', 'total']),
+        room: findHeader(['room', 'loc_room', 'rm']),
+        aisle: findHeader(['aisle', 'loc_aisle', 'al']),
+        bay: findHeader(['bay', 'loc_bay', 'by']),
+        bin: findHeader(['bin', 'loc_bin', 'bn'])
+      };
+    } else {
+      mapping = {
+        sku: D('map-sku').value,
+        name: D('map-name').value,
+        qty: D('map-qty').value,
+        room: D('map-room').value,
+        aisle: D('map-aisle').value,
+        bay: D('map-bay').value,
+        bin: D('map-bin').value
+      };
+    }
+
+    if (!mapping.sku) { toast('SKU mapping is required', 'error'); return; }
+
+    var finalRecords = [];
+    importParsedRecords.forEach(function(rec){
+      var sku = S(rec[mapping.sku]);
+      if (!sku) return;
+      
+      var name = rec[mapping.name] ? String(rec[mapping.name]).trim() : 'Imported Item';
+      var qty = Math.max(0, parseInt(rec[mapping.qty], 10) || 0);
+      var room = S(rec[mapping.room]) || 'NONE';
+      var aisle = S(rec[mapping.aisle]) || '-';
+      var bay = S(rec[mapping.bay]) || '-';
+      var bin = S(rec[mapping.bin]) || '-';
+
+      finalRecords.push({
+        sku: sku,
+        name: name,
+        qty: qty,
+        room: room,
+        aisle: aisle,
+        bay: bay,
+        bin: bin
+      });
+    });
+
+    window.__finalImportRecords = finalRecords;
+    D('import-preview-block').classList.remove('hidden');
+    D('import-preview-title').textContent = 'Import Preview: ' + finalRecords.length + ' valid record(s)';
+    
+    var tbody = D('import-preview-tbody');
+    tbody.innerHTML = finalRecords.map(function(r){
+      var loc = formatLocationShort(r.room, r.aisle, r.bay, r.bin);
+      return '<tr class="border-b border-slate-100 dark:border-slate-800">'
+        + '<td class="px-3 py-2 font-mono font-bold text-indigo-600 dark:text-indigo-400">' + esc(r.sku) + '</td>'
+        + '<td class="px-3 py-2">' + esc(r.name) + '</td>'
+        + '<td class="px-3 py-2 font-mono">' + esc(loc) + '</td>'
+        + '<td class="px-3 py-2 font-mono text-right font-bold">' + r.qty.toLocaleString() + '</td>'
+        + '</tr>';
+    }).join('');
+  });
+
+  function findHeader(candidates){
+    return importFileHeaders.find(function(h){
+      return candidates.includes(h.toLowerCase().trim());
+    }) || '';
+  }
+
+  // Confirm and Import to WMS (Firestore Batch)
+  D('btn-import-commit').addEventListener('click', function(){
+    var records = window.__finalImportRecords;
+    if (!records || !records.length) { toast('No records previewed to import', 'error'); return; }
+
+    var btn = D('btn-import-commit');
+    btn.disabled = true;
+    btn.textContent = 'Importing WMS data…';
+
+    var chunks = [];
+    for (var i = 0; i < records.length; i += 450) {
+      chunks.push(records.slice(i, i + 450));
+    }
+
+    var chain = Promise.resolve();
+    chunks.forEach(function(chunk, chunkIdx){
+      chain = chain.then(function(){
+        var batch = db.batch();
+        chunk.forEach(function(r){
+          var docId = normId(r.sku, r.room, r.aisle, r.bay, r.bin);
+          var ref = db.collection('inventory').doc(docId);
+          batch.set(ref, {
+            sku: r.sku,
+            item_name: r.name,
+            quantity: r.qty,
+            room: r.room,
+            aisle: r.aisle,
+            bay: r.bay,
+            bin: r.bin,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+        
+        btn.textContent = 'Writing chunk ' + (chunkIdx + 1) + ' of ' + chunks.length + '…';
+        return batch.commit();
+      });
+    });
+
+    chain.then(function(){
+      toast('Imported ' + records.length + ' records successfully!', 'success');
+      btn.disabled = false;
+      btn.textContent = 'Confirm & Import to WMS';
+      D('import-preview-block').classList.add('hidden');
+      D('import-mapping-card').classList.add('hidden');
+      D('import-file').value = '';
+      window.__finalImportRecords = [];
+    }).catch(function(e){
+      toast('Import failed: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Confirm & Import to WMS';
+    });
+  });
+
+  /* ================================================================
      INITIAL TAB FROM URL
      ================================================================ */
   (function initTabFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','count','batch','bins','labels'];
+    var validTabs = ['stock','wizard','count','batch','bins','labels','sync'];
     if (!validTabs.includes(tab)) tab = 'stock';
     showTab(tab);
   })();
