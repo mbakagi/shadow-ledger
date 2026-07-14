@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -205,25 +206,34 @@
       <button class="wizard-subtab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-subtab="transfer" role="tab" aria-selected="false" aria-controls="wizard-transfer">↔ Bin-to-Bin Transfer</button>
     </div>
 
+    <!-- Shared WMS Camera Scanner (dynamic, shown above active tab) -->
+    <div id="shared-scanner-card" class="hidden bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 id="scanner-title" class="font-bold text-xs uppercase tracking-wider text-slate-500">Unified WMS Scanner Camera</h3>
+        <button id="btn-scanner-close" class="px-2.5 py-1 rounded-lg bg-red-100 text-red-600 text-xs font-bold hover:bg-red-200 transition">✕ Close Cam</button>
+      </div>
+      <div class="flex gap-2 flex-wrap items-center">
+        <button id="btn-scanner-mode-qr" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition">Scan QR Code</button>
+        <button id="btn-scanner-mode-ocr-sku" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 hover:bg-indigo-100 transition">OCR SKU</button>
+        <button id="btn-scanner-mode-ocr-loc" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 hover:bg-indigo-100 transition">OCR Location</button>
+        <button id="btn-scanner-capture" class="hidden px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">📸 Capture OCR</button>
+        <span id="scanner-status" class="text-xs text-slate-400 font-semibold">OFF</span>
+      </div>
+      <div class="relative max-w-[360px] mx-auto">
+        <video id="shared-video" class="w-full rounded-xl border border-slate-300 shadow" autoplay playsinline muted></video>
+        <canvas id="shared-canvas" class="hidden"></canvas>
+      </div>
+    </div>
+
     <!-- Sub-tab: Search & Count -->
     <section id="wizard-count" class="wizard-subtab active space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
-      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Search & Count</h2>
-
-      <!-- OCR Camera Controls -->
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-semibold text-slate-500">OCR:</span>
-          <button id="ocr-toggle-sku" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 hover:bg-indigo-100 transition" data-target="sku">SKU</button>
-          <button id="ocr-toggle-loc" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 hover:bg-indigo-100 transition" data-target="loc">Location</button>
-          <span id="ocr-status" class="text-[10px] text-slate-400 font-medium">OFF</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <button id="btn-capture" class="hidden px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">📸 Capture</button>
-          <button id="btn-camera-close" class="hidden px-3 py-1.5 rounded-lg bg-red-100 text-red-600 text-xs font-bold transition">✕ Cam</button>
-        </div>
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Search & Count</h2>
+        <button id="btn-count-scan" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+          Open Scanner Camera
+        </button>
       </div>
-      <video id="camera-video" class="hidden w-full max-w-[360px] rounded-xl border border-slate-300 shadow" autoplay playsinline muted></video>
-      <canvas id="camera-canvas"></canvas>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
@@ -292,21 +302,116 @@
     </section>
 
     <!-- Sub-tab: Putaway / Assign -->
-    <section id="wizard-putaway" class="wizard-subtab hidden space-y-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
-      <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Putaway / Assign</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Room</label><input id="pa-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Aisle</label><input id="pa-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bay</label><input id="pa-bay" type="text" placeholder="e.g. 01" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Bin</label><input id="pa-bin" type="text" placeholder="e.g. 04" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+    <section id="wizard-putaway" class="wizard-subtab hidden space-y-4 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700" role="tabpanel">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Putaway / Assign</h2>
+        <button id="btn-pa-scan" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+          Open Scanner Camera
+        </button>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label><input id="pa-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Item Name (required for new SKU)</label><input id="pa-name" type="text" placeholder="Item name" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+
+      <!-- Mode Selector -->
+      <div class="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl w-fit">
+        <button type="button" id="pa-mode-single" class="px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">Single Item</button>
+        <button type="button" id="pa-mode-multi" class="px-4 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 dark:text-slate-400">Multiple Items</button>
       </div>
-      <div class="flex items-center gap-3">
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Quantity</label><input id="pa-qty" type="number" min="1" value="1" class="w-24 px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
-        <button id="btn-putaway" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition mt-5">Assign · Putaway</button>
+
+      <!-- Location Input + QR Card side-by-side -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-700/20 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div class="md:col-span-2 space-y-3">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Target Location</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room (req)</label><input id="pa-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+            <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="pa-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+            <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bay</label><input id="pa-bay" type="text" placeholder="e.g. 01" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+            <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bin</label><input id="pa-bin" type="text" placeholder="e.g. 04" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
+          </div>
+          <div class="flex items-center justify-between text-xs mt-1">
+            <span id="pa-loc-level-badge" class="font-bold text-slate-400">Level: Room Only (unassigned sublevels)</span>
+            <span class="mono text-indigo-600 dark:text-indigo-400 font-semibold" id="pa-loc-preview-str">R- -A- -B- -B-</span>
+          </div>
+        </div>
+        
+        <!-- Live QR label generator card -->
+        <div class="flex flex-col items-center justify-center bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
+          <div id="pa-live-qr-box" class="qr-box w-20 h-20 mb-2"></div>
+          <div id="pa-live-qr-lbl" class="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 truncate max-w-full">NO LOCATION</div>
+          <button type="button" id="btn-pa-print-loc-qr" class="mt-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition">Print Location Tag</button>
+        </div>
+      </div>
+
+      <!-- Item Form Container -->
+      <div class="space-y-4">
+        <!-- Single Item Form -->
+        <div id="pa-single-item-form" class="space-y-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label><input id="pa-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+            <div><label class="block text-xs font-semibold text-slate-500 mb-1">Item Name (required for new SKU)</label><input id="pa-name" type="text" placeholder="Item name" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div><label class="block text-xs font-semibold text-slate-500 mb-1">Quantity</label><input id="pa-qty" type="number" min="1" value="1" class="w-24 px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+            <button id="btn-putaway" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition mt-5">Assign · Putaway</button>
+          </div>
+        </div>
+
+        <!-- Multiple Items Form -->
+        <div id="pa-multi-item-form" class="hidden space-y-4 bg-slate-50 dark:bg-slate-700/25 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Putaway Item List</div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label>
+              <input id="pa-m-sku" type="text" placeholder="SKU" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Name</label>
+              <input id="pa-m-name" type="text" placeholder="Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Qty</label>
+              <input id="pa-m-qty" type="number" min="1" value="1" class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-center font-bold focus:ring-2 focus:ring-indigo-500 outline-none" />
+            </div>
+          </div>
+          
+          <div class="flex gap-2 mt-2">
+            <button type="button" id="btn-pa-list-add" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">+ Add to List</button>
+            <button type="button" id="btn-pa-list-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-red-100 text-slate-600 dark:text-slate-300 text-xs font-bold transition">Clear List</button>
+          </div>
+
+          <!-- List Table -->
+          <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800">
+            <table class="w-full text-xs text-left">
+              <thead class="bg-slate-100 dark:bg-slate-700 text-slate-500 uppercase font-semibold text-[10px]">
+                <tr>
+                  <th class="px-3 py-2">SKU</th>
+                  <th class="px-3 py-2">Item Name</th>
+                  <th class="px-3 py-2 text-right">Qty</th>
+                  <th class="px-3 py-2 text-center w-16">Action</th>
+                </tr>
+              </thead>
+              <tbody id="pa-list-table-body" class="divide-y divide-slate-200 dark:divide-slate-700">
+                <tr>
+                  <td colspan="4" class="text-center py-4 text-slate-400">No items added to list yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button id="btn-putaway-all" class="w-full px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Assign All items to Location</button>
+        </div>
+      </div>
+
+      <!-- Location Assignments Inspector -->
+      <div class="mt-6 border-t border-slate-200 dark:border-slate-700 pt-6 space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 class="font-black text-sm uppercase tracking-wider text-slate-500">Location Assignments Inspector</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">View active assignments in Firestore and delete incorrect placements.</p>
+          </div>
+          <input id="pa-inspect-filter" type="text" placeholder="Filter by SKU or Location..." class="mono px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 w-full sm:w-60 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div id="pa-inspect-list" class="space-y-2 max-h-72 overflow-y-auto scrollbar-thin"></div>
       </div>
     </section>
 
@@ -684,6 +789,28 @@
   var esc = function(v){ return String(v).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); };
   var S = function(v){ var s=String(v||'').trim().toUpperCase(); return s.replace(/\s+/g,''); };
   var normId = function(sku,room,aisle,bay,bin){ return sku+'_R'+room+'_A'+aisle+'_B'+bay+'_B'+bin; };
+  var cleanLocVal = function(v){
+    var s = String(v || '').trim().toUpperCase();
+    return (s === '-' || s === 'NONE' || !s) ? '' : s;
+  };
+  var formatLocation = function(room, aisle, bay, bin){
+    var r = cleanLocVal(room), a = cleanLocVal(aisle), ba = cleanLocVal(bay), bn = cleanLocVal(bin);
+    var parts = [];
+    if (r) parts.push('Room ' + r);
+    if (a) parts.push('Aisle ' + a);
+    if (ba) parts.push('Bay ' + ba);
+    if (bn) parts.push('Bin ' + bn);
+    return parts.length ? parts.join(' · ') : 'Unallocated';
+  };
+  var formatLocationShort = function(room, aisle, bay, bin){
+    var r = cleanLocVal(room), a = cleanLocVal(aisle), ba = cleanLocVal(bay), bn = cleanLocVal(bin);
+    var parts = [];
+    if (r) parts.push('R' + r);
+    if (a) parts.push('A' + a);
+    if (ba) parts.push('B' + ba);
+    if (bn) parts.push('B' + bn);
+    return parts.length ? parts.join('-') : '—';
+  };
   var toast = function(msg, type){
     var t = document.createElement('div');
     t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full text-white text-xs font-semibold shadow-lg animate-pulse ' +
@@ -734,22 +861,16 @@
 
   function rebuildBinLocCache(){
     var rs = new Set(), as = new Set(), bs = new Set(), is = new Set();
-    stockItems.forEach(function(item){
-      var parts = String(item.binsAdded || '').split(' | ');
-      parts.forEach(function(p){
-        var m = p.match(/R(-?\w+)?-A(-?\w+)?-B(-?\w+)?-B(-?\w+)?/);
-        if (m) {
-          if (m[1]) rs.add(m[1]);
-          if (m[2]) as.add(m[2]);
-          if (m[3]) bs.add(m[3]);
-          if (m[4]) is.add(m[4]);
-        }
-      });
+    rawInventoryDocs.forEach(function(doc){
+      if (doc.room) rs.add(doc.room);
+      if (doc.aisle) as.add(doc.aisle);
+      if (doc.bay) bs.add(doc.bay);
+      if (doc.bin) is.add(doc.bin);
     });
-    binLocCache.rooms = Array.from(rs).sort();
-    binLocCache.aisles = Array.from(as).sort();
-    binLocCache.bays = Array.from(bs).sort();
-    binLocCache.bins = Array.from(is).sort();
+    binLocCache.rooms = Array.from(rs).filter(function(v){ return v !== '-'; }).sort();
+    binLocCache.aisles = Array.from(as).filter(function(v){ return v !== '-'; }).sort();
+    binLocCache.bays = Array.from(bs).filter(function(v){ return v !== '-'; }).sort();
+    binLocCache.bins = Array.from(is).filter(function(v){ return v !== '-'; }).sort();
   }
 
   function attachSkuAutocomplete(inputEl, onPick){
@@ -829,6 +950,12 @@
   var bsItems = []; // batch stock labels
   var cvBins = []; // count-verify bin rows
   var cvDiscrepancies = []; // pending discrepancy logs
+  var rawInventoryDocs = []; // raw Firestore document snapshots
+  var paList = []; // multiple putaway items array
+  var paMode = 'single'; // 'single' | 'multi'
+  var paLiveQr = null; // live location QR code generator instance
+  var scannerMode = 'qr'; // 'qr' | 'ocr-sku' | 'ocr-loc'
+  var qrScanningActive = false; // camera scanning active flag
 
   /* ================================================================
      URL PARAM DEEP-LINK ROUTER
@@ -866,6 +993,7 @@
      TAB NAVIGATION (main tabs + wizard sub-tabs)
      ================================================================ */
   function showTab(tabName){
+    if (typeof stopScanner === 'function') stopScanner();
     // Main tabs
     document.querySelectorAll('.tab-btn').forEach(function(b){
       var isActive = b.dataset.tab === tabName;
@@ -1026,17 +1154,29 @@
 
   function aggregateStock(snapshot){
     var skuMap = new Map();
+    rawInventoryDocs = [];
     snapshot.forEach(function(doc){
       var d = doc.data();
-      var s = (d.sku || '').trim();
+      var s = (d.sku || '').trim().toUpperCase();
       if (!s) return;
+      var qty = Math.max(0, Number(d.quantity) || 0);
+      var r = (d.room||'').trim().toUpperCase(), a = (d.aisle||'').trim().toUpperCase(), ba = (d.bay||'').trim().toUpperCase(), bn = (d.bin||'').trim().toUpperCase();
+      rawInventoryDocs.push({
+        id: doc.id,
+        sku: s,
+        name: d.item_name || d.name || 'Unknown',
+        room: r,
+        aisle: a,
+        bay: ba,
+        bin: bn,
+        quantity: qty
+      });
+
       if (!skuMap.has(s)) {
         skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', total:0, bins:[], docCount:0 });
       }
       var row = skuMap.get(s);
       row.docCount++;
-      var qty = Math.max(0, Number(d.quantity) || 0);
-      var r = (d.room||'').trim(), a = (d.aisle||'').trim(), ba = (d.bay||'').trim(), bn = (d.bin||'').trim();
       row.total += qty;
       if (r || a || ba || bn) row.bins.push({ room:r, aisle:a, bay:ba, bin:bn, qty:qty });
     });
@@ -1052,7 +1192,7 @@
       var unique = Array.from(locMap.values());
       var addedToBin = unique.length
         ? unique.map(function(x){
-            return 'R'+(x.room||'-')+'-A'+(x.aisle||'-')+'-B'+(x.bay||'-')+'-B'+(x.bin||'-')+' (Qty:'+x.qty+')';
+            return formatLocationShort(x.room, x.aisle, x.bay, x.bin) + ' (Qty:' + x.qty + ')';
           }).join(' | ')
         : '—';
       stockItems.push({ sku:v.sku, name:v.name, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount });
@@ -1061,6 +1201,7 @@
     window.__stockRendered = true;
     rebuildSkuCache();
     rebuildBinLocCache();
+    if (typeof renderPaInspectList === 'function') renderPaInspectList();
     document.dispatchEvent(new CustomEvent('stockUpdated'));
   }
 
@@ -1108,53 +1249,174 @@
   });
 
   /* ================================================================
-     PANE 2 — TASK WIZARD (OCR, Search & Count, Putaway, Transfer)
+     PANE 2 — TASK WIZARD (QR / OCR Scanner, Search & Count, Putaway, Transfer)
      ================================================================ */
 
-  // OCR Camera
-  D('ocr-toggle-sku').addEventListener('click', function(){ ocrTarget='sku'; D('ocr-status').textContent='→ SKU'; D('ocr-toggle-sku').classList.add('bg-indigo-100'); D('ocr-toggle-loc').classList.remove('bg-indigo-100'); });
-  D('ocr-toggle-loc').addEventListener('click', function(){ ocrTarget='loc'; D('ocr-status').textContent='→ Location'; D('ocr-toggle-loc').classList.add('bg-indigo-100'); D('ocr-toggle-sku').classList.remove('bg-indigo-100'); });
+  // Unified Scanner Camera Control
+  function startScanner(mode){
+    scannerMode = mode;
+    D('btn-scanner-mode-qr').classList.toggle('bg-indigo-600', mode === 'qr');
+    D('btn-scanner-mode-qr').classList.toggle('text-white', mode === 'qr');
+    D('btn-scanner-mode-qr').classList.toggle('bg-slate-200', mode !== 'qr');
+    D('btn-scanner-mode-qr').classList.toggle('dark:bg-slate-700', mode !== 'qr');
+    D('btn-scanner-mode-qr').classList.toggle('text-slate-600', mode !== 'qr');
+    
+    D('btn-scanner-mode-ocr-sku').classList.toggle('bg-indigo-600', mode === 'ocr-sku');
+    D('btn-scanner-mode-ocr-sku').classList.toggle('text-white', mode === 'ocr-sku');
+    D('btn-scanner-mode-ocr-sku').classList.toggle('bg-slate-200', mode !== 'ocr-sku');
+    D('btn-scanner-mode-ocr-sku').classList.toggle('dark:bg-slate-700', mode !== 'ocr-sku');
+    D('btn-scanner-mode-ocr-sku').classList.toggle('text-slate-600', mode !== 'ocr-sku');
+    
+    D('btn-scanner-mode-ocr-loc').classList.toggle('bg-indigo-600', mode === 'ocr-loc');
+    D('btn-scanner-mode-ocr-loc').classList.toggle('text-white', mode === 'ocr-loc');
+    D('btn-scanner-mode-ocr-loc').classList.toggle('bg-slate-200', mode !== 'ocr-loc');
+    D('btn-scanner-mode-ocr-loc').classList.toggle('dark:bg-slate-700', mode !== 'ocr-loc');
+    D('btn-scanner-mode-ocr-loc').classList.toggle('text-slate-600', mode !== 'ocr-loc');
 
-  function stopCamera(){
-    if (cameraStream) { cameraStream.getTracks().forEach(function(t){ t.stop(); }); cameraStream = null; }
-    D('camera-video').classList.add('hidden'); D('btn-capture').classList.add('hidden'); D('btn-camera-close').classList.add('hidden');
-  }
-  D('btn-camera-close').addEventListener('click', stopCamera);
+    D('btn-scanner-capture').classList.toggle('hidden', mode === 'qr');
+    D('shared-scanner-card').classList.remove('hidden');
 
-  function startCamera(){
-    stopCamera();
+    if (mode === 'qr') {
+      qrScanningActive = true;
+      D('scanner-status').textContent = 'Scanning QR Code…';
+    } else {
+      qrScanningActive = false;
+      D('scanner-status').textContent = 'Camera active — Capture when aligned';
+    }
+
+    if (cameraStream) {
+      if (mode === 'qr') requestAnimationFrame(scanQrLoop);
+      return;
+    }
+
     navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } })
       .then(function(stream){
-        cameraStream = stream; D('camera-video').srcObject = stream;
-        D('camera-video').classList.remove('hidden'); D('btn-capture').classList.remove('hidden'); D('btn-camera-close').classList.remove('hidden');
+        cameraStream = stream;
+        D('shared-video').srcObject = stream;
+        if (mode === 'qr') requestAnimationFrame(scanQrLoop);
       })
-      .catch(function(e){ toast('Camera error: '+e.message,'error'); });
+      .catch(function(e){
+        toast('Camera error: ' + e.message, 'error');
+        stopScanner();
+      });
   }
-  D('ocr-toggle-sku').addEventListener('dblclick', startCamera);
-  D('ocr-toggle-loc').addEventListener('dblclick', startCamera);
 
-  D('btn-capture').addEventListener('click', function(){
-    var vid = D('camera-video'), cnv = D('camera-canvas');
+  function stopScanner(){
+    qrScanningActive = false;
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(function(t){ t.stop(); });
+      cameraStream = null;
+    }
+    D('shared-video').srcObject = null;
+    D('shared-scanner-card').classList.add('hidden');
+    D('scanner-status').textContent = 'OFF';
+  }
+
+  function scanQrLoop(){
+    if (!qrScanningActive) return;
+    var vid = D('shared-video');
+    var cnv = D('shared-canvas');
+    if (vid.readyState === vid.HAVE_ENOUGH_DATA) {
+      cnv.width = vid.videoWidth;
+      cnv.height = vid.videoHeight;
+      var ctx = cnv.getContext('2d');
+      ctx.drawImage(vid, 0, 0, cnv.width, cnv.height);
+      var imgData = ctx.getImageData(0, 0, cnv.width, cnv.height);
+      try {
+        var code = jsQR(imgData.data, imgData.width, imgData.height, {
+          inversionAttempts: "dontInvert"
+        });
+        if (code && code.data) {
+          handleScannedQr(code.data);
+          return;
+        }
+      } catch(e) {
+        console.error(e);
+      }
+    }
+    requestAnimationFrame(scanQrLoop);
+  }
+
+  function handleScannedQr(dataStr){
+    toast('QR Code detected!', 'success');
+    var urlObj = null;
+    try { urlObj = new URL(dataStr); } catch(e){}
+    
+    if (urlObj && (urlObj.searchParams.get('room') || urlObj.searchParams.get('sku'))) {
+      var room = urlObj.searchParams.get('room') || '';
+      var aisle = urlObj.searchParams.get('aisle') || '';
+      var bay = urlObj.searchParams.get('bay') || '';
+      var bin = urlObj.searchParams.get('bin') || '';
+      var sku = urlObj.searchParams.get('sku') || '';
+      populateWmsFields(room, aisle, bay, bin, sku);
+    } else {
+      populateWmsFields('', '', '', '', dataStr.trim());
+    }
+    stopScanner();
+  }
+
+  function populateWmsFields(room, aisle, bay, bin, sku){
+    var activeSubtab = document.querySelector('.wizard-subtab-btn.active').dataset.subtab;
+    
+    if (activeSubtab === 'count') {
+      if (sku) {
+        D('count-sku').value = sku;
+        var cached = skuCache.find(function(c){ return c.sku === sku; });
+        if (cached && D('count-name')) D('count-name').value = cached.name;
+        D('btn-count-search').click();
+      }
+    } else if (activeSubtab === 'putaway') {
+      if (room) {
+        D('pa-room').value = cleanLocVal(room);
+        D('pa-aisle').value = cleanLocVal(aisle);
+        D('pa-bay').value = cleanLocVal(bay);
+        D('pa-bin').value = cleanLocVal(bin);
+        updatePutawayLiveLoc();
+      }
+      if (sku) {
+        var targetSkuInput = paMode === 'single' ? D('pa-sku') : D('pa-m-sku');
+        var targetNameInput = paMode === 'single' ? D('pa-name') : D('pa-m-name');
+        
+        targetSkuInput.value = sku;
+        var cached = skuCache.find(function(c){ return c.sku === sku; });
+        if (cached) targetNameInput.value = cached.name;
+      }
+    }
+  }
+
+  D('btn-scanner-close').addEventListener('click', stopScanner);
+  D('btn-scanner-mode-qr').addEventListener('click', function(){ startScanner('qr'); });
+  D('btn-scanner-mode-ocr-sku').addEventListener('click', function(){ startScanner('ocr-sku'); });
+  D('btn-scanner-mode-ocr-loc').addEventListener('click', function(){ startScanner('ocr-loc'); });
+
+  D('btn-count-scan').addEventListener('click', function(){ startScanner('qr'); });
+  D('btn-pa-scan').addEventListener('click', function(){ startScanner('qr'); });
+
+  // shared OCR frame capture
+  D('btn-scanner-capture').addEventListener('click', function(){
+    var vid = D('shared-video'), cnv = D('shared-canvas');
     if (!vid.srcObject) { toast('No camera active','error'); return; }
     cnv.width = vid.videoWidth; cnv.height = vid.videoHeight;
     var ctx = cnv.getContext('2d'); ctx.drawImage(vid, 0, 0, cnv.width, cnv.height);
     var dataUrl = cnv.toDataURL('image/png');
-    D('ocr-status').textContent = 'OCR running…';
-    Tesseract.recognize(dataUrl, 'eng', { logger: function(m){ if (m.status === 'recognizing text') D('ocr-status').textContent = 'OCR ' + (Math.round(m.progress*100)) + '%'; } })
+    D('scanner-status').textContent = 'OCR running…';
+    Tesseract.recognize(dataUrl, 'eng', { logger: function(m){ if (m.status === 'recognizing text') D('scanner-status').textContent = 'OCR ' + (Math.round(m.progress*100)) + '%'; } })
       .then(function(r){
         var txt = (r.data.text || '').trim();
-        if (ocrTarget === 'sku') {
+        if (scannerMode === 'ocr-sku') {
           var m = txt.match(/[A-Z0-9\-_.]{2,60}/i);
-          D('count-sku').value = m ? m[0].toUpperCase() : txt.substr(0,60);
+          var sku = m ? m[0].toUpperCase() : txt.substr(0,60);
+          populateWmsFields('', '', '', '', sku);
         } else {
           var parts = txt.split(/[\s,\-|\/]+/).filter(Boolean).map(function(s){ return s.trim().toUpperCase(); });
-          if (parts.length >= 4) { D('pa-room').value=parts[0]; D('pa-aisle').value=parts[1]; D('pa-bay').value=parts[2]; D('pa-bin').value=parts[3]; }
-          else if (parts.length >= 1) { var p0=parts[0]; if (p0.match(/^[A-Z]\d?/)) D('pa-aisle').value=p0; else D('pa-room').value=p0; }
-          D('pa-sku').value = D('count-sku').value;
+          var room = '', aisle = '', bay = '', bin = '';
+          if (parts.length >= 4) { room=parts[0]; aisle=parts[1]; bay=parts[2]; bin=parts[3]; }
+          else if (parts.length >= 1) { var p0=parts[0]; if (p0.match(/^[A-Z]\d?/)) aisle=p0; else room=p0; }
+          populateWmsFields(room, aisle, bay, bin, '');
         }
-        D('ocr-status').textContent = 'OK ✓'; toast('OCR captured','success'); stopCamera();
+        D('scanner-status').textContent = 'OK ✓'; toast('OCR completed','success'); stopScanner();
       })
-      .catch(function(e){ D('ocr-status').textContent = 'FAIL'; toast('OCR failed: '+e.message,'error'); });
+      .catch(function(e){ D('scanner-status').textContent = 'FAIL'; toast('OCR failed: '+e.message,'error'); });
   });
 
   /* ── Image OCR (upload / drag-drop) ── */
@@ -1223,7 +1485,6 @@
       D('ocr-p-bay').value = locMatch[3];
       D('ocr-p-bin').value = locMatch[4];
     } else {
-      // Try 4 consecutive tokens
       var tokens = txt.split(/[\s,\-|\/:]+/).filter(Boolean);
       if (tokens.length >= 4) {
         D('ocr-p-room').value = tokens[0].toUpperCase();
@@ -1233,11 +1494,11 @@
       }
     }
 
-    // Try quantity: QTY: 50 or Qty 50 or just a number
+    // Try quantity
     var qtyMatch = allText.match(/QTY[:\s]*(\d+)/);
     if (qtyMatch) D('ocr-p-qty').value = qtyMatch[1];
 
-    // Try item name: first long text line
+    // Try item name
     for (var i = 0; i < lines.length; i++) {
       if (lines[i].length > 4 && !lines[i].match(/^[A-Z0-9\-_.]{2,40}$/i) && !lines[i].match(/QTY/i)) {
         D('ocr-p-name').value = lines[i].substr(0, 200);
@@ -1254,13 +1515,23 @@
   });
 
   D('btn-ocr-to-putaway').addEventListener('click', function(){
-    if (D('ocr-p-sku').value) D('pa-sku').value = D('ocr-p-sku').value;
-    if (D('ocr-p-name').value) D('pa-name').value = D('ocr-p-name').value;
+    if (D('ocr-p-sku').value) {
+      var targetSku = paMode === 'single' ? D('pa-sku') : D('pa-m-sku');
+      targetSku.value = D('ocr-p-sku').value;
+    }
+    if (D('ocr-p-name').value) {
+      var targetName = paMode === 'single' ? D('pa-name') : D('pa-m-name');
+      targetName.value = D('ocr-p-name').value;
+    }
     if (D('ocr-p-room').value) D('pa-room').value = D('ocr-p-room').value;
     if (D('ocr-p-aisle').value) D('pa-aisle').value = D('ocr-p-aisle').value;
     if (D('ocr-p-bay').value) D('pa-bay').value = D('ocr-p-bay').value;
     if (D('ocr-p-bin').value) D('pa-bin').value = D('ocr-p-bin').value;
-    if (D('ocr-p-qty').value) D('pa-qty').value = D('ocr-p-qty').value;
+    if (D('ocr-p-qty').value) {
+      var targetQty = paMode === 'single' ? D('pa-qty') : D('pa-m-qty');
+      targetQty.value = D('ocr-p-qty').value;
+    }
+    updatePutawayLiveLoc();
     showWizardSubtab('putaway');
     toast('Sent to Putaway','success');
   });
@@ -1302,8 +1573,9 @@
           D('count-title').textContent = sku + ' (' + (locs[0].name || '') + ') — ' + locs.length + ' bin record(s)';
           D('count-locs').innerHTML = locs.map(function(l){
             var safeId = l.id.replace(/[^a-zA-Z0-9_]/g,'_');
+            var cleanLoc = formatLocationShort(l.room, l.aisle, l.bay, l.bin);
             return '<div class="flex items-center gap-2 flex-wrap bg-slate-50 dark:bg-slate-700/50 rounded-lg p-2 border border-slate-200 dark:border-slate-600">'
-              + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[120px]">R'+(l.room||'-')+'-A'+(l.aisle||'-')+'-B'+(l.bay||'-')+'-B'+(l.bin||'-')+'</span>'
+              + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[120px]">' + cleanLoc + '</span>'
               + '<span class="text-xs text-slate-500">Qty recorded:</span>'
               + '<input id="lq-' + safeId + '" type="number" min="0" value="'+l.qty+'" class="w-20 px-2 py-1.5 rounded-lg border border-slate-300 mono text-sm text-center font-bold" />'
               + '<button onclick="verifyOne(\''+l.id+'\','+l.qty+',\''+l.sku+'\',\''+(l.name||'').replace(/'/g,"\\'")+'\')" class="px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-200 transition">OK</button>'
@@ -1333,26 +1605,285 @@
     .catch(function(e){ toast('Tx failed: '+e.message,'error'); });
   };
 
-  // ── Putaway / Assign ──
+  // ── Putaway / Assign & Multiple Mode UI ──
+  function updatePutawayLiveLoc() {
+    var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
+    var previewEl = D('pa-loc-preview-str');
+    var badgeEl = D('pa-loc-level-badge');
+    var qrBox = D('pa-live-qr-box');
+    var qrLbl = D('pa-live-qr-lbl');
+    
+    if (!room) {
+      previewEl.textContent = 'R- -A- -B- -B-';
+      badgeEl.textContent = 'Level: Room Required';
+      qrBox.innerHTML = '';
+      qrLbl.textContent = 'NO LOCATION';
+      return;
+    }
+    
+    var r = room;
+    var a = aisle || '-';
+    var ba = bay || '-';
+    var bn = bin || '-';
+    
+    var previewStr = formatLocationShort(r, a, ba, bn);
+    previewEl.textContent = previewStr;
+    
+    var level = 'Room level';
+    if (aisle && bay && bin) level = 'Bin level';
+    else if (aisle && bay) level = 'Bay level';
+    else if (aisle) level = 'Aisle level';
+    badgeEl.textContent = 'Level: ' + level;
+    
+    qrBox.innerHTML = '';
+    var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(r) + '&aisle=' + encodeURIComponent(a) + '&bay=' + encodeURIComponent(ba) + '&bin=' + encodeURIComponent(bn) + '&subtab=putaway';
+    qrLbl.textContent = r + '-' + a + '-' + ba + '-' + bn;
+    
+    try {
+      new QRCode(qrBox, {
+        text: url,
+        width: 80,
+        height: 80,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  function setPaMode(mode) {
+    paMode = mode;
+    D('pa-mode-single').classList.toggle('bg-white', mode === 'single');
+    D('pa-mode-single').classList.toggle('dark:bg-slate-800', mode === 'single');
+    D('pa-mode-single').classList.toggle('text-indigo-600', mode === 'single');
+    D('pa-mode-single').classList.toggle('dark:text-indigo-400', mode === 'single');
+    D('pa-mode-single').classList.toggle('text-slate-600', mode !== 'single');
+    D('pa-mode-single').classList.toggle('dark:text-slate-400', mode !== 'single');
+    
+    D('pa-mode-multi').classList.toggle('bg-white', mode === 'multi');
+    D('pa-mode-multi').classList.toggle('dark:bg-slate-800', mode === 'multi');
+    D('pa-mode-multi').classList.toggle('text-indigo-600', mode === 'multi');
+    D('pa-mode-multi').classList.toggle('dark:text-indigo-400', mode === 'multi');
+    D('pa-mode-multi').classList.toggle('text-slate-600', mode !== 'multi');
+    D('pa-mode-multi').classList.toggle('dark:text-slate-400', mode !== 'multi');
+    
+    D('pa-single-item-form').classList.toggle('hidden', mode !== 'single');
+    D('pa-multi-item-form').classList.toggle('hidden', mode !== 'multi');
+    renderPaListTable();
+  }
+
+  function renderPaListTable() {
+    var tbody = D('pa-list-table-body');
+    if (!paList.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400">No items added to list yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = paList.map(function(item, idx){
+      return '<tr class="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/30">'
+        + '<td class="px-3 py-2 font-mono font-bold text-indigo-600 dark:text-indigo-400">' + esc(item.sku) + '</td>'
+        + '<td class="px-3 py-2">' + esc(item.name) + '</td>'
+        + '<td class="px-3 py-2 text-right font-bold font-mono">' + item.qty.toLocaleString() + '</td>'
+        + '<td class="px-3 py-2 text-center">'
+        + '<button type="button" onclick="removePaListItem(' + idx + ')" class="text-red-500 hover:text-red-700 font-bold">✕</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+  
+  window.removePaListItem = function(idx) {
+    paList.splice(idx, 1);
+    renderPaListTable();
+  };
+
+  D('pa-mode-single').addEventListener('click', function(){ setPaMode('single'); });
+  D('pa-mode-multi').addEventListener('click', function(){ setPaMode('multi'); });
+
+  D('pa-room').addEventListener('input', updatePutawayLiveLoc);
+  D('pa-aisle').addEventListener('input', updatePutawayLiveLoc);
+  D('pa-bay').addEventListener('input', updatePutawayLiveLoc);
+  D('pa-bin').addEventListener('input', updatePutawayLiveLoc);
+
+  D('btn-pa-print-loc-qr').addEventListener('click', function(){
+    var room = S(D('pa-room').value);
+    if (!room) { toast('Specify location first','error'); return; }
+    printArea('pa-live-qr-box', 'Location QR Tag: ' + D('pa-live-qr-lbl').textContent);
+  });
+
+  D('btn-pa-list-add').addEventListener('click', function(){
+    var sku = S(D('pa-m-sku').value);
+    var name = (D('pa-m-name').value || '').trim();
+    var qty = Math.max(1, parseInt(D('pa-m-qty').value, 10) || 1);
+    if (!sku) { toast('Enter a SKU', 'error'); return; }
+    
+    var cached = skuCache.find(function(c){ return c.sku === sku; });
+    if (!cached && !name) { toast('Item name required for new SKU', 'error'); return; }
+    var itemName = name || (cached ? cached.name : 'Unknown');
+
+    paList.push({ sku: sku, name: itemName, qty: qty });
+    renderPaListTable();
+    
+    D('pa-m-sku').value = '';
+    D('pa-m-name').value = '';
+    D('pa-m-qty').value = 1;
+    D('pa-m-sku').focus();
+  });
+
+  D('btn-pa-list-clear').addEventListener('click', function(){
+    paList = [];
+    renderPaListTable();
+    toast('List cleared', 'info');
+  });
+
+  // Single putaway action
   D('btn-putaway').addEventListener('click', function(){
     var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
     var sku = S(D('pa-sku').value), name = (D('pa-name').value || '').trim(), qty = Math.max(1, parseInt(D('pa-qty').value,10)||1);
-    if (!sku || !room || !aisle || !bay || !bin) { toast('Fill all SKU + Room/Aisle/Bay/Bin','error'); return; }
-    if (!name) { toast('Item name required for new SKU','error'); return; }
-
-    var docId = normId(sku, room, aisle, bay, bin);
+    
+    if (!room) { toast('Room is required','error'); return; }
+    if (!sku) { toast('SKU is required','error'); return; }
+    
+    var cached = skuCache.find(function(c){ return c.sku === sku; });
+    if (!cached && !name) { toast('Item name required for new SKU','error'); return; }
+    var itemName = name || (cached ? cached.name : 'Unknown');
+    
+    var r = room;
+    var a = aisle || '-';
+    var ba = bay || '-';
+    var bn = bin || '-';
+    
+    var docId = normId(sku, r, a, ba, bn);
     var ref = db.collection('inventory').doc(docId);
+    
     db.runTransaction(function(tx){
       return tx.get(ref).then(function(doc){
         var oldQty = doc.exists ? Math.max(0, Number(doc.data().quantity)||0) : 0;
         var newQty = oldQty + qty;
-        tx.set(ref, { sku:sku, item_name:name, room:room, aisle:aisle, bay:bay, bin:bin, quantity:newQty, updated_at:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
-        document.querySelectorAll('#wizard-putaway input').forEach(function(i){ i.value=''; });
-        D('pa-qty').value = 1;
+        tx.set(ref, {
+          sku: sku,
+          item_name: itemName,
+          room: r,
+          aisle: a,
+          bay: ba,
+          bin: bn,
+          quantity: newQty,
+          updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge:true });
       });
-    }).then(function(){ toast('Putaway OK: '+sku+' +'+qty+' → R'+room+'-A'+aisle+'-B'+bay+'-B'+bin,'success'); })
-    .catch(function(e){ toast('Tx error: '+e.message,'error'); });
+    }).then(function(){
+      toast('Putaway OK: ' + sku + ' +' + qty + ' → ' + r + '-' + a + '-' + ba + '-' + bn, 'success');
+      D('pa-sku').value = '';
+      D('pa-name').value = '';
+      D('pa-qty').value = 1;
+    }).catch(function(e){
+      toast('Transaction failed: ' + e.message, 'error');
+    });
   });
+
+  // Multiple putaway action
+  D('btn-putaway-all').addEventListener('click', function(){
+    var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
+    if (!room) { toast('Room is required','error'); return; }
+    if (!paList.length) { toast('Putaway list is empty','error'); return; }
+    
+    var r = room;
+    var a = aisle || '-';
+    var ba = bay || '-';
+    var bn = bin || '-';
+    
+    var btn = D('btn-putaway-all');
+    btn.disabled = true;
+    btn.textContent = 'Saving ' + paList.length + ' assignments…';
+
+    var promises = paList.map(function(item){
+      var docId = normId(item.sku, r, a, ba, bn);
+      var ref = db.collection('inventory').doc(docId);
+      return db.runTransaction(function(tx){
+        return tx.get(ref).then(function(doc){
+          var oldQty = doc.exists ? Math.max(0, Number(doc.data().quantity)||0) : 0;
+          var newQty = oldQty + item.qty;
+          tx.set(ref, {
+            sku: item.sku,
+            item_name: item.name,
+            room: r,
+            aisle: a,
+            bay: ba,
+            bin: bn,
+            quantity: newQty,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+      });
+    });
+
+    Promise.all(promises).then(function(){
+      toast('Putaway successful for ' + paList.length + ' items', 'success');
+      paList = [];
+      renderPaListTable();
+      btn.disabled = false;
+      btn.textContent = 'Assign All items to Location';
+    }).catch(function(e){
+      toast('Batch Putaway failed: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Assign All items to Location';
+    });
+  });
+
+  // Live Location Inspector & Deletion
+  function renderPaInspectList() {
+    var list = D('pa-inspect-list');
+    if (!list) return;
+    var filter = (D('pa-inspect-filter').value || '').toLowerCase().trim();
+    
+    var filtered = rawInventoryDocs;
+    if (filter) {
+      filtered = rawInventoryDocs.filter(function(doc){
+        var locShort = formatLocationShort(doc.room, doc.aisle, doc.bay, doc.bin).toLowerCase();
+        var cleanLoc = formatLocation(doc.room, doc.aisle, doc.bay, doc.bin).toLowerCase();
+        return doc.sku.toLowerCase().includes(filter)
+            || doc.name.toLowerCase().includes(filter)
+            || locShort.includes(filter)
+            || cleanLoc.includes(filter);
+      });
+    }
+    
+    if (!filtered.length) {
+      list.innerHTML = '<div class="text-center py-4 text-xs text-slate-400">No WMS assignments found matching query.</div>';
+      return;
+    }
+    
+    list.innerHTML = filtered.map(function(doc){
+      var locShort = formatLocationShort(doc.room, doc.aisle, doc.bay, doc.bin);
+      var cleanLoc = formatLocation(doc.room, doc.aisle, doc.bay, doc.bin);
+      return '<div class="flex items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600 text-xs">'
+        + '<div class="flex-1 min-w-0">'
+        + '<div class="flex items-center gap-1.5 flex-wrap">'
+        + '<span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">' + esc(doc.sku) + '</span>'
+        + '<span class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono font-bold text-[9px] text-slate-600 dark:text-slate-300">' + locShort + '</span>'
+        + '</div>'
+        + '<div class="text-slate-400 text-[10px] mt-0.5 truncate">' + esc(doc.name) + ' (' + cleanLoc + ')</div>'
+        + '</div>'
+        + '<div class="flex items-center gap-3">'
+        + '<span class="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right min-w-[32px]">' + doc.quantity + '</span>'
+        + '<button onclick="deleteAssignment(\'' + doc.id + '\')" class="p-1 px-2.5 rounded bg-red-100 dark:bg-red-950/40 text-red-600 hover:bg-red-200 transition font-bold">Delete</button>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  window.deleteAssignment = function(docId) {
+    if (!confirm('Are you sure you want to completely delete the WMS location assignment:\n' + docId + '?')) return;
+    db.collection('inventory').doc(docId).delete()
+      .then(function(){
+        toast('Assignment deleted successfully', 'success');
+      })
+      .catch(function(e){
+        toast('Delete failed: ' + e.message, 'error');
+      });
+  };
+
+  D('pa-inspect-filter').addEventListener('input', renderPaInspectList);
 
   // ── Bin-to-Bin Transfer ──
   D('btn-transfer').addEventListener('click', function(){
@@ -1554,7 +2085,7 @@
     updateCvCounted();
 
     bins.innerHTML = cvBins.map(function(r, idx){
-      var loc = 'R'+(r.room||'-')+'-A'+(r.aisle||'-')+'-B'+(r.bay||'-')+'-B'+(r.bin||'-');
+      var loc = formatLocationShort(r.room, r.aisle, r.bay, r.bin);
       var safeId = r.id.replace(/[^a-zA-Z0-9_]/g,'_');
       return '<div class="flex items-center gap-2 flex-wrap bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">'
         + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[130px]">' + loc + '</span>'
@@ -1591,7 +2122,7 @@
             inventory_id: r.id, sku: r.sku, name: r.name,
             expected_qty: q, actual_qty: newQty, variance: newQty - q,
             worker_uid: auth.currentUser.uid,
-            bin: 'R'+r.room+'-A'+r.aisle+'-B'+r.bay+'-B'+r.bin,
+            bin: formatLocationShort(r.room, r.aisle, r.bay, r.bin),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
@@ -1601,7 +2132,7 @@
       cvBins[idx].counted = newQty;
       renderCvBins();
       updateCvCounted();
-      var loc = 'R'+r.room+'-A'+r.aisle+'-B'+r.bay+'-B'+r.bin;
+      var loc = formatLocationShort(r.room, r.aisle, r.bay, r.bin);
       toast(loc + ' → ' + newQty, 'success');
     }).catch(function(e){ toast('Tx failed: ' + e.message, 'error'); });
   };
@@ -2108,6 +2639,7 @@ PWA SERVICE WORKER REGISTRATION
     function safe(id, onPick){ var el = D(id); if (el) attachSkuAutocomplete(el, onPick); }
     safe('count-sku', function(sku, name){ if (D('count-name')) D('count-name').value = name; });
     safe('pa-sku', function(sku, name){ if (D('pa-name')) D('pa-name').value = name; });
+    safe('pa-m-sku', function(sku, name){ if (D('pa-m-name')) D('pa-m-name').value = name; });
     safe('tf-sku', function(sku, name){ if (D('tf-name')) D('tf-name').value = name; });
     safe('cv-sku');
     safe('ocr-p-sku', function(sku, name){ if (D('ocr-p-name')) D('ocr-p-name').value = name; });
