@@ -1,16 +1,12 @@
 {
-  "name": "St3s — Inventory",
-  "short_name": "St3s",
-  "description": "Track stock across Main Depot and Company Building. Instantly calculate depot stock, trigger carrier transfers, and manage purchase orders.",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "any",
-  "background_color": "#0f172a",
+  "name": "Shadow Ledger",
+  "short_name": "proofinv",
+  "description": "Text-Based WMS for inventory tracking",
   "theme_color": "#6366f1",
-  "lang": "en",
-  "dir": "ltr",
-  "categories": ["productivity", "business", "utilities"],
+  "background_color": "#f8fafc",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
   "icons": [
     {
       "src": "/icon.svg",
@@ -18,20 +14,5 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
-  ],
-  "shortcuts": [
-    {
-      "name": "Add Item",
-      "short_name": "Add",
-      "url": "/?action=add",
-      "description": "Quickly add a new inventory item"
-    },
-    {
-      "name": "Carrier Manifest",
-      "short_name": "Manifest",
-      "url": "/?action=manifest",
-      "description": "Generate today's carrier transfer manifest"
-    }
-  ],
-  "prefer_related_applications": false
+  ]
 }

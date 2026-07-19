@@ -2,6 +2,7 @@
   import '$lib/styles.css';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
+  import { base } from '$app/paths';
   import { startSync, user, online } from '$lib/store';
   import { completeEmailLink, sendEmailLink } from '$lib/firebase';
   import { toasts, toast } from '$lib/toast';
@@ -43,7 +44,7 @@
 </script>
 
 <header class="topbar">
-  <span class="brand"><img src="/icon.svg" alt="" /> Shadow Ledger</span>
+  <span class="brand"><img src="{base}/icon.svg" alt="" /> Shadow Ledger</span>
   <nav class="nav">
     {#each nav as [path, label] (path)}
       <a href={path} class:active={page.url.pathname === path}>{label}</a>

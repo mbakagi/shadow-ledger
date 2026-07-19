@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>St3s — 3D Warehouse View</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; overflow: hidden; background: #0f172a; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    #canvas-container { position: fixed; inset: 0; }
+    canvas { display: block; }
+
+    #info-panel {
+      position: fixed; top: 16px; left: 16px; z-index: 50;
+      background: rgba(15,23,42,0.92); backdrop-filter: blur(12px);
+      border: 1px solid rgba(99,102,241,0.3); border-radius: 16px;
+      padding: 16px; max-width: 320px; max-height: calc(100vh - 32px);
+      overflow-y: auto; color: #e2e8f0;
+    }
+    #info-panel.collapsed { max-height: 52px; overflow: hidden; }
+    #info-panel h2 { font-size: 15px; font-weight: 800; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+    #legend { position: fixed; bottom: 16px; left: 16px; z-index: 50; background: rgba(15,23,42,0.88); backdrop-filter: blur(8px); border: 1px solid rgba(148,163,184,0.2); border-radius: 12px; padding: 10px 14px; font-size: 11px; color: #94a3b8; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    #legend .swatch { display: inline-flex; align-items: center; gap: 5px; }
+    #legend .dot { width: 10px; height: 10px; border-radius: 3px; }
+
+    #code-badge {
+      position: fixed; pointer-events: none; z-index: 100;
+      background: rgba(15,23,42,0.95); border: 1px solid #6366f1; border-radius: 8px;
+      padding: 4px 10px; font-size: 12px; font-family: ui-monospace, monospace;
+      color: #a5b4fc; font-weight: 700; white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5); transition: opacity 0.15s;
+    }
+    #code-badge.hidden { opacity: 0; }
+
+    #toast {
+      position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 200;
+      background: rgba(15,23,42,0.95); border: 1px solid rgba(99,102,241,0.4);
+      border-radius: 10px; padding: 12px 20px; font-size: 13px; color: #e2e8f0;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="code-badge" class="hidden"></div>
+
+  <div id="info-panel">
+    <h2>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      Warehouse 3D
+      <button id="toggle-panel" style="margin-left:auto;background:none;border:none;color:#64748b;cursor:pointer;padding:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </h2>
+    <!-- Logged-in user badge — populated by auth.onAuthStateChanged -->
+    <div id="user-badge" class="hidden mb-2 px-2 py-1 rounded-md bg-indigo-900/40 border border-indigo-500/30 text-indigo-300 font-semibold truncate" style="font-size:10px;"></div>
+
+
+    <div id="panel-content" class="space-y-4 text-xs">
+      <div>
+        <p class="text-slate-500 font-semibold uppercase tracking-wider mb-1.5" style="font-size:10px">Add / Configure Warehouse</p>
+        <div class="space-y-2">
+          <button id="btn-add-room" class="w-full text-left px-3 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-semibold transition">+ Add Room / Zone</button>
+
+          <div class="space-y-1.5 px-2">
+            <div>
+              <label class="block text-slate-400 mb-0.5" style="font-size:10px">Room name</label>
+              <input id="cfg-room-name" type="text" class="w-full text-slate-200 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs" placeholder="e.g. WH, DRY, COLD" value="WH" maxlength="4" />
+            </div>
+            <div class="grid grid-cols-3 gap-1">
+              <div>
+                <label class="block text-slate-400 mb-0.5" style="font-size:9px">Aisles</label>
+                <input id="cfg-room-aisles" type="number" min="1" max="20" value="3" class="w-full text-slate-200 bg-slate-800 border border-slate-600 rounded px-1 py-1 text-xs" />
+              </div>
+              <div>
+                <label class="block text-slate-400 mb-0.5" style="font-size:9px">Bays/aisle</label>
+                <input id="cfg-room-bays" type="number" min="1" max="20" value="6" class="w-full text-slate-200 bg-slate-800 border border-slate-600 rounded px-1 py-1 text-xs" />
+              </div>
+              <div>
+                <label class="block text-slate-400 mb-0.5" style="font-size:9px">Bins/bay</label>
+                <input id="cfg-room-bins" type="number" min="1" max="10" value="4" class="w-full text-slate-200 bg-slate-800 border border-slate-600 rounded px-1 py-1 text-xs" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-0.5" style="font-size:10px">Shelf levels (F=Floor, 1-4)</label>
+              <select id="cfg-room-levels" class="w-full text-slate-200 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                <option value="F">Floor only</option>
+                <option value="1" selected>F + 1 (2 levels)</option>
+                <option value="2">F + 1 + 2 (3 levels)</option>
+                <option value="3">F + 1 + 2 + 3 (4 levels)</option>
+                <option value="4">F + 1 + 2 + 3 + 4 (5 levels)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="border-slate-700/60" />
+
+      <div>
+        <p class="text-slate-500 font-semibold uppercase tracking-wider mb-1.5" style="font-size:10px">Camera Controls</p>
+        <div class="space-y-1 text-slate-400 text-xs px-2">
+          <p>🍜 <strong class="text-slate-300">Drag</strong> — orbit</p>
+          <p>🔍 <strong class="text-slate-300">Scroll</strong> — zoom</p>
+          <p>✋ <strong class="text-slate-300">Right-drag</strong> — pan</p>
+          <p>👆 <strong class="text-slate-300">Click a bin</strong> — see item</p>
+        </div>
+        <button id="btn-reset-view" class="mt-2 w-full px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs transition">Reset Camera</button>
+      </div>
+
+      <hr class="border-slate-700/60" />
+
+      <div>
+        <p class="text-slate-500 font-semibold uppercase tracking-wider mb-1.5" style="font-size:10px">Warehouse Summary</p>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Total SKUs:</span> <span id="stat-skus" class="font-bold text-slate-200">0</span></div>
+          <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Rooms:</span> <span id="stat-rooms" class="font-bold text-slate-200">0</span></div>
+          <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Aisles:</span> <span id="stat-aisles" class="font-bold text-slate-200">0</span></div>
+          <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Bins:</span> <span id="stat-bins" class="font-bold text-slate-200">0</span></div>
+          <div class="bg-slate-800/60 rounded px-2 py-1"><span class="text-slate-400">Occupied:</span> <span id="stat-occupied" class="font-bold text-indigo-400">0</span></div>
+        </div>
+        <div class="mt-2 grid grid-cols-4 gap-2">
+          <button id="btn-add-room" class="px-2 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition col-span-4 mb-1">Add Room Layout</button>
+          <button id="btn-fit-all" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Fit All</button>
+          <button id="btn-top-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Top</button>
+          <button id="btn-front-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">Front</button>
+          <button id="btn-iso-view" class="px-2 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold transition">ISO</button>
+        </div>
+      </div>
+
+      <hr class="border-slate-700/60" />
+
+      <div>
+        <p class="text-slate-500 font-semibold uppercase tracking-wider mb-1.5" style="font-size:10px">Selected Bin</p>
+        <div id="selected-info" class="bg-slate-800/60 rounded-lg p-3 text-slate-400 italic text-xs">
+          Click a bin on a rack to see what's stored there.
+        </div>
+      </div>
+
+      <hr class="border-slate-700/60" />
+
+      <div>
+        <p class="text-slate-500 font-semibold uppercase tracking-wider mb-1.5" style="font-size:10px">Unassigned SKUs <span id="unassigned-count" class="text-amber-400 font-bold">0</span></p>
+        <div id="unassigned-list" class="bg-slate-800/60 rounded-lg p-2 max-h-48 overflow-y-auto scrollbar-thin space-y-1 text-xs text-slate-400">
+          <p class="italic text-xs text-slate-500">Items without a bin code appear here. Click a free bin to assign one.</p>
+        </div>
+        <button id="btn-open-main" class="mt-2 w-full px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs transition">Open Main App ↗</button>
+      </div>
+
+      <hr class="border-slate-700/60" />
+
+      <div>
+        <p class="text-slate-500 font-semibold uppercase tracking-wider mb-1.5" style="font-size:10px">Filter / Search</p>
+        <input id="search-sku" type="text" placeholder="Waiting for inventory load…" disabled class="w-full text-slate-200 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none disabled:opacity-40" />
+        <p class="text-slate-500 mt-1" style="font-size:10px">Chaotic storage: any SKU can be in any free bin — bins are auto-assigned or manually assigned.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="legend">
+    <div class="swatch"><span class="dot" style="background:#475569"></span> Empty (free)</div>
+    <div class="swatch"><span class="dot" style="background:#6366f1"></span> Occupied</div>
+    <div class="swatch"><span class="dot" style="background:#f59e0b"></span> Low stock</div>
+    <div class="swatch"><span class="dot" style="background:#ef4444"></span> Alert</div>
+    <div class="swatch"><span class="dot" style="background:#22d3ee"></span> Highlighted / Search</div>
+    <div class="swatch"><span class="dot" style="background:#10b981"></span> Selected</div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Deprecation banner — standalone 3D page is a legacy fallback; use the in-app 3D panel from the dashboard. -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:80;background:rgba(180,83,9,0.96);color:#fff;font:600 12px/1.4 'Inter',system-ui,sans-serif;text-align:center;padding:6px 12px;backdrop-filter:blur(6px);">
+    ⚠️ This standalone 3D page is deprecated. Use the in-app 3D panel from the dashboard for the unified session.
+  </div>
+
+  <!-- Firebase SDKs — SAME compat version as index.html (v10.13.2) to avoid cross-tab auth-token invalidation -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <!-- Shared Firebase init: provides `db` and `auth` globals -->
+  <script src="firebase-config.js"></script>
+  <script>
+  /*
+   ═══════════════════════════════════════════════════════
+   3D Warehouse View — St3s Shadow Ledger
+   Auth: unified with main app via firebase-config.js.
+   Unauthenticated visitors are redirected to index.html.
+   Write path: assign/clear binCode writes all derived
+   warehouse fields to Firestore (REP-003 §4.2).
+   ═══════════════════════════════════════════════════════ */
+
+  // db and auth are provided by firebase-config.js
+
+  const LOC_BUILDING = 'building';
+  const COLOR_TAG = { default: 0x475569, occupied: 0x6366f1, low: 0xf59e0b, alert: 0xef4444, highlight: 0x22d3ee, selected: 0x10b981 };
+
+  let scene, camera, renderer, controls, raycaster, mouse;
+  let inventory = [];          // raw Firestore items
+  let binMeshes = [];          // [{ mesh, code, item, defaultColor }]
+  let selectedMesh = null;
+  let highlightedMeshes = new Set();
+  let labelGroup, labels = []; // CSS-like floating text via sprite
+  let roomGroup;
+
+  // ─── Warehouse structure config (auto-built from binCodes) ───
+  let warehouse = {
+    rooms: {
+      // 'WH': { aisles: ['A','B'], bays: [1..6], bins: [1..4], levels: ['F','1'] }
+    }
+  };
+
+  // ───────────────────────────────────────────
+  // AUTH (unified with main app) + DATA LOAD
+  // ───────────────────────────────────────────
+
+  // Derive binCode component fields per REP-003 §4.2
+  // Format: ROOM-AISLE-BAY-BIN-LEVEL-STOCK
+  function parseBinCode(binCode) {
+    const parts = String(binCode || '').split('-');
+    return {
+      warehouseRoom:  parts[0] || '',
+      warehouseAisle: parts[1] || '',
+      warehouseBay:   parseInt(parts[2], 10) || 0,
+      warehouseBin:   parseInt(parts[3], 10) || 0,
+      warehouseLevel: parts[4] || ''
+    };
+  }
+
+  // Assign a SKU to a bin
+  async function assignSkuToBin(itemId, binCode) {
+    if (!binCode) return Promise.resolve();
+    // Use the deep merge to initialize locationStock[binCode] = 0
+    await db.collection('inventory').doc(itemId).set({
+      [`locationStock.${binCode}`]: 0,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    // Also delete legacy fields
+    await db.collection('inventory').doc(itemId).set({
+      binCode: firebase.firestore.FieldValue.delete(),
+      warehouseRoom: firebase.firestore.FieldValue.delete(),
+      warehouseAisle: firebase.firestore.FieldValue.delete(),
+      warehouseBay: firebase.firestore.FieldValue.delete(),
+      warehouseBin: firebase.firestore.FieldValue.delete(),
+      warehouseLevel: firebase.firestore.FieldValue.delete()
+    }, { merge: true });
+
+    const invItem = inventory.find(i => i.id === itemId);
+    if (invItem) {
+      if (!invItem.locationStock) invItem.locationStock = {};
+      invItem.locationStock[binCode] = 0;
+    }
+  }
+
+  // Clear a bin: wipes specific binCode from locationStock
+  async function clearSkuFromBin(itemId, binCode) {
+    if (!binCode) return Promise.resolve();
+    await db.collection('inventory').doc(itemId).set({
+      [`locationStock.${binCode}`]: firebase.firestore.FieldValue.delete(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    const invItem = inventory.find(i => i.id === itemId);
+    if (invItem && invItem.locationStock) {
+      delete invItem.locationStock[binCode];
+    }
+  }
+
+  let currentUser = null; // set when auth resolves
+
+  let warehouseRoomLayouts = [];
+
+  function startInventoryListener() {
+    const info = document.getElementById('selected-info');
+    info.innerHTML = '<p class="text-indigo-400 text-xs">🔄 Loading inventory…</p>';
+
+    // Listen to empty room layouts first
+    db.collection('warehouse_rooms').onSnapshot(snap => {
+      warehouseRoomLayouts = [];
+      snap.forEach(doc => warehouseRoomLayouts.push({ id: doc.id, ...doc.data() }));
+      if (renderer) {
+        buildWarehouseStructure();
+        buildAllRooms();
+        renderStats();
+      }
+    });
+
+    db.collection('inventory').onSnapshot(snap => {
+      inventory = [];
+      snap.forEach(doc => inventory.push({ id: doc.id, ...doc.data() }));
+      if (renderer) {
+        buildWarehouseStructure();
+        buildAllRooms();
+        renderStats();
+      } else {
+        buildWarehouseStructure();
+        init3D();
+        renderStats();
+        document.getElementById('search-sku').disabled = false;
+        document.getElementById('search-sku').placeholder = 'Search SKU or bin code to highlight.';
+        checkRouteQuery();
+      }
+    }, err => {
+      info.innerHTML = `<div class="space-y-2"><p class="text-red-400 text-sm font-semibold">Database error</p><p class="text-red-300 text-xs">${esc(err.message)}</p></div>`;
+    });
+  }
+
+  function bootstrap() {
+    const info = document.getElementById('selected-info');
+    info.innerHTML = '<p class="text-indigo-400 text-xs">🔐 Checking session…</p>';
+
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        // Not signed in — redirect to main app login
+        // Preserve the return destination so user lands back here after login
+        const returnUrl = encodeURIComponent(window.location.href);
+        window.location.href = 'index.html?redirect=warehouse&from=' + returnUrl;
+        return;
+      }
+      currentUser = user;
+      // Show logged-in user badge
+      const badge = document.getElementById('user-badge');
+      if (badge) {
+        badge.textContent = user.displayName || user.email || 'Signed in';
+        badge.classList.remove('hidden');
+      }
+      startInventoryListener();
+    });
+  }
+
+  // ───────────────────────────────────────────
+  // BUILD WAREHOUSE STRUCTURE FROM Bincodes
+  // ───────────────────────────────────────────
+  function buildWarehouseStructure() {
+    warehouse.rooms = {};
+    warehouse.emptyBins = [];
+
+    // 1. Seed structural empty rooms from layout collection
+    warehouseRoomLayouts.forEach(layout => {
+      const room = layout.roomName || layout.id;
+      if (!warehouse.rooms[room]) {
+        warehouse.rooms[room] = { aisles: new Set(), bays: new Set(), bins: new Set(), levels: new Set(), items: new Map(), aislesData: layout.aislesData || {} };
+      }
+      
+      if (layout.aislesData) {
+        Object.entries(layout.aislesData).forEach(([aisleLetter, config]) => {
+          warehouse.rooms[room].aisles.add(aisleLetter);
+          for (let b = config.bayStart || 1; b <= (config.bayEnd || config.bays || 1); b++) warehouse.rooms[room].bays.add(b);
+          for (let bi = 1; bi <= (config.bins || 1); bi++) warehouse.rooms[room].bins.add(bi);
+          for (let l = 1; l <= (config.levels || 1); l++) warehouse.rooms[room].levels.add(String(l));
+        });
+      } else {
+        const numAisles = parseInt(layout.aisles, 10) || 1;
+        const numBays = parseInt(layout.bays, 10) || 1;
+        const numBins = parseInt(layout.bins, 10) || 1;
+        const numLevels = parseInt(layout.levels, 10) || 1;
+
+        for (let a = 0; a < numAisles; a++) {
+          const aisleLetter = String.fromCharCode(65 + a);
+          warehouse.rooms[room].aisles.add(aisleLetter);
+          warehouse.rooms[room].aislesData[aisleLetter] = { bayStart: 1, bayEnd: numBays, bins: numBins, levels: numLevels };
+        }
+        for (let b = 1; b <= numBays; b++) warehouse.rooms[room].bays.add(b);
+        for (let bi = 1; bi <= numBins; bi++) warehouse.rooms[room].bins.add(bi);
+        for (let l = 1; l <= numLevels; l++) warehouse.rooms[room].levels.add(String(l));
+      }
+    });
+
+    // 2. Overlay items from inventory onto the rooms
+    inventory.forEach(item => {
+      if (!item.locationStock) return;
+      const bins = Object.keys(item.locationStock).filter(k => k !== 'depot' && k !== 'building');
+      
+      bins.forEach(binCode => {
+        const parts = String(binCode).split('-');
+
+        if (parts[0] === 'GENERAL') {
+          const roomKey = parts[1] || 'GENERAL';
+          if (!warehouse.rooms[roomKey]) warehouse.rooms[roomKey] = { _isGeneral: true, zones: new Set(), labels: new Map() };
+          if (parts[2]) warehouse.rooms[roomKey].zones.add(parts[2]);
+          warehouse.rooms[roomKey].labels.set(binCode, { item, code: binCode });
+          return;
+        }
+        // Format: ROOM-AISLE-BAY-BIN-LEVEL-ACTION
+        const [room, aisle, bayStr, binStr, level, action] = parts;
+        if (!room) return;
+        if (!warehouse.rooms[room]) warehouse.rooms[room] = { aisles: new Set(), bays: new Set(), bins: new Set(), levels: new Set(), items: new Map() };
+        if (aisle) warehouse.rooms[room].aisles.add(aisle);
+        if (bayStr) warehouse.rooms[room].bays.add(parseInt(bayStr,10) || 0);
+        if (binStr) warehouse.rooms[room].bins.add(parseInt(binStr,10) || 0);
+        if (level) warehouse.rooms[room].levels.add(level);
+        warehouse.rooms[room].items.set(binCode, { item, code: binCode });
+      });
+    });
+
+    // If no rooms exist, seed one example so user sees structure
+    const rooms = Object.keys(warehouse.rooms);
+    if (rooms.length === 0) {
+      warehouse.rooms['WH'] = {
+        aisles: new Set(['A','B','C']),
+        bays: new Set([1,2,3,4,5,6]),
+        bins: new Set([1,2,3,4]),
+        levels: new Set(['F','1','2','3']),
+        items: new Map()
+      };
+    }
+  }
+
+  // ───────────────────────────────────────────
+  // 3D INIT
+  // ───────────────────────────────────────────
+  function init3D() {
+    const container = document.getElementById('canvas-container');
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+    scene.fog = new THREE.Fog(0x0f172a, 50, 200);
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(35, 30, 35);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 5;
+    controls.maxDistance = 120;
+    controls.maxPolarAngle = Math.PI * 0.48; // don't go below floor
+
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0x64748b, 0.55));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(20, 40, 20);
+    dir.castShadow = true;
+    dir.shadow.mapSize.width = 2048;
+    dir.shadow.mapSize.height = 2048;
+    dir.shadow.camera.left = -60;
+    dir.shadow.camera.right = 60;
+    dir.shadow.camera.top = 60;
+    dir.shadow.camera.bottom = -60;
+    scene.add(dir);
+    const fill = new THREE.DirectionalLight(0x6366f1, 0.2);
+    fill.position.set(-20, 15, -20);
+    scene.add(fill);
+
+    // Floor plane
+    const floorGeo = new THREE.PlaneGeometry(200, 200);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.95 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Grid lines
+    const grid = new THREE.GridHelper(200, 50, 0x334155, 0x1e293b);
+    grid.position.y = 0.01;
+    scene.add(grid);
+
+    labelGroup = new THREE.Group();
+    scene.add(labelGroup);
+
+    roomGroup = new THREE.Group();
+    scene.add(roomGroup);
+
+    buildAllRooms();
+    fitAll();
+
+    window.addEventListener('resize', onResize);
+    renderer.domElement.addEventListener('click', onCanvasClick);
+    renderer.domElement.addEventListener('mousemove', onCanvasMouseMove);
+    animate();
+  }
+
+  // ───────────────────────────────────────────
+  // TEXT LABEL (Sprite)
+  // ───────────────────────────────────────────
+  function makeLabel(text, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(15,23,42,0.85)';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = color || '#6366f1';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, 2, 252, 60);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 28px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 32);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.userData = { canvas }; // track canvas for explicit GC eligibility
+    tex.needsUpdate = true;
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(4, 1, 1);
+    return sprite;
+  }
+
+  // ───────────────────────────────────────────
+  // BUILD ALL ROOMS
+  // ───────────────────────────────────────────
+function binColorFor(item) {
+    if (!item) return COLOR_TAG.default;
+    const building = Number(item.locationStock?.[LOC_BUILDING] ?? item.buildingStock ?? 0);
+    const carrierTrigger = item.carrierTrigger ?? 99;
+    const purchTrigger = item.purchasingTrigger ?? 99;
+
+    let totalStock = 0;
+    if (item.totalStock != null && item.totalStock >= 0) {
+      totalStock = Number(item.totalStock);
+    } else if (item.locationStock) {
+      totalStock = Object.values(item.locationStock).reduce((s, v) => s + (Number(v) || 0), 0);
+    }
+
+    if (purchTrigger <= 99 && totalStock <= purchTrigger) return COLOR_TAG.alert;
+    if (building <= carrierTrigger) return COLOR_TAG.low;
+    return COLOR_TAG.occupied;
+  }
+
+  function buildAllRooms() {
+    // Clear existing
+    while (roomGroup.children.length) {
+      const c = roomGroup.children[0];
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose && c.material.dispose();
+      roomGroup.remove(c);
+    }
+    labels.forEach(s => { if (s.material.map) s.material.map.dispose(); s.material.dispose(); });
+    labelGroup.clear(); labels = [];
+    binMeshes = [];
+
+    const rooms = Object.keys(warehouse.rooms);
+    const numRooms = rooms.length;
+    const roomSpacingX = 14; // room rows along X axis
+
+    rooms.forEach((roomKey, roomIdx) => {
+      const room = warehouse.rooms[roomKey];
+      const roomOffsetX = (roomIdx - (numRooms - 1) / 2) * roomSpacingX;
+      buildRoomStructure(roomKey, room, roomOffsetX);
+    });
+  }
+
+  function buildRoomStructure(roomKey, room, offsetX) {
+    let aisles, bays, bins, levels;
+
+    if (room._isGeneral) {
+      // General zones: simple row of cells
+      const zones = [...room.zones].sort();
+      const zoneCount = zones.length || 4;
+      const cellSize = 2;
+      for (let i = 0; i < zoneCount; i++) {
+        const code = `GENERAL-${roomKey}-${zones[i] || `ZONE_${i+1}`}-STOCK`;
+        const itemEntry = room.labels?.get(code);
+        const item = itemEntry?.item;
+        const mesh = makeBinMesh(cellSize, 0.6, cellSize, binColorFor(item));
+        mesh.position.set(offsetX + (i - zoneCount/2) * (cellSize + 1), 0.3, 0);
+        mesh.userData = { code, item, defaultColor: mesh.material.color.getHex() };
+        roomGroup.add(mesh); binMeshes.push({ mesh, code, item, defaultColor: mesh.material.color.getHex() });
+      }
+      // Label
+      const lbl = makeLabel(`${roomKey}`, '#22d3ee');
+      lbl.position.set(offsetX, 2.5, -zoneCount/2 * (cellSize+1) - 1);
+      labelGroup.add(lbl); labels.push(lbl);
+      return;
+    }
+
+    aisles = [...room.aisles].sort();
+    bays = [...room.bays].sort((a,b)=>a-b);
+    bins = [...room.bins].sort((a,b)=>a-b);
+    levels = room.levels.size > 0 ? [...room.levels] : ['F','1'];
+    if (levels.indexOf('F') === -1) levels.unshift('F');
+    // sort levels F=0,1,2,3,4
+    levels.sort((a,b) => (a==='F' ? 0 : parseInt(a,10)) - (b==='F' ? 0 : parseInt(b,10)));
+
+    // Defaults if empty
+    if (aisles.length === 0) aisles = ['A'];
+    if (bays.length === 0) bays = [1,2,3];
+    if (bins.length === 0) bins = [1,2];
+    // Cap dimensions to keep UI usable
+    aisles = aisles.slice(0, 20);
+    bays = bays.slice(0, 20);
+    bins = bins.slice(0, 10);
+    levels = levels.slice(0, 5);
+
+    // Building each aisle as a tall rack
+    const shelfUnitDepth = 2;   // bin depth (Z)
+    const shelfUnitWidth = 2;   // bin width (X within an aisle)
+    const aisleGapZ = 4;        // walking space between adjacent racks
+    const levelHeight = 2;
+    const binGap = 0.15;
+
+    const numAisles = aisles.length;
+    const numBays = bays.length;
+    const numBins = bins.length;
+    const numLevels = levels.length;
+
+    // Layout: each aisle is a standalone rack; aisles laid out along X
+    const aisleWidthX = numBins * (shelfUnitWidth + binGap) + 0.3;
+    const aisleDepthZ = numBays * (shelfUnitDepth + binGap) + 0.3;
+
+    aisles.forEach((aisle, aisleIdx) => {
+      const aisleX = offsetX + (aisleIdx - (numAisles - 1)/2) * (aisleWidthX + aisleGapZ);
+
+      // Rack frame (vertical posts + horizontal shelves)
+      const rackHeight = numLevels * levelHeight + 0.6;
+      const rackColor = 0x334155;
+      const frameMat = new THREE.MeshStandardMaterial({ color: rackColor, roughness: 0.7, metalness: 0.3 });
+
+      // shelf planes
+      levels.forEach((level, levelIdx) => {
+        // shelf platform under each level (skip platform for F since it's on floor)
+        if (level !== 'F') {
+          const shelfGeo = new THREE.BoxGeometry(aisleWidthX + 0.2, 0.08, aisleDepthZ + 0.2);
+          const shelf = new THREE.Mesh(shelfGeo, frameMat);
+          shelf.position.set(aisleX, levelIdx * levelHeight + 0.04, 0);
+          shelf.castShadow = true; shelf.receiveShadow = true;
+          roomGroup.add(shelf);
+        }
+      });
+
+      // 4 vertical posts
+      const postH = rackHeight + 0.5;
+      const postGeo = new THREE.BoxGeometry(0.15, postH, 0.15);
+      [
+        [-aisleWidthX/2 - 0.05, aisleDepthZ/2 + 0.05],
+        [ aisleWidthX/2 + 0.05, aisleDepthZ/2 + 0.05],
+        [-aisleWidthX/2 - 0.05, -aisleDepthZ/2 - 0.05],
+        [ aisleWidthX/2 + 0.05, -aisleDepthZ/2 - 0.05],
+      ].forEach(([dx, dz]) => {
+        const post = new THREE.Mesh(postGeo, frameMat);
+        post.position.set(aisleX + dx, postH/2, dz);
+        post.castShadow = true;
+        roomGroup.add(post);
+      });
+
+      // Build each bin
+      levels.forEach((level, levelIdx) => {
+        bays.forEach((bay, bayIdx) => {
+          bins.forEach((bin, binIdx) => {
+            const code = `${roomKey}-${aisle}-${String(bay).padStart(2,'0')}-${String(bin).padStart(2,'0')}-${level}-STOCK`;
+            const itemEntry = room.items?.get(code);
+            const item = itemEntry?.item;
+            
+            // Retroactive Bulk Builder constraint: skip drawing bins that fall outside the defined aisle bounds
+            if (room.aislesData && room.aislesData[aisle] && !itemEntry) {
+              const config = room.aislesData[aisle];
+              if (bay < (config.bayStart || 1) || bay > (config.bayEnd || config.bays || 1) || bin > (config.bins || 1)) {
+                 return; // Do not render missing physical bins
+              }
+            }
+
+            const color = binColorFor(item);
+            const binMesh = makeBinMesh(shelfUnitWidth, levelHeight*0.85, shelfUnitDepth, color);
+            const xWithinAisle = (binIdx - (numBins - 1)/2) * (shelfUnitWidth + binGap);
+            const zWithinAisle = (bayIdx - (numBays - 1)/2) * (shelfUnitDepth + binGap);
+            const y = levelIdx * levelHeight + levelHeight/2 + 0.1;
+            
+            if (!itemEntry) {
+              warehouse.emptyBins.push({ code, mesh: binMesh });
+            }
+
+            binMesh.position.set(aisleX + xWithinAisle, y, zWithinAisle);
+            binMesh.userData = { code, item, defaultColor: color };
+            binMesh.castShadow = true;
+            roomGroup.add(binMesh);
+            binMeshes.push({ mesh: binMesh, code, item, defaultColor: color });
+          });
+        });
+      });
+
+      // Aisle label — placed at top of rack front
+      const aisleLabel = makeLabel(`${roomKey} · ${aisle}`, '#a5b4fc');
+      aisleLabel.position.set(aisleX, rackHeight + 1.2, aisleDepthZ/2 + 0.5);
+      labelGroup.add(aisleLabel); labels.push(aisleLabel);
+
+      // Level labels on the side of the rack
+      levels.forEach((level, levelIdx) => {
+        const lvlLabel = makeLabel(level === 'F' ? 'F' : 'L'+level, '#64748b');
+        lvlLabel.scale.set(1, 0.4, 1);
+        lvlLabel.position.set(aisleX - aisleWidthX/2 - 0.4, levelIdx * levelHeight + levelHeight/2 + 0.1, aisleDepthZ/2);
+        labelGroup.add(lvlLabel); labels.push(lvlLabel);
+      });
+    });
+
+    // Room label (big banner above all aisles)
+    const roomLabel = makeLabel(`ROOM ${roomKey}`, '#22d3ee');
+    roomLabel.scale.set(6, 1.5, 1);
+    roomLabel.position.set(offsetX + 0, rackHeightTop(room) + 3, -(numBays * (shelfUnitDepth + binGap))/2 - 2);
+    labelGroup.add(roomLabel); labels.push(roomLabel);
+  }
+
+  function rackHeightTop(room) {
+    if (room._isGeneral) return 4;
+    const levels = (room.levels && room.levels.size) ? [...room.levels] : ['F','1'];
+    if (levels.indexOf('F') === -1) levels.unshift('F');
+    levels.sort((a,b) => (a==='F' ? 0 : parseInt(a,10)) - (b==='F' ? 0 : parseInt(b,10)));
+    return levels.length * 2 + 1.2;
+  }
+
+  function makeBinMesh(w, h, d, colorHex) {
+    const geo = new THREE.BoxGeometry(w - 0.05, h - 0.05, d - 0.05);
+    const mat = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      roughness: 0.45,
+      metalness: 0.1,
+      emissive: colorHex,
+      emissiveIntensity: 0.08
+    });
+    return new THREE.Mesh(geo, mat);
+  }
+
+  // ───────────────────────────────────────────
+  // INTERACTION
+  // ───────────────────────────────────────────
+  let mouseThrottleId = null;
+  function onCanvasMouseMove(e) {
+    // Throttle to ~15fps — raycaster on hundreds of bins is expensive
+    if (mouseThrottleId) return;
+    mouseThrottleId = requestAnimationFrame(() => {
+      mouseThrottleId = null;
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(binMeshes.map(b => b.mesh));
+      const badge = document.getElementById('code-badge');
+      if (hits.length > 0) {
+        const ud = hits[0].object.userData;
+        badge.textContent = ud.code + (ud.item ? ` · ${ud.item.sku}` : ' · free');
+        badge.style.left = (e.clientX + 14) + 'px';
+        badge.style.top = (e.clientY + 14) + 'px';
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    });
+  }
+
+  function onCanvasClick(e) {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const meshes = binMeshes.map(b => b.mesh);
+    const hits = raycaster.intersectObjects(meshes);
+    if (hits.length > 0) {
+      const hitMesh = hits[0].object;
+      selectBin(hitMesh);
+    } else {
+      deselectBin();
+    }
+  }
+
+  function selectBin(mesh) {
+    if (selectedMesh && selectedMesh !== mesh) {
+      // restore prior selected color
+      const priorEntry = binMeshes.find(b => b.mesh === selectedMesh);
+      if (priorEntry) {
+        selectedMesh.material.color.setHex(priorEntry.defaultColor);
+        selectedMesh.material.emissive.setHex(priorEntry.defaultColor);
+      }
+    }
+    const entry = binMeshes.find(b => b.mesh === mesh);
+    selectedMesh = mesh;
+    mesh.material.color.setHex(COLOR_TAG.selected);
+    mesh.material.emissive.setHex(COLOR_TAG.selected);
+
+    const ud = mesh.userData;
+    const info = document.getElementById('selected-info');
+    if (!ud.item) {
+      // ── FREE BIN: show assign-SKU picker ──────────────────────
+      const unassignedItems = inventory.filter(i => !i.binCode && !i.archived);
+      const optionsHtml = unassignedItems.length === 0
+        ? '<option value="">— No unassigned SKUs —</option>'
+        : ['<option value="">Select a SKU to assign…</option>',
+            ...unassignedItems.map(i => `<option value="${esc(i.id)}">${esc(i.sku)} — ${esc(i.name)}</option>`)
+          ].join('');
+
+      info.innerHTML = `
+        <div class="space-y-3">
+          <p class="mono font-bold text-cyan-400 text-sm">${ud.code}</p>
+          <p class="text-emerald-400 text-xs font-semibold">🟢 Free bin — assign a SKU to this location</p>
+          <div>
+            <label class="block text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Choose SKU</label>
+            <select id="assign-sku-select"
+              class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+              ${optionsHtml}
+            </select>
+          </div>
+          <button id="btn-assign-confirm"
+            class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition disabled:opacity-40"
+            ${unassignedItems.length === 0 ? 'disabled' : ''}>
+            Assign to ${ud.code}
+          </button>
+          <p class="text-slate-600" style="font-size:10px">Writes binCode + 3D position to database immediately.</p>
+        </div>`;
+
+      const confirmBtn = info.querySelector('#btn-assign-confirm');
+      if (confirmBtn && unassignedItems.length > 0) {
+        confirmBtn.addEventListener('click', async () => {
+          const select = info.querySelector('#assign-sku-select');
+          const itemId = select?.value;
+          if (!itemId) { toast('Select a SKU first'); return; }
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = 'Saving…';
+          try {
+            await assignSkuToBin(itemId, ud.code);
+            ud.item = inventory.find(i => i.id === itemId) || null;
+            const entry = binMeshes.find(b => b.mesh === mesh);
+            if (entry) {
+              entry.item = ud.item;
+              const col = binColorFor(ud.item);
+              entry.defaultColor = col;
+              mesh.material.color.setHex(col);
+              mesh.material.emissive.setHex(col);
+            }
+            selectedMesh = null;
+            renderStats();
+            toast(`✓ ${inventory.find(i=>i.id===itemId)?.sku || itemId} → ${ud.code}`);
+            // Refresh the info panel to show the item details
+            selectBin(mesh);
+          } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Assign to ' + ud.code;
+            toast('Error: ' + err.message);
+          }
+        });
+      }
+
+    } else {
+      const it = ud.item;
+      const building = Number(it.locationStock?.[LOC_BUILDING] ?? it.buildingStock ?? 0);
+      const total = it.locationStock ? Object.values(it.locationStock).reduce((s,v)=>s+(v||0),0) : (it.totalStock || 0);
+      const alert = building <= (it.carrierTrigger ?? 5);
+      const procure = total <= (it.purchasingTrigger ?? 10);
+      info.innerHTML = `
+        <div>
+          <p class="mono font-bold text-indigo-400 text-sm mb-1">${ud.code}</p>
+          <p class="text-slate-200 font-semibold">${esc(it.sku)} — ${esc(it.name)}</p>
+          <div class="mt-2 space-y-0.5 text-slate-300">
+            <p>📦 Building: <strong>${building}</strong> / max ${it.maxCapacity ?? '—'}</p>
+            <p>🏭 Depot: <strong>${it.locationStock?.depot ?? it.depotStock ?? 0}</strong></p>
+            <p>📊 Total: <strong>${total}</strong></p>
+            <p>🏷️ Category: <span class="text-slate-400">${esc(it.category || '—')}</span></p>
+            ${alert ? '<p class="text-red-400 mt-1">⚠️ Carrier alert (below trigger)</p>' : ''}
+            ${procure ? '<p class="text-amber-400 mt-1">🟡 Procurement alert</p>' : ''}
+          </div>
+          <div class="mt-2 flex gap-1.5 flex-wrap">
+            ${it.datasheetUrl ? `<a href="${it.datasheetUrl}" target="_blank" rel="noopener" class="px-2 py-1 bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 rounded text-xs">Datasheet ↗</a>` : ''}
+            <button id="btn-clear-bin" class="px-2 py-1 bg-red-600/30 border border-red-500/40 text-red-300 rounded text-xs hover:bg-red-600/50 transition">🗑 Clear bin</button>
+            <button id="btn-reassign-bin" class="px-2 py-1 bg-amber-600/30 border border-amber-500/40 text-amber-300 rounded text-xs hover:bg-amber-600/50 transition">↔ Reassign</button>
+          </div>
+        </div>`;
+
+      // ── CLEAR BIN ───────────────────────────────────────────────
+      info.querySelector('#btn-clear-bin')?.addEventListener('click', async () => {
+        if (!confirm(`Clear ${it.sku} from bin ${ud.code}?`)) return;
+        try {
+          await clearSkuFromBin(it.id);
+          ud.item = null;
+          const entry = binMeshes.find(b => b.mesh === mesh);
+          if (entry) { entry.item = null; entry.defaultColor = COLOR_TAG.default; }
+          mesh.material.color.setHex(COLOR_TAG.default);
+          mesh.material.emissive.setHex(COLOR_TAG.default);
+          selectedMesh = null;
+          renderStats();
+          toast('Bin cleared ✓');
+        } catch (err) { toast('Error: ' + err.message); }
+      });
+
+      // ── REASSIGN: show picker overlay ───────────────────────────
+      info.querySelector('#btn-reassign-bin')?.addEventListener('click', () => {
+        const freeBins = binMeshes.filter(b => !b.item && b.code !== ud.code);
+        if (freeBins.length === 0) { toast('No free bins available'); return; }
+        const opts = freeBins.map(b => `<option value="${esc(b.code)}">${esc(b.code)}</option>`).join('');
+        const overlay = document.createElement('div');
+        overlay.className = 'mt-3 space-y-2 border-t border-slate-700 pt-3';
+        overlay.innerHTML = `
+          <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Move to free bin</p>
+          <select id="reassign-select"
+            class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+            <option value="">Select target bin…</option>${opts}
+          </select>
+          <button id="btn-reassign-confirm"
+            class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition">
+            Move SKU
+          </button>`;
+        info.querySelector('div').appendChild(overlay);
+
+        overlay.querySelector('#btn-reassign-confirm').addEventListener('click', async () => {
+          const newBin = overlay.querySelector('#reassign-select').value;
+          if (!newBin) { toast('Select a target bin'); return; }
+          try {
+            await clearSkuFromBin(it.id);
+            await assignSkuToBin(it.id, newBin);
+            buildAllRooms();
+            renderStats();
+            toast(`✓ ${it.sku} moved to ${newBin}`);
+            deselectBin();
+          } catch (err) { toast('Error: ' + err.message); }
+        });
+      });
+    }
+  }
+
+  function deselectBin() {
+    if (selectedMesh) {
+      const entry = binMeshes.find(b => b.mesh === selectedMesh);
+      if (entry) {
+        selectedMesh.material.color.setHex(highlightedMeshes.has(selectedMesh) ? COLOR_TAG.highlight : entry.defaultColor);
+        selectedMesh.material.emissive.setHex(highlightedMeshes.has(selectedMesh) ? COLOR_TAG.highlight : entry.defaultColor);
+      }
+      selectedMesh = null;
+    }
+    document.getElementById('selected-info').innerHTML = '<p class="italic text-slate-400">Click a bin on a rack to see what\'s stored there.</p>';
+  }
+
+  // ───────────────────────────────────────────
+  // HIGHLIGHT FROM SEARCH
+  // ───────────────────────────────────────────
+  document.getElementById('search-sku').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toUpperCase();
+    if (q.length < 2) {
+      // Restore all colors
+      binMeshes.forEach(b => {
+        b.mesh.material.color.setHex(b.defaultColor);
+        b.mesh.material.emissive.setHex(b.defaultColor);
+      });
+      highlightedMeshes.clear();
+      return;
+    }
+    highlightedMeshes.clear();
+    binMeshes.forEach(b => {
+      const match = (b.item && (b.item.sku?.toUpperCase().includes(q))) || b.code.toUpperCase().includes(q) || (b.item && b.item.name?.toUpperCase().includes(q));
+      if (match) {
+        b.mesh.material.color.setHex(COLOR_TAG.highlight);
+        b.mesh.material.emissive.setHex(COLOR_TAG.highlight);
+        highlightedMeshes.add(b.mesh);
+      } else {
+        b.mesh.material.color.setHex(b.defaultColor);
+        b.mesh.material.emissive.setHex(b.defaultColor);
+      }
+    });
+    if (highlightedMeshes.size === 0) toast('No matches for "' + q + '"');
+  });
+
+  // ───────────────────────────────────────────
+  // CAMERA PRESETS
+  // ───────────────────────────────────────────
+  function fitAll() {
+    const box = new THREE.Box3().setFromObject(roomGroup);
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI/180);
+    let z = Math.abs(maxDim / 2 / Math.tan(fov/2));
+    z *= 1.6;
+    camera.position.set(center.x + z*0.7, z*0.8, center.z + z*0.7);
+    controls.target.set(center.x, center.y, center.z);
+    controls.update();
+  }
+  function topView() {
+    const box = new THREE.Box3().setFromObject(roomGroup);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    camera.position.set(center.x, size.length() * 1.2, center.z + 0.1);
+    controls.target.set(center.x, 0, center.z);
+    controls.update();
+  }
+  function frontView() {
+    const box = new THREE.Box3().setFromObject(roomGroup);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    camera.position.set(center.x, Math.max(8, size.y/2 + 4), size.z + size.length()*0.9);
+    controls.target.set(center.x, center.y, center.z);
+    controls.update();
+  }
+
+  // ───────────────────────────────────────────
+  // PICK PATH ROUTING
+  // ───────────────────────────────────────────
+  function generatePickRoute(skus) {
+    const waypoints = [];
+    
+    // Start at staging area (0,0)
+    const staging = new THREE.Vector3(0, 0, 0);
+    waypoints.push({ id: 'START (Staging)', point: staging, mesh: null });
+
+    skus.forEach(sku => {
+       const bins = binMeshes.filter(b => b.item && b.item.sku === sku);
+       if (bins.length === 0) return;
+       // Pick the first bin for simplicity
+       const targetBin = bins[0];
+       waypoints.push({ id: sku, point: targetBin.mesh.position.clone(), mesh: targetBin.mesh });
+    });
+
+    if (waypoints.length <= 1) {
+       toast('No physical bins found for the selected SKUs.');
+       return;
+    }
+
+    // Nearest Neighbor TSP
+    const unvisited = waypoints.slice(1);
+    const path = [waypoints[0]];
+    let current = waypoints[0];
+
+    while (unvisited.length > 0) {
+      let nearestIdx = -1;
+      let minDist = Infinity;
+      for (let i = 0; i < unvisited.length; i++) {
+        const dist = current.point.distanceTo(unvisited[i].point);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestIdx = i;
+        }
+      }
+      current = unvisited[nearestIdx];
+      path.push(current);
+      unvisited.splice(nearestIdx, 1);
+    }
+    
+    // Return to staging
+    path.push(waypoints[0]);
+
+    // Draw the 3D line
+    const points = path.map(p => new THREE.Vector3(p.point.x, p.point.y > 0 ? p.point.y : 0.1, p.point.z));
+    const mat = new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3 });
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geo, mat);
+    roomGroup.add(line);
+    
+    // Highlight waypoint meshes
+    path.forEach(p => {
+      if (p.mesh && p.mesh.material) {
+        p.mesh.material.emissive.setHex(0xf59e0b);
+        p.mesh.material.color.setHex(0xf59e0b);
+        highlightedMeshes.add(p.mesh);
+      }
+    });
+
+    toast(`Generated optimal pick path for ${skus.length} SKUs.`);
+  }
+
+  function checkRouteQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get('route');
+    if (!route) return;
+    
+    const ids = route.split(',');
+    
+    // Delay ensures binMeshes is fully populated by buildAllRooms
+    setTimeout(() => {
+      const skus = [];
+      ids.forEach(id => {
+         const item = inventory.find(i => i.id === id);
+         if (item) skus.push(item.sku);
+      });
+      generatePickRoute(skus);
+    }, 1500);
+  }
+
+  document.getElementById('btn-reset-view').addEventListener('click', () => { camera.position.set(35, 30, 35); controls.target.set(0, 4, 0); controls.update(); });
+  document.getElementById('btn-fit-all').addEventListener('click', fitAll);
+  document.getElementById('btn-top-view').addEventListener('click', topView);
+  document.getElementById('btn-front-view').addEventListener('click', frontView);
+  document.getElementById('btn-open-main').addEventListener('click', () => {
+    window.open(window.location.origin + window.location.pathname.replace(/warehouse-3d\.html.*$/, 'index.html'), '_blank');
+  });
+
+  document.getElementById('toggle-panel').addEventListener('click', () => {
+    document.getElementById('info-panel').classList.toggle('collapsed');
+  });
+
+  // ───────────────────────────────────────────
+  // ADD ROOM / REBUILD
+  // ───────────────────────────────────────────
+  document.getElementById('btn-add-room').addEventListener('click', () => {
+    const roomName = document.getElementById('cfg-room-name').value.trim().toUpperCase() || ('R' + (Object.keys(warehouse.rooms).length + 1));
+    if (warehouse.rooms[roomName]) { toast(`Room "${roomName}" already exists. Building extra bins.`); }
+    const numAisles = parseInt(document.getElementById('cfg-room-aisles').value, 10) || 2;
+    const numBays = parseInt(document.getElementById('cfg-room-bays').value, 10) || 3;
+    const numBins = parseInt(document.getElementById('cfg-room-bins').value, 10) || 2;
+    const maxLevelStr = document.getElementById('cfg-room-levels').value;
+    const levels = maxLevelStr === 'F' ? ['F'] : ['F', ...Array.from({length: parseInt(maxLevelStr,10)}, (_,i)=>String(i+1))];
+
+    // Build or extend warehouse config
+    if (!warehouse.rooms[roomName] || warehouse.rooms[roomName]._isGeneral) {
+      warehouse.rooms[roomName] = { aisles: new Set(), bays: new Set(), bins: new Set(), levels: new Set(), items: new Map() };
+    }
+    const r = warehouse.rooms[roomName];
+    for (let i=0; i<numAisles; i++) r.aisles.add(String.fromCharCode(65 + i));
+    for (let i=1; i<=numBays; i++) r.bays.add(i);
+    for (let i=1; i<=numBins; i++) r.bins.add(i);
+    levels.forEach(l => r.levels.add(l));
+
+    buildAllRooms();
+    renderStats();
+    fitAll();
+    toast(`Room ${roomName} ready — ${numAisles} aisles × ${numBays} bays × ${numBins} bins × ${levels.length} levels = ${numAisles*numBays*numBins*levels.length} bin slots`);
+  });
+
+  // ───────────────────────────────────────────
+  // STATS
+  // ───────────────────────────────────────────
+  function renderStats() {
+    const rooms = Object.keys(warehouse.rooms);
+    let totalAisles = 0, totalBins = 0, occupied = 0;
+    rooms.forEach(key => {
+      const r = warehouse.rooms[key];
+      const a = r._isGeneral ? 1 : r.aisles.size;
+      const b = r._isGeneral ? r.zones.size : r.bays.size;
+      const n = r._isGeneral ? 1 : r.bins.size;
+      const lv = r._isGeneral ? 1 : r.levels.size;
+      totalAisles += a;
+      totalBins += a * b * n * lv;
+      occupied += (r.items?.size || r.labels?.size || 0);
+    });
+    document.getElementById('stat-skus').textContent = inventory.length;
+    document.getElementById('stat-rooms').textContent = rooms.length;
+    document.getElementById('stat-aisles').textContent = totalAisles;
+    document.getElementById('stat-bins').textContent = totalBins;
+    document.getElementById('stat-occupied').textContent = occupied;
+    renderUnassignedList();
+  }
+
+  function renderUnassignedList() {
+    const listEl = document.getElementById('unassigned-list');
+    const countEl = document.getElementById('unassigned-count');
+    if (!listEl || !countEl) return;
+
+    // A SKU is unassigned if it has no bins EXCEPT building/depot
+    const unassigned = inventory.filter(i => {
+      if (i.archived) return false;
+      const bins = Object.keys(i.locationStock || {}).filter(k => k !== 'building' && k !== 'depot' && i.locationStock[k] > 0);
+      return bins.length === 0;
+    });
+
+    countEl.textContent = unassigned.length;
+    if (unassigned.length === 0) {
+      listEl.innerHTML = '<p class="italic text-xs text-slate-500">✓ All active SKUs have bins assigned.</p>';
+      return;
+    }
+    listEl.innerHTML = unassigned.slice(0, 50).map(i => `
+      <div class="flex items-center justify-between gap-1 py-1 px-1.5 rounded hover:bg-slate-700/60 border-b border-slate-700/50 last:border-0 group">
+        <div class="flex-1 min-w-0">
+          <span class="font-mono text-indigo-300 text-sm truncate block">${esc(i.sku)}</span>
+          <span class="text-slate-500 text-[10px] truncate block">${esc(i.name || '')}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-amber-400 font-bold text-sm shrink-0">${Number(i.locationStock?.building ?? i.buildingStock ?? 0)}</span>
+          <button onclick="suggestPutaway('${i.id}')" title="Find optimal empty bin" class="p-1 rounded bg-slate-700 hover:bg-emerald-600 text-slate-300 hover:text-white transition opacity-0 group-hover:opacity-100 focus:opacity-100">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          </button>
+        </div>
+      </div>
+    `).join('') + (unassigned.length > 50 ? `<p class="text-xs text-slate-500 italic mt-2">+${unassigned.length - 50} more…</p>` : '');
+  }
+
+  let putawayPulseInterval = null;
+  
+  window.suggestPutaway = function(itemId) {
+    if (!warehouse.emptyBins || warehouse.emptyBins.length === 0) {
+      toast('No empty bins available in the layout!');
+      return;
+    }
+
+    const item = inventory.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Reset previous pulses
+    if (putawayPulseInterval) clearInterval(putawayPulseInterval);
+    warehouse.emptyBins.forEach(b => {
+      if (b.mesh && b.mesh.material) {
+        b.mesh.material.emissive.setHex(b.mesh.userData.defaultColor);
+      }
+    });
+
+    // Strategy 1: Find closest to staging area (X=0, Z=0)
+    // Strategy 2: If we had velocity/proximity, we would calculate distance to existing identical SKUs.
+    // For now, we calculate distance to the absolute center of the warehouse.
+    
+    const candidates = warehouse.emptyBins.map(b => {
+       const dx = b.mesh.position.x;
+       const dz = b.mesh.position.z;
+       const dist = Math.sqrt(dx*dx + dz*dz);
+       return { ...b, dist };
+    }).sort((a,b) => a.dist - b.dist);
+
+    // Pick top 3 recommendations
+    const topBins = candidates.slice(0, 3);
+    
+    // Highlight them
+    let bright = true;
+    putawayPulseInterval = setInterval(() => {
+      topBins.forEach(b => {
+        if (!b.mesh || !b.mesh.material) return;
+        b.mesh.material.emissive.setHex(bright ? 0x10b981 : 0x064e3b); // Emerald pulse
+        b.mesh.material.color.setHex(bright ? 0x10b981 : 0x064e3b);
+      });
+      bright = !bright;
+    }, 500);
+
+    const best = topBins[0];
+    
+    // Move camera to look at the best bin
+    const camTarget = best.mesh.position;
+    controls.target.copy(camTarget);
+    camera.position.set(camTarget.x + 10, camTarget.y + 10, camTarget.z + 10);
+    controls.update();
+
+    const codes = topBins.map(b => b.code).join(', ');
+    toast(`Suggested Putaway Bins: ${codes}. Glowing green.`);
+  };
+
+  // ───────────────────────────────────────────
+  // UTILS
+  // ───────────────────────────────────────────
+  function esc(str) { const d = document.createElement('div'); d.textContent = String(str ?? ''); return d.innerHTML; }
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    // Make labels always face camera (they're sprites, already do in three r128)
+    renderer.render(scene, camera);
+  }
+
+  // Boot Add Room Layout Events
+  const modalAddRoom = document.getElementById('modal-add-room');
+  const formAddRoom = document.getElementById('form-add-room');
+  
+  document.getElementById('btn-add-room')?.addEventListener('click', () => {
+    modalAddRoom.classList.remove('hidden');
+    modalAddRoom.classList.add('flex');
+    document.getElementById('input-room-name').focus();
+  });
+  
+  document.getElementById('btn-add-room-cancel')?.addEventListener('click', () => {
+    modalAddRoom.classList.add('hidden');
+    modalAddRoom.classList.remove('flex');
+  });
+  
+  formAddRoom?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const roomName = document.getElementById('input-room-name').value.trim().toUpperCase();
+    const aisle = document.getElementById('input-room-aisles').value.trim().toUpperCase();
+    const bayStart = document.getElementById('input-room-bay-start').value;
+    const bayEnd = document.getElementById('input-room-bay-end').value;
+    const bins = document.getElementById('input-room-bins').value;
+    const levels = document.getElementById('input-room-levels').value;
+    
+    if (!roomName || !aisle) return;
+    
+    try {
+      await db.collection('warehouse_rooms').doc(roomName).set({
+        roomName,
+        [`aislesData.${aisle}`]: {
+          bayStart: parseInt(bayStart, 10),
+          bayEnd: Math.max(parseInt(bayStart, 10), parseInt(bayEnd, 10)),
+          bins: parseInt(bins, 10),
+          levels: parseInt(levels, 10)
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      
+      toast(`Aisle ${aisle} added to Room ${roomName}!`);
+      modalAddRoom.classList.add('hidden');
+      modalAddRoom.classList.remove('flex');
+      formAddRoom.reset();
+    } catch (err) {
+      toast('Error saving aisle: ' + err.message);
+    }
+  });
+
+  // Boot
+  bootstrap().catch(err => {
+    console.error(err);
+    toast('Failed to load: ' + err.message);
+  });
+  </script>
+
+  <!-- Add Room Modal -->
+  <div id="modal-add-room" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-slate-800 border border-slate-600 rounded-xl w-full max-w-sm p-5 shadow-2xl">
+      <h2 class="text-lg font-bold text-slate-100 mb-4">Add Aisle to Room</h2>
+      <form id="form-add-room" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Room Name</label>
+            <input id="input-room-name" type="text" required placeholder="WH" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Aisle (A-Z)</label>
+            <input id="input-room-aisles" type="text" required placeholder="A" maxlength="1" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500 uppercase">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Bay Start</label>
+            <input id="input-room-bay-start" type="number" required min="1" max="99" value="1" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Bay End</label>
+            <input id="input-room-bay-end" type="number" required min="1" max="99" value="10" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Bins per Bay</label>
+            <input id="input-room-bins" type="number" required min="1" max="20" value="4" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Levels</label>
+            <input id="input-room-levels" type="number" required min="1" max="10" value="4" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button type="button" id="btn-add-room-cancel" class="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold transition">Cancel</button>
+          <button type="submit" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow transition">Save Aisle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
