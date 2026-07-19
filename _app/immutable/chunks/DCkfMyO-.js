@@ -1,1 +1,0 @@
-import{w as n}from"./E-ePLT8r.js";const a=n([]);let r=0;function f(s,e="info"){const o=++r;a.update(t=>[...t,{id:o,msg:s,kind:e}]),setTimeout(()=>a.update(t=>t.filter(i=>i.id!==o)),3200)}export{a,f as t};

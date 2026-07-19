@@ -1,0 +1,1 @@
+import{w as r,f as h}from"./DWJdoJhh.js";const o=450;async function f(n,a){let c=0;for(let t=0;t<n.length;t+=o){const e=r(h);for(const i of n.slice(t,t+o))i(e);await e.commit(),c=Math.min(t+o,n.length),a?.(c,n.length)}return c}export{f as c};

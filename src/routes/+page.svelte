@@ -8,6 +8,49 @@
   let lookupBin = $state('');
   let lookupSku = $state('');
 
+  // Autocomplete: bin code or SKU
+  let query = $state('');
+  let acOpen = $state(false);
+  let acFocused = $state(-1);
+
+  const acBins = $derived(
+    query ? [...$bins.keys()].filter((k) => k.includes(query.toUpperCase())).slice(0, 6) : []
+  );
+  const acSkus = $derived(
+    query
+      ? [...$skus.entries()].filter(([k, v]) => k.includes(query.toUpperCase()) || v.name.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
+      : []
+  );
+  const acTotal = $derived(acBins.length + acSkus.length);
+
+  type AcItem = { kind: 'bin'; code: string } | { kind: 'sku'; sku: string; name: string; total: number };
+
+  const acItems = $derived<AcItem[]>([
+    ...acBins.map((c): AcItem => ({ kind: 'bin', code: c })),
+    ...acSkus.map(([sku, v]): AcItem => ({ kind: 'sku', sku, name: v.name, total: v.total }))
+  ]);
+
+  function acSelect(item: AcItem) {
+    acOpen = false;
+    if (item.kind === 'bin') {
+      lookupBin = item.code;
+      lookupSku = '';
+      query = item.code;
+    } else {
+      lookupSku = item.sku;
+      lookupBin = '';
+      query = item.sku;
+    }
+  }
+
+  function onAcKeydown(e: KeyboardEvent) {
+    if (!acOpen) return;
+    if (e.key === 'ArrowDown') { acFocused = Math.min(acFocused + 1, acTotal - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { acFocused = Math.max(acFocused - 1, 0); e.preventDefault(); }
+    else if (e.key === 'Enter') { if (acFocused >= 0) acSelect(acItems[acFocused]); e.preventDefault(); }
+    else if (e.key === 'Escape') acOpen = false;
+  }
+
   const stats = $derived({
     docs: $inventory.filter((d) => !d.archived).length,
     skus: $skus.size,
@@ -65,9 +108,29 @@
         <button class="btn primary" onclick={() => (scanning = true)}>▣ Start scanner</button>
       {/if}
       <div class="scan-last">{lastScan ? `last: ${lastScan}` : ''}</div>
-      <div class="row" style="margin-top:8px">
-        <input class="input" style="flex:1" placeholder="…or type bin code / SKU" bind:value={lookupBin}
-          oninput={(e) => { lookupSku = ''; lookupBin = e.currentTarget.value.toUpperCase(); }} />
+      <div class="ac-wrap" style="margin-top:8px">
+        <input class="input" placeholder="Search bin code or SKU / name…"
+          bind:value={query}
+          oninput={() => { acOpen = query.length >= 1; acFocused = -1; }}
+          onkeydown={onAcKeydown}
+          onfocus={() => query && acTotal && (acOpen = true)}
+          onblur={() => setTimeout(() => (acOpen = false), 120)} />
+        {#if acOpen && acTotal > 0}
+          <div class="ac-drop">
+            {#each acItems as item, i (item.kind === 'bin' ? `b:${item.code}` : `s:${item.sku}`)}
+              <button class="ac-item {i === acFocused ? 'focus' : ''}" onclick={() => acSelect(item)}>
+                {#if item.kind === 'bin'}
+                  <span class="mono badge info">bin</span>
+                  <span class="mono">{item.code}</span>
+                {:else}
+                  <span class="mono badge ok">sku</span>
+                  <span style="flex:1">{item.name}</span>
+                  <span class="mono muted small">T{item.total}</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       {#if lookupBin}

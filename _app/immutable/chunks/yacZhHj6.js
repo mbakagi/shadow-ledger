@@ -1,0 +1,1 @@
+import{a as b}from"./BXYUXB2E.js";import{K as A,m as l}from"./DeQp_wh-.js";function S(i,h,f,C,t,r){var a=i[A];if(l||a!==f||a===void 0){var o=b(f,C,r);(!l||o!==i.getAttribute("class"))&&(o==null?i.removeAttribute("class"):i.className=o),i[A]=f}else if(r&&t!==r)for(var u in r){var g=!!r[u];(t==null||g!==!!t[u])&&i.classList.toggle(u,g)}return r}export{S as s};
