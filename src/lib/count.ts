@@ -83,7 +83,7 @@ export class CountSession {
             variance: v,
             worker_uid: userId,
             status: 'open',
-            countedAt: serverTimestamp()
+            timestamp: serverTimestamp() // legacy field name (proofinv contract)
           })
         );
       }

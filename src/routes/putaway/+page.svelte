@@ -31,7 +31,9 @@
   );
   const best = $derived(suggestions[0]);
   const bestQr = $derived(best ? qrSvg(binDeepLink(best.binCode)) : '');
-  const unassigned = $derived(entry?.docs.filter((d) => !d.binCode) ?? []);
+  // Only scalar docs can be (re)assigned a binCode — per-bin docs' location is
+  // their identity and rules deny non-quantity updates on them.
+  const unassigned = $derived(entry?.docs.filter((d) => !d.isPerBin && !d.binCode) ?? []);
 
   async function assign(binCode: string) {
     const target = unassigned[0];

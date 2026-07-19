@@ -92,6 +92,7 @@
           {
             sku: r.sku,
             name: r.name || r.sku,
+            item_name: r.name || r.sku, // proofinv readers prefer item_name
             category: r.category,
             room: p.room,
             aisle: p.aisle,

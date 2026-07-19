@@ -16,11 +16,12 @@ export interface Discrepancy {
   id: string;
   sku: string;
   name: string;
-  binCode: string;
+  binCode?: string; // written by v2 counts
+  bin?: string; // legacy proofinv display field
   expected_qty: number; // legacy snake_case contract
   actual_qty: number;
   variance: number;
-  status: string;
+  status?: string; // absent on legacy docs → treat as open
 }
 export const discrepancies = writable<Discrepancy[]>([]);
 
@@ -83,7 +84,7 @@ export function startSync() {
       ready.set(true);
     });
     onSnapshot(
-      query(collection(db, COL.discrepancies), orderBy('countedAt', 'desc'), limit(20)),
+      query(collection(db, COL.discrepancies), orderBy('timestamp', 'desc'), limit(20)),
       (snap) => discrepancies.set(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Discrepancy, 'id'>) }))),
       () => discrepancies.set([])
     );

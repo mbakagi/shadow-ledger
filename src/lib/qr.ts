@@ -14,7 +14,7 @@ export type ScanResult =
   | { kind: 'item'; id: string; loc: string }
   | { kind: 'raw'; text: string };
 
-const BIN_RE = /^[A-Z0-9]+-[A-Z0-9:]+-[A-Z0-9:]+-[A-Z0-9:]+-[A-Z0-9:]+-?/i;
+const BIN_RE = /^(?:R?[A-Z0-9]+)(?:-[A-Z0-9:]+){1,5}$/i;
 
 export function parseScan(text: string): ScanResult {
   const t = text.trim();
@@ -22,11 +22,24 @@ export function parseScan(text: string): ScanResult {
   if (dl) return { kind: 'bin', bin: decodeURIComponent(dl[1]) };
   try {
     const u = new URL(t);
+    // guest item links: ?id={itemId}&loc={binCode}
     const id = u.searchParams.get('id');
     if (id) return { kind: 'item', id, loc: u.searchParams.get('loc') ?? 'ANY' };
+    // proofinv bin labels: ?room=&aisle=&bay=&bin= → canonical code
+    const room = u.searchParams.get('room');
+    if (room) {
+      const parts = [`R${room}`];
+      const aisle = u.searchParams.get('aisle');
+      const bay = u.searchParams.get('bay');
+      const bin = u.searchParams.get('bin');
+      if (aisle) parts.push(`A${aisle}`);
+      if (bay) parts.push(`B${bay.padStart(2, '0')}`);
+      if (bin) parts.push(`B${bin.padStart(2, '0')}`);
+      return { kind: 'bin', bin: parts.join('-') };
+    }
   } catch {
     /* not a URL */
   }
-  if (BIN_RE.test(t)) return { kind: 'bin', bin: t };
+  if (BIN_RE.test(t)) return { kind: 'bin', bin: t.toUpperCase() };
   return { kind: 'raw', text: t };
 }

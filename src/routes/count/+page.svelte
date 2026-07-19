@@ -65,7 +65,7 @@
     <div class="row">
       <div style="flex:1">
         <label class="lbl" for="bin-in">Bin code</label>
-        <input id="bin-in" class="input mono" placeholder="A-A1-01-01-F-STOCK" bind:value={binCode}
+        <input id="bin-in" class="input mono" placeholder="R1-A1-B01-B04" bind:value={binCode}
           onkeydown={(e) => e.key === 'Enter' && loadBin(binCode.toUpperCase())} />
       </div>
       <button class="btn primary" onclick={() => loadBin(binCode.toUpperCase())}>Load</button>

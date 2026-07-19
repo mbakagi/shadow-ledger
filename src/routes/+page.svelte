@@ -12,7 +12,7 @@
     docs: $inventory.filter((d) => !d.archived).length,
     skus: $skus.size,
     bins: $bins.size,
-    open: $discrepancies.filter((d) => d.status === 'open').length
+    open: $discrepancies.filter((d) => (d.status ?? 'open') === 'open').length
   });
   const binDocs = $derived(lookupBin ? ($bins.get(lookupBin) ?? []) : []);
   const skuEntry = $derived(lookupSku ? $skus.get(lookupSku) : undefined);
@@ -102,9 +102,9 @@
       <h3>Recent discrepancies</h3>
       {#each $discrepancies as d (d.id)}
         <div class="lrow">
-          <span class="badge {d.status === 'open' ? 'err' : 'ok'}">{d.status}</span>
+          <span class="badge {(d.status ?? 'open') === 'open' ? 'err' : 'ok'}">{d.status ?? 'open'}</span>
           <span class="mono badge info">{d.sku}</span>
-          <span class="grow small">{d.binCode}</span>
+          <span class="grow small">{d.binCode ?? d.bin ?? ''}</span>
           <span class="mono" style:color={d.variance > 0 ? 'var(--ok)' : 'var(--err)'}>
             {d.variance > 0 ? '+' : ''}{d.variance}
           </span>

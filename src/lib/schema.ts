@@ -16,9 +16,9 @@ export const COL = {
 
 export const LOC = { DEPOT: 'depot', BUILDING: 'building' } as const;
 
-/** Canonical bin code: ROOM-AISLE-BAY-BIN-LEVEL-ACTION, e.g. `A-A1-01-01-F-STOCK`.
- *  Tolerates the labeled spec variant `ROOM-AISLE-BAY:02-BIN:02-LEVEL-STOCK`.
- *  `GENERAL-…` zones are unstructured and always sort last. */
+/** Canonical bin code (production, per proofinv labels): `R{room}-A{aisle}-B{bay}-B{bin}`
+ *  e.g. `R1-A1-B01-B04`. Tolerated variants: plain segments (`A-A1-01-01-F-STOCK`),
+ *  colon labels (`ROOM-AISLE-BAY:02-…`), partials (`R1`, `R1-A1`), `GENERAL-…`. */
 export interface BinParts {
   raw: string;
   general: boolean;
@@ -26,7 +26,7 @@ export interface BinParts {
   aisle: string;
   bay: number;
   bin: number;
-  level: string; // 'F' = floor
+  level: string; // '' unless the old 6-segment format carries one ('F' = floor)
 }
 
 export interface InventoryDoc {
@@ -57,12 +57,13 @@ const PER_BIN_ID = /^[A-Za-z0-9\-_.]+_R[^_]+_A[^_]+_B[^_]+_B[^_]+$/;
 export function parseInventory(id: string, d: Record<string, unknown>): InventoryDoc {
   const num = (v: unknown) => Math.max(0, Number(v) || 0);
   const isPerBin = PER_BIN_ID.test(id) || 'quantity' in d;
+  const binCode = String(d.binCode ?? '') || synthesizeBinCode(d);
   return {
     id,
     sku: String(d.sku ?? ''),
     name: String(d.name ?? d.item_name ?? ''),
     category: String(d.category ?? ''),
-    binCode: String(d.binCode ?? ''),
+    binCode,
     datasheetUrl: String(d.datasheetUrl ?? ''),
     isPerBin,
     quantity: isPerBin ? num(d.quantity) : num(d.buildingStock),
@@ -76,22 +77,44 @@ export function parseInventory(id: string, d: Record<string, unknown>): Inventor
   };
 }
 
-const seg = (s: string | undefined) => {
-  const v = String(s ?? '');
-  return v.includes(':') ? v.slice(v.lastIndexOf(':') + 1) : v;
+/** Build the canonical code from per-bin location fields (proofinv format).
+ *  Partial locations are legal: room-only → `R1`, +aisle → `R1-A1`, etc. */
+export function synthesizeBinCode(d: Record<string, unknown>): string {
+  const r = String(d.room ?? '').trim();
+  const a = String(d.aisle ?? '').trim();
+  const bay = String(d.bay ?? '').trim();
+  const bin = String(d.bin ?? '').trim();
+  if (!r && !a && !bay && !bin) return '';
+  const parts: string[] = [];
+  if (r) parts.push(`R${r}`);
+  if (a) parts.push(`A${a}`);
+  if (bay) parts.push(`B${bay.padStart(2, '0')}`);
+  if (bin) parts.push(`B${bin.padStart(2, '0')}`);
+  return parts.join('-');
+}
+
+/* Segment value: strip colon labels (`BAY:02`→`02`) and single letter prefixes
+ * used by the canonical format (`R1`→`1`, `B01`→`01`). Aisle keeps letters. */
+const seg = (s: string | undefined, stripPrefix: boolean) => {
+  let v = String(s ?? '');
+  if (v.includes(':')) v = v.slice(v.lastIndexOf(':') + 1);
+  if (stripPrefix) v = v.replace(/^[A-Z]+(?=\d)/, '');
+  return v;
 };
 
 export function parseBinCode(binCode: string): BinParts {
   const p = String(binCode || '').split('-');
   const general = p[0] === 'GENERAL';
+  const g = general ? 1 : 0;
+  const hasLevel = p.length - g >= 6; // old ROOM-AISLE-BAY-BIN-LEVEL-ACTION shape
   return {
     raw: binCode,
     general,
-    room: seg(p[general ? 1 : 0]),
-    aisle: seg(p[general ? 2 : 1]),
-    bay: parseInt(seg(p[general ? 3 : 2]), 10) || 0,
-    bin: parseInt(seg(p[general ? 4 : 3]), 10) || 0,
-    level: seg(p[general ? 5 : 4])
+    room: seg(p[g], true),
+    aisle: seg(p[g + 1], true),
+    bay: parseInt(seg(p[g + 2], true), 10) || 0,
+    bin: parseInt(seg(p[g + 3], true), 10) || 0,
+    level: hasLevel ? seg(p[g + 4], false) : ''
   };
 }
 
@@ -128,5 +151,16 @@ export function warehouseFields(binCode: string) {
     warehouseBay: p.bay ? String(p.bay).padStart(2, '0') : null,
     warehouseBin: p.bin ? String(p.bin).padStart(2, '0') : null,
     warehouseLevel: p.level || null
+  };
+}
+
+/** Per-bin location fields (for cross-shape inspection/debug). */
+export function locationFields(binCode: string) {
+  const p = parseBinCode(binCode);
+  return {
+    room: p.room || '',
+    aisle: p.aisle || '',
+    bay: p.bay ? String(p.bay).padStart(2, '0') : '',
+    bin: p.bin ? String(p.bin).padStart(2, '0') : ''
   };
 }
