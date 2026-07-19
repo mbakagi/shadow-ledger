@@ -78,6 +78,16 @@ service cloud.firestore {
                       'warehouseBay','warehouseBin','warehouseLevel','updatedAt'])
         && request.resource.data.binCode is string;
 
+      // Cycle-count reconciliation update (Shadow Ledger v2 count flow)
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['buildingStock','totalStock','lastCounted',
+                      'lastCountedBy','countStatus','updatedAt'])
+        && request.resource.data.buildingStock is int
+        && request.resource.data.buildingStock >= 0
+        && request.resource.data.totalStock is int
+        && request.resource.data.totalStock >= 0;
+
       allow delete: if request.auth != null;
     }
 
@@ -126,6 +136,16 @@ service cloud.firestore {
         && request.resource.data.worker_uid is string;
       allow update: if false;
       allow delete: if false;
+    }
+
+    // ── Counts (Shadow Ledger v2 count session records) ──
+    match /counts/{countId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId is string
+        && request.resource.data.userId.size() > 0
+        && request.resource.data.binCode is string;
+      allow update, delete: if false;
     }
 
     // ── Warehouse Templates (read-only; admin-write only) ──
