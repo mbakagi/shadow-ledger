@@ -7,6 +7,7 @@ import { db, onUser, ensureAuth } from './firebase';
 import { COL, parseInventory, type InventoryDoc } from './schema';
 
 export const user = writable<User | null>(null);
+export const authError = writable('');
 export const online = writable(true);
 export const inventory = writable<InventoryDoc[]>([]);
 export const ready = writable(false);
@@ -62,7 +63,19 @@ export function startSync() {
   onUser(async (u) => {
     user.set(u);
     if (!u) {
-      await ensureAuth();
+      // Anonymous session — frictionless default. If the provider is disabled
+      // in the Firebase console, surface the error instead of spinning forever.
+      try {
+        await ensureAuth();
+        authError.set('');
+      } catch (e) {
+        const err = e as { code?: string; message?: string };
+        authError.set(
+          err.code === 'auth/admin-restricted-operation'
+            ? 'Anonymous sign-in is disabled — use email sign-in (top-right).'
+            : (err.message ?? 'Sign-in failed')
+        );
+      }
       return;
     }
     onSnapshot(collection(db, COL.inventory), (snap) => {

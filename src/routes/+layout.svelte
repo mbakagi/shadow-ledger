@@ -3,8 +3,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { base } from '$app/paths';
-  import { startSync, user, online } from '$lib/store';
-  import { completeEmailLink, sendEmailLink } from '$lib/firebase';
+  import { startSync, user, authError, online } from '$lib/store';
+  import { completeEmailLink, sendEmailLink, signInEmailPassword } from '$lib/firebase';
   import { toasts, toast } from '$lib/toast';
 
   let { children } = $props();
@@ -20,7 +20,24 @@
   ] as const;
 
   let email = $state('');
+  let password = $state('');
   let linkSent = $state(false);
+  let signInErr = $state('');
+  let signingIn = $state(false);
+
+  async function signIn() {
+    if (!email) return;
+    signingIn = true;
+    signInErr = '';
+    try {
+      await signInEmailPassword(email, password);
+      toast(`Signed in as ${email}`, 'ok');
+    } catch (e) {
+      signInErr = (e as { message?: string }).message ?? 'Sign-in failed';
+    } finally {
+      signingIn = false;
+    }
+  }
 
   onMount(() => {
     startSync();
@@ -60,9 +77,16 @@
       {:else if linkSent}
         <div class="small">Check your inbox for the sign-in link.</div>
       {:else}
-        <label class="lbl" for="auth-email">Email sign-in link</label>
+        <label class="lbl" for="auth-email">Email</label>
         <input id="auth-email" class="input" type="email" placeholder="you@example.com" bind:value={email} />
-        <button class="btn primary sm" style="margin-top:8px" onclick={sendLink}>Send link</button>
+        <label class="lbl" for="auth-pass" style="margin-top:8px">Password</label>
+        <input id="auth-pass" class="input" type="password" placeholder="••••••••" bind:value={password}
+          onkeydown={(e) => e.key === 'Enter' && signIn()} />
+        {#if signInErr}<div class="small" style="color:var(--err);margin-top:6px">{signInErr}</div>{/if}
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary sm" disabled={signingIn} onclick={signIn}>{signingIn ? '…' : 'Sign in'}</button>
+          <button class="btn ghost sm" onclick={sendLink}>Email link</button>
+        </div>
       {/if}
     </div>
   </details>

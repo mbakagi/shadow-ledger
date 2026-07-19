@@ -11,6 +11,7 @@ import {
   getAuth,
   onAuthStateChanged,
   signInAnonymously,
+  signInWithEmailAndPassword,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -46,6 +47,12 @@ export function onUser(cb: (u: User | null) => void) {
 export async function ensureAuth(): Promise<User> {
   if (auth.currentUser) return auth.currentUser;
   const cred = await signInAnonymously(auth);
+  return cred.user;
+}
+
+/** Email + password sign-in (matches the legacy app's Firebase users). */
+export async function signInEmailPassword(email: string, password: string): Promise<User> {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
   return cred.user;
 }
 

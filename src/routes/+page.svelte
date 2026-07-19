@@ -1,6 +1,6 @@
 <script lang="ts">
   import Scanner from '$lib/Scanner.svelte';
-  import { inventory, skus, bins, discrepancies, ready } from '$lib/store';
+  import { inventory, skus, bins, discrepancies, ready, authError } from '$lib/store';
   import { parseScan } from '$lib/qr';
 
   let scanning = $state(false);
@@ -39,7 +39,15 @@
 <p class="page-sub">Live snapshot of the production inventory collection.</p>
 
 {#if !$ready}
-  <div class="empty"><span class="spin"></span> Syncing…</div>
+  {#if $authError}
+    <div class="card" style="max-width:480px;border-color:var(--err)">
+      <h3 style="color:var(--err)">Sign-in required</h3>
+      <div class="small">{$authError}</div>
+      <div class="small muted" style="margin-top:8px">Use the account pill (top-right) to sign in with the same email/password as the legacy app.</div>
+    </div>
+  {:else}
+    <div class="empty"><span class="spin"></span> Syncing…</div>
+  {/if}
 {:else}
   <div class="grid cols-4" style="margin-bottom:16px">
     <div class="card"><h3>Bin docs</h3><div class="stat">{stats.docs}</div></div>
