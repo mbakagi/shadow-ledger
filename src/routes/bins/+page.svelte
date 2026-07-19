@@ -228,7 +228,7 @@
 
       {#if creating && inspected}
         <div class="inline-form" style="margin-bottom:12px">
-          <input class="input" style="width:110px" placeholder="SKU" bind:value={newSku} autofocus />
+          <input class="input" style="width:110px" placeholder="SKU" bind:value={newSku} />
           <input class="input" style="width:140px" placeholder="Name" bind:value={newName} />
           <input class="input" style="width:70px" type="number" min="1" bind:value={newQty} />
           <button class="btn primary sm" onclick={() => doCreate(inspected)}>Create</button>
