@@ -13,6 +13,7 @@
     ['/', 'Home'],
     ['/search', 'Search'],
     ['/putaway', 'Putaway'],
+    ['/bins', 'Bins'],
     ['/count', 'Count'],
     ['/routes', 'Routes'],
     ['/editor', 'Editor'],

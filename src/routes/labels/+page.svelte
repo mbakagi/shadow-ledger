@@ -1,9 +1,22 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { bins } from '$lib/store';
   import { qrSvg, binDeepLink } from '$lib/qr';
 
-  const allBins = $derived([...$bins.keys()].sort());
+  // Occupied bins ∪ any codes passed via ?bins= (allows labeling empty bins).
+  let extra = $state<string[]>([]);
+  const allBins = $derived([...new Set([...$bins.keys(), ...extra])].sort());
   let selected = $state<Set<string>>(new Set());
+
+  onMount(() => {
+    const q = page.url.searchParams.get('bins');
+    if (q) {
+      const codes = q.split(',').filter(Boolean);
+      extra = codes;
+      selected = new Set(codes);
+    }
+  });
 
   function toggle(b: string) {
     const s = new Set(selected);

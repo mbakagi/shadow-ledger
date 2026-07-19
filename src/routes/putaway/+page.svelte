@@ -5,8 +5,9 @@
   import { db } from '$lib/firebase';
   import { skus, bins } from '$lib/store';
   import { suggestBins } from '$lib/putaway';
+  import { moveQty } from '$lib/transfer';
   import { qrSvg, binDeepLink } from '$lib/qr';
-  import { warehouseFields, COL } from '$lib/schema';
+  import { warehouseFields, COL, type InventoryDoc } from '$lib/schema';
   import { toast } from '$lib/toast';
 
   let sku = $state('');
@@ -34,6 +35,24 @@
   // Only scalar docs can be (re)assigned a binCode — per-bin docs' location is
   // their identity and rules deny non-quantity updates on them.
   const unassigned = $derived(entry?.docs.filter((d) => !d.isPerBin && !d.binCode) ?? []);
+
+  const perBinDocs = $derived(entry?.docs.filter((d) => d.isPerBin) ?? []);
+  let moveAmounts = $state<Record<string, number>>({});
+  let moving = $state(false);
+
+  async function move(d: InventoryDoc, destBinCode: string) {
+    if (moving) return;
+    moving = true;
+    try {
+      const qty = moveAmounts[d.id] ?? d.quantity;
+      const r = await moveQty(d, destBinCode, qty);
+      toast(`Moved ${r.moved} × ${d.sku} → ${destBinCode}${r.srcRemaining === 0 ? ' (source emptied)' : ''}`, 'ok');
+    } catch (e) {
+      toast((e as Error).message, 'err');
+    } finally {
+      moving = false;
+    }
+  }
 
   async function assign(binCode: string) {
     const target = unassigned[0];
@@ -102,6 +121,24 @@
         <div class="small">{entry.name} · <span class="badge info">{entry.category || 'uncategorized'}</span></div>
         <div class="small muted">network total: {entry.total} across {entry.docs.length} doc(s)</div>
       </div>
+      {#if perBinDocs.length}
+        <div style="margin-top:12px">
+          <h3>Move stock (bin-to-bin)</h3>
+          {#each perBinDocs as d (d.id)}
+            <div class="lrow">
+              <span class="mono small grow">{d.binCode}</span>
+              <span class="mono small">×{d.quantity}</span>
+              {#if d.binCode !== best.binCode}
+                <input class="input qty-in" type="number" min="1" max={d.quantity} value={moveAmounts[d.id] ?? d.quantity}
+                  oninput={(e) => (moveAmounts[d.id] = Math.max(1, Math.min(d.quantity, e.currentTarget.valueAsNumber || 1)))} />
+                <button class="btn sm primary" disabled={moving} onclick={() => move(d, best.binCode)}>→ best</button>
+              {:else}
+                <span class="badge ok">at best</span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}

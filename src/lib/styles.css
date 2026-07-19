@@ -153,6 +153,20 @@ label.lbl { display: block; font: 600 12px var(--font); color: var(--ink-2); mar
 
 .empty { text-align: center; color: var(--ink-3); padding: 42px 0; font-size: 14px; }
 
+/* ── bins explorer grid ── */
+.bin-grid { display: grid; gap: 6px; align-items: center; }
+.bin-axis { font: 600 10px var(--mono); color: var(--ink-3); text-align: center; }
+.bin-cell {
+  aspect-ratio: 1; min-height: 44px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); background: var(--bg-3); color: var(--ink-2);
+  cursor: pointer; font: 700 13px var(--mono);
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .1s, background .1s;
+}
+.bin-cell:hover { border-color: var(--acc); }
+.bin-cell.full { background: color-mix(in srgb, var(--acc) 22%, var(--bg-3)); color: var(--ink); }
+.bin-cell.sel { border-color: var(--acc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 45%, transparent); }
+
 /* ── auth popover ── */
 .authpop { position: relative; }
 .authpop summary { list-style: none; cursor: pointer; }

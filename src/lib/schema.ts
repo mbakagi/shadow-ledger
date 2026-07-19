@@ -164,3 +164,13 @@ export function locationFields(binCode: string) {
     bin: p.bin ? String(p.bin).padStart(2, '0') : ''
   };
 }
+
+/** proofinv normId — composite per-bin document ID. */
+export function binDocId(sku: string, p: { room: string; aisle: string; bay: number; bin: number }) {
+  return `${sku}_R${p.room}_A${p.aisle}_B${String(p.bay).padStart(2, '0')}_B${String(p.bin).padStart(2, '0')}`;
+}
+
+/** Canonical bin code from parsed parts: R{room}-A{aisle}-B{bay}-B{bin}. */
+export function canonicalBinCode(p: { room: string; aisle: string; bay: number; bin: number }) {
+  return `R${p.room}-A${p.aisle}-B${String(p.bay).padStart(2, '0')}-B${String(p.bin).padStart(2, '0')}`;
+}

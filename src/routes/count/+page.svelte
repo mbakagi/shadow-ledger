@@ -1,5 +1,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
+  import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import Scanner from '$lib/Scanner.svelte';
   import { bins, user } from '$lib/store';
   import { parseScan } from '$lib/qr';
@@ -15,6 +17,11 @@
 
   const counted = $derived(lines.filter((l) => l.counted !== null));
   const flagged = $derived(counted.filter((l) => (l.counted ?? 0) - l.expected !== 0));
+
+  onMount(() => {
+    const q = page.url.searchParams.get('bin');
+    if (q) loadBin(q.toUpperCase());
+  });
 
   function loadBin(code: string) {
     const docs = get(bins).get(code) ?? [];
