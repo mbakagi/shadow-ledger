@@ -47,7 +47,7 @@
   <span class="brand"><img src="{base}/icon.svg" alt="" /> Shadow Ledger</span>
   <nav class="nav">
     {#each nav as [path, label] (path)}
-      <a href={path} class:active={page.url.pathname === path}>{label}</a>
+      <a href="{base}{path}" class:active={page.url.pathname === `${base}${path}` || (path === '/' && page.url.pathname === `${base}/`)}>{label}</a>
     {/each}
   </nav>
   <span class="spacer"></span>

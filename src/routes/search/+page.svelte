@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { skus, ready } from '$lib/store';
   import { buildIndex, makeFuse, debounce, type SearchItem } from '$lib/search';
 
@@ -38,7 +39,7 @@
         {#if r.category}<span class="badge warn">{r.category}</span>{/if}
         <span class="mono small muted" title="bin(s)">{r.binCodes || '—'}</span>
         <span class="mono">T:{r.total}</span>
-        <a class="btn sm ghost" href="/putaway?sku={encodeURIComponent(r.sku)}">putaway</a>
+        <a class="btn sm ghost" href="{base}/putaway?sku={encodeURIComponent(r.sku)}">putaway</a>
       </div>
     {/each}
   </div>
