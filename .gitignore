@@ -1,6 +1,0 @@
-node_modules/
-build/
-.svelte-kit/
-firebase-debug.log
-.env
-.DS_Store
