@@ -712,6 +712,15 @@
         <input id="st-worker" type="text" list="worker-options" placeholder="Counter (your name)" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-44 focus:ring-2 focus:ring-indigo-500 outline-none" />
         <datalist id="worker-options"></datalist>
       </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <select id="st-filter-brand" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All Brands</option>
+        </select>
+        <select id="st-filter-category" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All Categories</option>
+        </select>
+        <span class="text-[10px] text-slate-400">Filter what shows + prints (e.g. only Hochiki)</span>
+      </div>
       <div class="text-[11px] text-slate-400" id="st-loc-hint">Location: all depots · all zones. Pick Room/Aisle/Bay/Bin to narrow the count.</div>
       <div class="flex flex-wrap items-center gap-3">
         <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
@@ -4875,6 +4884,8 @@
     var bay = S(D('st-bay').value);
     var bin = S(D('st-bin').value);
     var depot = D('st-depot').value;
+    var filterBrand = D('st-filter-brand').value;
+    var filterCategory = D('st-filter-category').value;
     var workerName = (D('st-worker').value || '').trim();
     var unverifiedOnly = D('st-unverified-only').checked;
     var blind = D('st-blind').checked;
@@ -4903,6 +4914,8 @@
     if (aisle) rows = rows.filter(function(d){ return d.aisle === aisle; });
     if (bay) rows = rows.filter(function(d){ return d.bay === bay; });
     if (bin) rows = rows.filter(function(d){ return d.bin === bin; });
+    if (filterBrand) rows = rows.filter(function(d){ return (d.brand || '') === filterBrand; });
+    if (filterCategory) rows = rows.filter(function(d){ return (d.category || '') === filterCategory; });
     if (unverifiedOnly) rows = rows.filter(function(d){ return !isVerifiedRecently(d); });
 
     // Location hint
@@ -5088,9 +5101,24 @@
   D('st-unverified-only').addEventListener('change', renderStocktake);
   D('st-blind').addEventListener('change', renderStocktake);
   D('st-depot').addEventListener('change', renderStocktake);
+  D('st-filter-brand').addEventListener('change', renderStocktake);
+  D('st-filter-category').addEventListener('change', renderStocktake);
   ['st-show-location','st-show-sku','st-show-name','st-show-qty','st-show-total','st-show-category','st-show-verifier'].forEach(function(id){
     D(id).addEventListener('change', renderStocktake);
   });
+
+  // Populate stocktake brand/category filter dropdowns from assigned data
+  function refreshStocktakeFilters(){
+    var brdSel = D('st-filter-brand'), catSel = D('st-filter-category');
+    if (!brdSel || !catSel) return;
+    var brdCur = brdSel.value, catCur = catSel.value;
+    brdSel.innerHTML = '<option value="">All Brands</option>' + catCache.brands.map(function(b){ return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('');
+    catSel.innerHTML = '<option value="">All Categories</option>' + catCache.categories.map(function(c){ return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    brdSel.value = brdCur || '';
+    catSel.value = catCur || '';
+  }
+  document.addEventListener('stockUpdated', refreshStocktakeFilters);
+  refreshStocktakeFilters();
   D('st-worker').addEventListener('input', function(){
     // remember worker name across reloads
     try { localStorage.setItem('stWorkerName', this.value); } catch(e){}
@@ -5202,6 +5230,8 @@
     var bay = S(D('st-bay').value);
     var bin = S(D('st-bin').value);
     var depot = D('st-depot').value;
+    var filterBrand = D('st-filter-brand').value;
+    var filterCategory = D('st-filter-category').value;
     var workerName = workerNameOverride !== undefined ? workerNameOverride : (D('st-worker').value || '').trim();
     var blind = D('st-blind').checked;
     var showLocation = D('st-show-location').checked;
@@ -5215,6 +5245,8 @@
       if (aisle && d.aisle !== aisle) return false;
       if (bay && d.bay !== bay) return false;
       if (bin && d.bin !== bin) return false;
+      if (filterBrand && (d.brand || '') !== filterBrand) return false;
+      if (filterCategory && (d.category || '') !== filterCategory) return false;
       return true;
     });
     rows = rows.sort(function(a, b){
@@ -5236,6 +5268,8 @@
     if (aisle) locTitle.push('Aisle ' + esc(aisle));
     if (bay) locTitle.push('Bay ' + esc(bay));
     if (bin) locTitle.push('Bin ' + esc(bin));
+    if (filterBrand) locTitle.push('Brand: ' + esc(filterBrand));
+    if (filterCategory) locTitle.push('Category: ' + esc(filterCategory));
     var html = '<h1>Stocktake Count Sheet</h1>'
       + (locTitle.length ? '<p style="font-size:12pt;font-weight:700;margin:0 0 2px;">' + locTitle.join(' · ') + '</p>' : '')
       + '<p class="print-date">Generated ' + new Date().toLocaleString() + (workerName ? ' · <b>Assigned to: ' + esc(workerName) + '</b>' : ' · Counted by: ______________________') + '</p>'
