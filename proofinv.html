@@ -731,6 +731,7 @@
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-sku" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> SKU</label>
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-name" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Item Name</label>
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-qty" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> System Qty</label>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer" title="Show each item's grand total across all bins/depots"><input id="st-show-total" type="checkbox" class="rounded border-slate-300 text-indigo-600" /> Total Qty</label>
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-verifier" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Verifier</label>
         <span id="st-summary-hint" class="ml-auto text-[10px] text-slate-400"></span>
       </div>
@@ -4619,9 +4620,13 @@
     var showSku = D('st-show-sku').checked;
     var showName = D('st-show-name').checked;
     var showQty = D('st-show-qty').checked;
+    var showTotal = D('st-show-total').checked;
     var showVerifier = D('st-show-verifier').checked;
 
     var all = rawInventoryDocs.slice();
+    // Per-SKU grand total across all bins/depots
+    var skuTotals = {};
+    all.forEach(function(d){ skuTotals[d.sku] = (skuTotals[d.sku] || 0) + d.quantity; });
     var verifiedCount = all.filter(isVerifiedRecently).length;
     D('st-total').textContent = all.length;
     D('st-verified').textContent = verifiedCount;
@@ -4722,9 +4727,15 @@
                 ? '<span class="text-xs text-slate-400 font-semibold">Qty: ???</span>'
                 : '<span class="text-xs text-slate-400">Sys:</span><span class="mono text-xs font-bold text-slate-600 dark:text-slate-300 min-w-[36px] text-center">' + doc.quantity + '</span>');
             }
+            if (showTotal) {
+              cells.push('<span class="text-[10px] text-slate-400" title="Total across all bins/depots">Σ <span class="mono font-bold text-slate-600 dark:text-slate-300">' + (skuTotals[doc.sku] || 0).toLocaleString() + '</span></span>');
+            }
             cells.push('<input id="st-in-' + safeId + '" data-stid="' + esc(doc.id) + '" data-stexp="' + doc.quantity + '" data-stworker="' + esc(workerName) + '" type="number" min="0" placeholder="count" class="st-count-input w-20 px-2 py-1.5 mono rounded-lg border border-slate-400 dark:border-slate-500 bg-white dark:bg-black text-black dark:text-white text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none" />');
             cells.push('<button onclick="stVerify(\'' + doc.id + '\')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">✓</button>');
             if (showQty && !blind) cells.push('<button onclick="stVerifySystem(\'' + doc.id + '\')" title="Mark counted = system qty (no change)" class="px-2.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-emerald-200 dark:hover:bg-emerald-900/40 text-slate-600 dark:text-slate-300 text-[10px] font-bold transition">= SYS</button>');
+            // Add qty directly (putaway-style) to this bin
+            cells.push('<input id="st-add-' + safeId + '" data-staddid="' + esc(doc.id) + '" type="number" min="1" placeholder="+" class="st-add-input w-16 px-1.5 py-1.5 mono rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-transparent text-black dark:text-white text-xs font-bold text-center focus:ring-1 focus:ring-amber-500 outline-none" />'
+              + '<button onclick="stAddQty(\'' + doc.id + '\')" title="Add this many units to the bin" class="px-2.5 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 transition text-[10px] font-bold">+Add</button>');
             if (showVerifier && v) cells.push('<span class="text-[10px] font-bold text-emerald-600 whitespace-nowrap">✓ ' + (doc.verified_by_name ? esc(doc.verified_by_name) + ' · ' : '') + fmtTs(doc.last_verified_at) + '</span>');
             return '<div class="flex items-center gap-2 flex-wrap px-4 py-2 ' + (v ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : '') + '">' + cells.join('') + '</div>';
           }).join('')
@@ -4771,6 +4782,39 @@
     stCommitCount(docId, rec, rec.quantity, workerName);
   };
 
+  // Add quantity directly to a bin (putaway-style) from the stocktake tab
+  window.stAddQty = function(docId){
+    var rec = rawInventoryDocs.find(function(d){ return d.id === docId; });
+    if (!rec) { toast('Record not found', 'error'); return; }
+    var safeId = docId.replace(/[^a-zA-Z0-9_]/g, '_');
+    var inp = document.getElementById('st-add-' + safeId);
+    var addQty = inp ? parseInt(inp.value, 10) : NaN;
+    if (isNaN(addQty) || addQty <= 0) {
+      toast('Enter a positive qty to add', 'error');
+      if (inp) inp.focus();
+      return;
+    }
+    var workerName = (D('st-worker').value || '').trim();
+    db.runTransaction(function(tx){
+      return tx.get(db.collection('inventory').doc(docId)).then(function(doc){
+        if (!doc.exists) return;
+        var q = Math.max(0, Number(doc.data().quantity) || 0);
+        var newQty = q + addQty;
+        tx.set(doc.ref, {
+          quantity: newQty,
+          last_verified_at: firebase.firestore.FieldValue.serverTimestamp(),
+          verified_by: auth.currentUser ? auth.currentUser.uid : 'anon',
+          verified_by_name: workerName || (auth.currentUser ? (auth.currentUser.email || '') : ''),
+          updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        logMovement('putaway', rec.sku, rec.name, addQty, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), 'stocktake add', workerName);
+      });
+    }).then(function(){
+      toast(rec.sku + ' +' + addQty + ' → ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + (workerName ? ' (by ' + workerName + ')' : ''), 'success');
+      if (inp) inp.value = '';
+    }).catch(function(e){ toast('Add failed: ' + e.message, 'error'); });
+  };
+
   function stCommitCount(docId, rec, newQty, workerName){
     db.runTransaction(function(tx){
       return tx.get(db.collection('inventory').doc(docId)).then(function(doc){
@@ -4805,7 +4849,7 @@
   D('st-blind').addEventListener('change', renderStocktake);
   D('st-group-items').addEventListener('change', renderStocktake);
   D('st-depot').addEventListener('change', renderStocktake);
-  ['st-show-location','st-show-sku','st-show-name','st-show-qty','st-show-verifier'].forEach(function(id){
+  ['st-show-location','st-show-sku','st-show-name','st-show-qty','st-show-total','st-show-verifier'].forEach(function(id){
     D(id).addEventListener('change', renderStocktake);
   });
   D('st-worker').addEventListener('input', function(){
