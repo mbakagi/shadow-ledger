@@ -980,8 +980,9 @@
           <select id="asn-brand" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
         </div>
         <div class="md:col-span-2">
-          <label class="block text-xs font-semibold text-slate-500 mb-1">Items (type SKU, Enter to add)</label>
-          <input id="asn-sku" type="text" placeholder="Type SKU and press Enter to add to list…" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Search items (by SKU or name)</label>
+          <input id="asn-sku" type="text" placeholder="Type to search, then click a result or press Enter…" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <div id="asn-search-results" class="mt-2 space-y-1 max-h-48 overflow-y-auto scrollbar-thin"></div>
         </div>
       </div>
       <div id="asn-list" class="flex flex-wrap gap-2 min-h-[40px]"></div>
@@ -4751,16 +4752,62 @@
   window.asnRemove = function(idx){ asnItems.splice(idx, 1); renderAsnList(); };
   D('btn-asn-clear').addEventListener('click', function(){ asnItems = []; renderAsnList(); });
 
+  // Add a SKU to the assignment queue (shared by search results + autocomplete + Enter)
+  window.asnAddSku = function(sku){
+    sku = S(sku);
+    if (!sku) return false;
+    var known = skuCache.find(function(c){ return c.sku === sku; });
+    if (!known) { toast('SKU "' + sku + '" not found in inventory', 'error'); return false; }
+    if (asnItems.indexOf(sku) < 0) asnItems.push(sku);
+    renderAsnList();
+    D('asn-sku').value = '';
+    renderAsnSearch('');
+    return true;
+  };
+
+  // Live search: show matching items (by SKU or name) as clickable rows
+  function renderAsnSearch(q){
+    var box = D('asn-search-results');
+    if (!box) return;
+    var query = (q || '').trim().toLowerCase();
+    if (!query) { box.innerHTML = ''; return; }
+    var results = skuCache.filter(function(c){
+      return c.sku.toLowerCase().indexOf(query) >= 0 || c.name.toLowerCase().indexOf(query) >= 0;
+    }).slice(0, 25);
+    if (!results.length) {
+      box.innerHTML = '<p class="text-xs text-slate-400 italic px-2 py-1">No matching items.</p>';
+      return;
+    }
+    box.innerHTML = results.map(function(c){
+      var already = asnItems.indexOf(c.sku) >= 0;
+      return '<div class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 ' + (already ? 'opacity-50' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer') + '">'
+        + '<div class="flex-1 min-w-0">'
+        + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400">' + esc(c.sku) + '</span>'
+        + '<span class="ml-2 text-xs text-slate-500 dark:text-slate-400 truncate">' + esc(c.name) + '</span>'
+        + '</div>'
+        + '<span class="mono text-[10px] text-slate-400">T:' + c.total + '</span>'
+        + (already
+            ? '<span class="text-[10px] font-bold text-emerald-600">added ✓</span>'
+            : '<button type="button" onclick="asnAddSku(\'' + esc(c.sku.replace(/'/g,"\\'")) + '\')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold">+ Add</button>')
+        + '</div>';
+    }).join('');
+  }
+
+  D('asn-sku').addEventListener('input', function(){
+    renderAsnSearch(this.value);
+  });
   D('asn-sku').addEventListener('keydown', function(e){
     if (e.key !== 'Enter') return;
     e.preventDefault();
     var sku = S(this.value);
     if (!sku) return;
+    // exact SKU match → add directly; else if exactly one search result, add it
     var known = skuCache.find(function(c){ return c.sku === sku; });
-    if (!known) { toast('SKU "' + sku + '" not found in inventory', 'error'); return; }
-    if (asnItems.indexOf(sku) < 0) asnItems.push(sku);
-    this.value = '';
-    renderAsnList();
+    if (known) { asnAddSku(sku); return; }
+    var matches = skuCache.filter(function(c){ return c.sku.toLowerCase().indexOf(sku.toLowerCase()) >= 0 || c.name.toLowerCase().indexOf(sku.toLowerCase()) >= 0; });
+    if (matches.length === 1) { asnAddSku(matches[0].sku); }
+    else if (matches.length > 1) { toast(matches.length + ' matches — pick one from the list', 'info'); }
+    else { toast('No item matches "' + sku + '"', 'error'); }
   });
 
   D('btn-asn-apply').addEventListener('click', function(){
@@ -5384,6 +5431,7 @@ PWA SERVICE WORKER REGISTRATION
     safe('cv-sku');
     safe('ocr-p-sku', function(sku, name){ if (D('ocr-p-name')) D('ocr-p-name').value = name; });
     safe('qr-sku');
+    safe('asn-sku', function(sku, name){ if (window.asnAddSku) window.asnAddSku(sku); });
 
     function wireBin(prefix){
       var rEl = D(prefix+'-room'), aEl = D(prefix+'-aisle'), bEl = D(prefix+'-bay'), nEl = D(prefix+'-bin');
