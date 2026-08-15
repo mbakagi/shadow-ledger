@@ -4640,17 +4640,16 @@
     if (aisle) rows = rows.filter(function(d){ return d.aisle === aisle; });
     if (bay) rows = rows.filter(function(d){ return d.bay === bay; });
     if (bin) rows = rows.filter(function(d){ return d.bin === bin; });
-    if (depot) rows = rows.filter(function(d){ return (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) === depot; });
     if (unverifiedOnly) rows = rows.filter(function(d){ return !isVerifiedRecently(d); });
 
     // Location hint
     var locParts = [];
-    if (depot) locParts.push(({MAIN:'Main Building',DEPOT1:'Depot 1',DEPOT2:'Depot 2'})[depot] || depot);
+    if (depot) locParts.push('Counting into ' + (({MAIN:'Main Building',DEPOT1:'Depot 1',DEPOT2:'Depot 2'})[depot] || depot));
     if (room) locParts.push('Room ' + room);
     if (aisle) locParts.push('Aisle ' + aisle);
     if (bay) locParts.push('Bay ' + bay);
     if (bin) locParts.push('Bin ' + bin);
-    D('st-loc-hint').textContent = 'Location: ' + (locParts.length ? locParts.join(' · ') : 'all depots · all zones');
+    D('st-loc-hint').textContent = (locParts.length ? locParts.join(' · ') : 'Location: all depots · all zones') + ' · ' + rows.length + ' items shown';
 
     // Sort: either by location (walking order) or by item affinity
     if (groupItems) {
@@ -4795,6 +4794,7 @@
       return;
     }
     var workerName = (D('st-worker').value || '').trim();
+    var depot = D('st-depot').value || '';
     db.runTransaction(function(tx){
       return tx.get(db.collection('inventory').doc(docId)).then(function(doc){
         if (!doc.exists) return;
@@ -4802,26 +4802,29 @@
         var newQty = q + addQty;
         tx.set(doc.ref, {
           quantity: newQty,
+          depot: depot || doc.data().depot || '',
           last_verified_at: firebase.firestore.FieldValue.serverTimestamp(),
           verified_by: auth.currentUser ? auth.currentUser.uid : 'anon',
           verified_by_name: workerName || (auth.currentUser ? (auth.currentUser.email || '') : ''),
           updated_at: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        logMovement('putaway', rec.sku, rec.name, addQty, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), 'stocktake add', workerName);
+        logMovement('putaway', rec.sku, rec.name, addQty, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), depot ? 'stocktake add → ' + depot : 'stocktake add', workerName);
       });
     }).then(function(){
-      toast(rec.sku + ' +' + addQty + ' → ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + (workerName ? ' (by ' + workerName + ')' : ''), 'success');
+      toast(rec.sku + ' +' + addQty + ' → ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + (depot ? ' (' + depot + ')' : '') + (workerName ? ' by ' + workerName : ''), 'success');
       if (inp) inp.value = '';
     }).catch(function(e){ toast('Add failed: ' + e.message, 'error'); });
   };
 
   function stCommitCount(docId, rec, newQty, workerName){
+    var depot = D('st-depot').value || '';
     db.runTransaction(function(tx){
       return tx.get(db.collection('inventory').doc(docId)).then(function(doc){
         if (!doc.exists) return;
         var q = Math.max(0, Number(doc.data().quantity) || 0);
         tx.set(doc.ref, {
           quantity: newQty,
+          depot: depot || doc.data().depot || '',
           last_verified_at: firebase.firestore.FieldValue.serverTimestamp(),
           verified_by: auth.currentUser ? auth.currentUser.uid : 'anon',
           verified_by_name: workerName || (auth.currentUser ? (auth.currentUser.email || '') : ''),
@@ -4976,7 +4979,6 @@
       if (aisle && d.aisle !== aisle) return false;
       if (bay && d.bay !== bay) return false;
       if (bin && d.bin !== bin) return false;
-      if (depot && (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) !== depot) return false;
       return true;
     });
     if (groupItems) {
@@ -4991,7 +4993,7 @@
         return (a.room + a.aisle + a.bay + a.bin + a.sku).localeCompare(b.room + b.aisle + b.bay + b.bin + b.sku);
       });
     }
-    if (!rows.length) { toast('Nothing to print for this location', 'error'); return; }
+    if (!rows.length) { toast('Nothing to print', 'error'); return; }
 
     var headers = [];
     if (showLocation) headers.push('Location');
@@ -5001,7 +5003,7 @@
 
     var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
     var locTitle = [];
-    if (depot) locTitle.push(depotLabels[depot] || depot);
+    if (depot) locTitle.push('Counting into ' + (depotLabels[depot] || depot));
     if (room) locTitle.push('Room ' + esc(room));
     if (aisle) locTitle.push('Aisle ' + esc(aisle));
     if (bay) locTitle.push('Bay ' + esc(bay));
