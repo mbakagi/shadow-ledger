@@ -133,6 +133,9 @@
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="bins" role="tab" aria-selected="false" aria-controls="pane-bins">
         🗂 Bins
       </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="locations" role="tab" aria-selected="false" aria-controls="pane-locations">
+        📍 Locations
+      </button>
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="labels" role="tab" aria-selected="false" aria-controls="pane-labels">
         🏷 Labels
       </button>
@@ -142,7 +145,6 @@
     </div>
 
     <div class="flex items-center gap-3 flex-wrap no-print">
-      <input id="search-input" type="text" placeholder="Search SKU, name, bin…" class="flex-1 min-w-[180px] px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" aria-label="Search inventory" />
       <button id="btn-print" class="btn-print px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition flex items-center gap-1.5" aria-label="Print logsheet">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
         Print
@@ -178,6 +180,18 @@
       </div>
     </section>
 
+    <!-- Filters -->
+    <section class="px-4 pb-3 flex flex-wrap items-center gap-2 no-print">
+      <input id="search-input" type="text" placeholder="Search SKU, name, bin…" class="flex-1 min-w-[180px] px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" aria-label="Search inventory" />
+      <select id="filter-category" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        <option value="">All Categories</option>
+      </select>
+      <select id="filter-group" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        <option value="">All Groups</option>
+      </select>
+      <button id="btn-clear-filters" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">✕ Clear</button>
+    </section>
+
     <!-- Table -->
     <div class="px-4 pb-8 overflow-x-auto">
       <table id="dashboard-table" class="w-full text-sm border-collapse print-grid">
@@ -185,6 +199,8 @@
           <tr class="border-b border-slate-300 dark:border-slate-700 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold bg-slate-100 dark:bg-slate-800/50">
             <th class="px-3 py-2.5">SKU</th>
             <th class="px-3 py-2.5">Item Name</th>
+            <th class="px-3 py-2.5 hidden md:table-cell">Category</th>
+            <th class="px-3 py-2.5 hidden md:table-cell">Group</th>
             <th class="px-3 py-2.5">Total Qty</th>
             <th class="px-3 py-2.5">Bin Count</th>
             <th class="px-3 py-2.5">Added to Bin</th>
@@ -248,6 +264,23 @@
         <div>
           <label class="block text-xs font-semibold text-slate-500 mb-1">Item Name (required)</label>
           <input id="add-name" type="text" placeholder="e.g. Hex Bolt M8x50" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Category</label>
+          <input id="add-category" type="text" list="category-options" placeholder="e.g. Détection Incendie" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <datalist id="category-options"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Group</label>
+          <input id="add-group" type="text" list="group-options" placeholder="e.g. Security Systems" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <datalist id="group-options"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Description</label>
+          <input id="add-description" type="text" placeholder="Optional notes" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
         </div>
       </div>
 
@@ -718,6 +751,37 @@
     </section>
   </section>
 
+  <!-- Pane: Locations Management -->
+  <section id="pane-locations" class="tab-pane hidden p-4 max-w-5xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-locations">
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Locations — Warehouse Zones & Bins</h2>
+    <p class="text-xs text-slate-500">Define named locations (zones, rooms, aisles, bays, bins). These feed autocomplete throughout the WMS.</p>
+
+    <!-- Add location form -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <h3 class="font-bold text-sm">Add / Register Location</h3>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room (req)</label><input id="loc-room" type="text" placeholder="e.g. 1" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="8" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="loc-aisle" type="text" placeholder="e.g. A" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="8" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bay</label><input id="loc-bay" type="text" placeholder="e.g. 01" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="8" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bin</label><input id="loc-bin" type="text" placeholder="e.g. 04" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="8" /></div>
+        <div class="flex items-end"><button id="btn-loc-add" class="w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">+ Add</button></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Location Name / Label</label><input id="loc-name" type="text" placeholder="e.g. Fire Panel Room, Main Depot" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+        <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Description</label><input id="loc-desc" type="text" placeholder="Optional notes" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+      </div>
+    </div>
+
+    <!-- Locations list -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm">Registered Locations (<span id="loc-count">0</span>)</h3>
+        <input id="loc-filter" type="text" placeholder="Filter locations…" class="mono px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 w-full sm:w-64 focus:ring-2 focus:ring-indigo-500 outline-none" />
+      </div>
+      <div id="loc-list" class="space-y-2 max-h-[55vh] overflow-y-auto scrollbar-thin"></div>
+    </div>
+  </section>
+
   <!-- Pane: Labels (item labels generator, search & add, batch current) -->
   <section id="pane-labels" class="tab-pane p-4 max-w-4xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-labels">
     <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Labels — Item Label Generator</h2>
@@ -979,6 +1043,56 @@
       </div>
     </div>
   </section>
+
+  <!-- ──────────────────────────────────────────────────────────────
+       ITEM DETAIL MODAL (view/edit metadata + bin locations)
+       ────────────────────────────────────────────────────────────── -->
+  <div id="item-detail-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-thin">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
+        <h3 class="font-black text-sm uppercase tracking-wider text-slate-600 dark:text-slate-300">Item Details</h3>
+        <button id="item-detail-close" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition text-slate-500">✕</button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-semibold text-slate-400 mb-1">SKU</label>
+            <p id="id-sku" class="mono font-black text-indigo-600 dark:text-indigo-400 text-sm"></p>
+          </div>
+          <div>
+            <label class="block text-[10px] font-semibold text-slate-400 mb-1">Total Quantity</label>
+            <p id="id-total" class="mono font-black text-emerald-600 dark:text-emerald-400 text-sm"></p>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-slate-400 mb-1">Item Name</label>
+          <input id="id-name" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-semibold text-slate-400 mb-1">Category</label>
+            <input id="id-category" type="text" list="category-options" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-semibold text-slate-400 mb-1">Group</label>
+            <input id="id-group" type="text" list="group-options" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-slate-400 mb-1">Description</label>
+          <textarea id="id-description" rows="2" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"></textarea>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-slate-400 mb-1">Bin Locations</label>
+          <div id="id-bins" class="space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin"></div>
+        </div>
+        <div class="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+          <button id="id-save" class="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Save Changes</button>
+          <button id="id-close" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm transition">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ──────────────────────────────────────────────────────────────
        SHARED JAVASCRIPT — GLOBAL INIT, STATE, HELPERS, TABS, TABS
@@ -1391,14 +1505,26 @@
 
   var skuCache = [];
   var binLocCache = { rooms: [], aisles: [], bays: [], bins: [] };
+  var catCache = { categories: [], groups: [] };
 
   function rebuildSkuCache(){
     var seen = new Set();
     skuCache = [];
     stockItems.forEach(function(i){
-      if (!seen.has(i.sku)) { seen.add(i.sku); skuCache.push({ sku:i.sku, name:i.name, total:i.total, bins:i.binCount }); }
+      if (!seen.has(i.sku)) { seen.add(i.sku); skuCache.push({ sku:i.sku, name:i.name, category:i.category, group:i.group, description:i.description, total:i.total, bins:i.binCount }); }
     });
     skuCache.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
+  }
+
+  function rebuildCategoryCache(){
+    var cs = new Set(), gs = new Set();
+    stockItems.forEach(function(i){
+      if (i.category) cs.add(i.category);
+      if (i.group) gs.add(i.group);
+    });
+    catCache.categories = Array.from(cs).sort();
+    catCache.groups = Array.from(gs).sort();
+    refreshCategoryFilters();
   }
 
   function rebuildBinLocCache(){
@@ -1478,6 +1604,8 @@
   var stockUnsub = null;
   var stockItems = [];
   var stockFilter = '';
+  var stockCategoryFilter = '';
+  var stockGroupFilter = '';
   var stockPage = 1;
   var stockPageSize = 25;
   var cameraStream = null;
@@ -1505,12 +1633,121 @@
   var qrScanningActive = false; // camera scanning active flag
 
   /* ================================================================
+     SVG QR CODE GENERATOR — stable, print-friendly vector QR codes
+     Uses qrcodejs for encoding → renders as crisp SVG with optional badge
+     ================================================================ */
+  function renderQrSvg(text, badgeText, size) {
+    size = size || 200;
+    var tmp = document.createElement('div');
+    tmp.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+    document.body.appendChild(tmp);
+
+    // Render QR to hidden temp canvas using qrcodejs for encoding
+    new QRCode(tmp, {
+      text: text,
+      width: size, height: size,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    return new Promise(function(resolve) {
+      var tries = 0;
+      function poll() {
+        tries++;
+        var canvas = tmp.querySelector('canvas');
+        if (canvas && canvas.width > 0) {
+          var svg = buildSvgFromCanvas(canvas, size, badgeText);
+          document.body.removeChild(tmp);
+          resolve(svg);
+        } else if (tries < 30) {
+          setTimeout(poll, 16);
+        } else {
+          document.body.removeChild(tmp);
+          resolve(null);
+        }
+      }
+      setTimeout(poll, 20);
+    });
+  }
+
+  function buildSvgFromCanvas(canvas, size, badgeText) {
+    var imgData = canvas.getContext('2d').getImageData(0, 0, size, size);
+    var pixels = imgData.data;
+    var stride = size * 4;
+
+    // Find QR module count by scanning for quiet zone boundary
+    var moduleCount = 21;
+    var quietRows = 0;
+    for (var y = 0; y < size; y++) {
+      var white = true;
+      for (var x = 0; x < size; x++) {
+        if (pixels[(y * stride + x * 4)] < 128) { white = false; break; }
+      }
+      if (!white) { quietRows = y; break; }
+    }
+    if (quietRows > 2) {
+      var quietCols = 0;
+      for (var xc = 0; xc < size; xc++) {
+        var wc = true;
+        for (var yc = 0; yc < size; yc++) {
+          if (pixels[(yc * stride + xc * 4)] < 128) { wc = false; break; }
+        }
+        if (!wc) { quietCols = xc; break; }
+      }
+      if (quietCols > 2 && quietRows > 2) {
+        var modSize = quietRows;
+        moduleCount = Math.round((size - modSize * 2) / modSize);
+      }
+    }
+
+    var cell = size / moduleCount;
+    var rects = [];
+    for (var r = 0; r < moduleCount; r++) {
+      for (var c = 0; c < moduleCount; c++) {
+        var cx = Math.floor((c + 0.5) * cell);
+        var cy = Math.floor((r + 0.5) * cell);
+        var idx = cy * stride + cx * 4;
+        if (pixels[idx] < 128) {
+          rects.push('<rect x="' + (c * cell).toFixed(2) + '" y="' + (r * cell).toFixed(2) + '" width="' + cell.toFixed(2) + '" height="' + cell.toFixed(2) + '" shape-rendering="crispEdges"/>');
+        }
+      }
+    }
+
+    var badgeHtml = '';
+    if (badgeText) {
+      var bw = size * 0.72, bh = size * 0.2;
+      var bx = (size - bw) / 2, by = (size - bh) / 2;
+      var fs = Math.max(9, Math.round(bh * 0.5));
+      badgeHtml = '<rect x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="4" fill="#fff" stroke="#4f46e5" stroke-width="1.5"/>'
+        + '<text x="' + (size / 2).toFixed(1) + '" y="' + (size / 2).toFixed(1) + '" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-weight="bold" font-size="' + fs + '" fill="#4f46e5">' + xmlSafe(badgeText) + '</text>';
+    }
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size + '" width="100%" height="100%" shape-rendering="crispEdges">'
+      + '<rect width="' + size + '" height="' + size + '" fill="#fff"/>'
+      + rects.join('')
+      + badgeHtml
+      + '</svg>';
+  }
+
+  function xmlSafe(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function readQrBadgeText(r, a, b, bn) {
+    var cr = cleanLocVal(r), ca = cleanLocVal(a), cb = cleanLocVal(b), cbn = cleanLocVal(bn);
+    var parts = [];
+    if (cr && cr !== '-') parts.push('R:' + cr);
+    if (ca && ca !== '-') parts.push('A:' + ca);
+    if (cb && cb !== '-') parts.push('B:' + cb);
+    if (cbn && cbn !== '-') parts.push('B:' + cbn);
+    return parts.length ? parts.join(' ') : '';
+  }
+
+  /* ================================================================
      URL PARAM DEEP-LINK ROUTER
      ================================================================ */
   (function routeFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','count','batch','bins','labels','sync'];
+    var validTabs = ['stock','wizard','count','batch','bins','locations','labels','sync'];
     if (!validTabs.includes(tab)) tab = 'stock';
 
     // Pre-fill wizard fields from URL
@@ -1529,7 +1766,8 @@
       var aisle = params.get('aisle') || '';
       var bay = params.get('bay') || '';
       var bin = params.get('bin') || '';
-      window.__deepLink = { tab: 'bins', sku: sku, room: room, aisle: aisle, bay: bay, bin: bin };
+      var subtab = params.get('subtab') || 'qr';
+      window.__deepLink = { tab: 'bins', sku: sku, room: room, aisle: aisle, bay: bay, bin: bin, subtab: subtab };
     } else if (tab === 'count') {
       var sku = params.get('sku') || '';
       window.__deepLink = { tab: 'count', sku: sku };
@@ -1561,6 +1799,7 @@
     if (tabName === 'batch' && !window.__batchBuilt) buildBatchGrid();
     if (tabName === 'wizard') applyDeepLinkWizard();
     if (tabName === 'bins') applyDeepLinkBins();
+    if (tabName === 'locations' && !window.__locationsBuilt) { window.__locationsBuilt = true; startLocationsSync(); }
     if (tabName === 'labels' && !window.__labelsBuilt) buildLabelsTab();
     if (tabName === 'count' && !window.__countBuilt) buildCountTab();
     if (tabName === 'count') applyDeepLinkCount();
@@ -1621,13 +1860,30 @@
   function applyDeepLinkBins(){
     var dl = window.__deepLink;
     if (!dl || dl.tab !== 'bins') return;
+    var targetSubtab = dl.subtab || 'qr';
+    showBinsSubtab(targetSubtab);
     if (dl.sku) D('qr-sku').value = dl.sku;
-    if (dl.room) D('qr-room').value = dl.room;
-    if (dl.aisle) D('qr-aisle').value = dl.aisle;
-    if (dl.bay) D('qr-bay').value = dl.bay;
-    if (dl.bin) D('qr-bin').value = dl.bin;
+    if (dl.room) {
+      D('qr-room').value = dl.room;
+      D('bs-room').value = dl.room;
+    }
+    if (dl.aisle) {
+      D('qr-aisle').value = dl.aisle;
+      D('bs-aisle').value = dl.aisle;
+    }
+    if (dl.bay) {
+      D('qr-bay').value = dl.bay;
+      D('bs-bay').value = dl.bay;
+    }
+    if (dl.bin) {
+      D('qr-bin').value = dl.bin;
+      D('bs-bin').value = dl.bin;
+    }
     if (dl.sku && dl.room && dl.aisle && dl.bay && dl.bin) {
       addQrToGrid();
+    }
+    if (targetSubtab === 'binsearch' && dl.room) {
+      setTimeout(function(){ D('btn-bs-search').click(); }, 400);
     }
     window.__deepLink = null;
   }
@@ -1703,6 +1959,9 @@
       if (!s) return;
       var qty = Math.max(0, Number(d.quantity) || 0);
       var r = (d.room||'').trim().toUpperCase(), a = (d.aisle||'').trim().toUpperCase(), ba = (d.bay||'').trim().toUpperCase(), bn = (d.bin||'').trim().toUpperCase();
+      var cat = (d.category || '').trim();
+      var grp = (d.group || '').trim();
+      var desc = (d.description || '').trim();
       rawInventoryDocs.push({
         id: doc.id,
         sku: s,
@@ -1711,11 +1970,18 @@
         aisle: a,
         bay: ba,
         bin: bn,
-        quantity: qty
+        quantity: qty,
+        category: cat,
+        group: grp,
+        description: desc
       });
 
       if (!skuMap.has(s)) {
-        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', total:0, bins:[], docCount:0 });
+        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', category:cat, group:grp, description:desc, total:0, bins:[], docCount:0 });
+      } else if (!skuMap.get(s).category && cat) {
+        skuMap.get(s).category = cat;
+        skuMap.get(s).group = grp;
+        skuMap.get(s).description = desc;
       }
       var row = skuMap.get(s);
       row.docCount++;
@@ -1737,12 +2003,13 @@
             return formatLocationShort(x.room, x.aisle, x.bay, x.bin) + ' (Qty:' + x.qty + ')';
           }).join(' | ')
         : '—';
-      stockItems.push({ sku:v.sku, name:v.name, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount });
+      stockItems.push({ sku:v.sku, name:v.name, category:v.category||'', group:v.group||'', description:v.description||'', total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount, bins: unique });
     });
     stockItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
     window.__stockRendered = true;
     rebuildSkuCache();
     rebuildBinLocCache();
+    rebuildCategoryCache();
     if (typeof renderPaInspectList === 'function') renderPaInspectList();
     document.dispatchEvent(new CustomEvent('stockUpdated'));
   }
@@ -1751,12 +2018,17 @@
     var filtered = stockItems;
     if (stockFilter) {
       var q = stockFilter.toLowerCase();
-      filtered = stockItems.filter(function(i){
+      filtered = filtered.filter(function(i){
         return i.sku.toLowerCase().indexOf(q) >= 0
             || i.name.toLowerCase().indexOf(q) >= 0
+            || (i.category||'').toLowerCase().indexOf(q) >= 0
+            || (i.group||'').toLowerCase().indexOf(q) >= 0
             || i.binsAdded.toLowerCase().indexOf(q) >= 0;
       });
     }
+    if (stockCategoryFilter) filtered = filtered.filter(function(i){ return i.category === stockCategoryFilter; });
+    if (stockGroupFilter) filtered = filtered.filter(function(i){ return i.group === stockGroupFilter; });
+
     var tbody = D('table-body');
     var empty = D('empty-state');
     if (!filtered.length) { tbody.innerHTML=''; empty.classList.remove('hidden'); }
@@ -1764,8 +2036,10 @@
 
     tbody.innerHTML = filtered.map(function(i){
       return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">'
-        + '<td class="px-3 py-2 font-mono font-semibold text-indigo-700 dark:text-indigo-400 text-xs whitespace-nowrap">' + esc(i.sku) + '</td>'
+        + '<td class="px-3 py-2 font-mono font-semibold text-indigo-700 dark:text-indigo-400 text-xs whitespace-nowrap"><a href="#" class="hover:underline" onclick="openItemDetail(\'' + esc(i.sku.replace(/'/g,"\\'")) + '\'); return false;">' + esc(i.sku) + '</a></td>'
         + '<td class="px-3 py-2 font-medium">' + esc(i.name) + '</td>'
+        + '<td class="px-3 py-2 hidden md:table-cell text-xs">' + (i.category ? '<span class="inline-block px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-semibold">' + esc(i.category) + '</span>' : '—') + '</td>'
+        + '<td class="px-3 py-2 hidden md:table-cell text-xs text-slate-600 dark:text-slate-300">' + (i.group ? esc(i.group) : '—') + '</td>'
         + '<td class="px-3 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right">' + i.total.toLocaleString() + '</td>'
         + '<td class="px-3 py-2 font-mono text-slate-500 text-center">' + i.binCount + '</td>'
         + '<td class="px-3 py-2 font-mono text-[11px] leading-tight text-slate-600 dark:text-slate-300 max-w-[420px] whitespace-normal break-words">' + esc(i.binsAdded) + '</td>'
@@ -1785,6 +2059,36 @@
     stockFilter = D('search-input').value.trim();
     renderStock();
   });
+
+  D('filter-category').addEventListener('change', function(){
+    stockCategoryFilter = D('filter-category').value;
+    renderStock();
+  });
+
+  D('filter-group').addEventListener('change', function(){
+    stockGroupFilter = D('filter-group').value;
+    renderStock();
+  });
+
+  D('btn-clear-filters').addEventListener('click', function(){
+    stockFilter = '';
+    stockCategoryFilter = '';
+    stockGroupFilter = '';
+    D('search-input').value = '';
+    D('filter-category').value = '';
+    D('filter-group').value = '';
+    renderStock();
+  });
+
+  function refreshCategoryFilters(){
+    var catSel = D('filter-category'), grpSel = D('filter-group');
+    if (!catSel || !grpSel) return;
+    var catCur = catSel.value, grpCur = grpSel.value;
+    catSel.innerHTML = '<option value="">All Categories</option>' + catCache.categories.map(function(c){ return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    grpSel.innerHTML = '<option value="">All Groups</option>' + catCache.groups.map(function(g){ return '<option value="' + esc(g) + '">' + esc(g) + '</option>'; }).join('');
+    catSel.value = catCur || '';
+    grpSel.value = grpCur || '';
+  }
 
   D('btn-print').addEventListener('click', function(){
     printArea('dashboard-table', 'Stock Logsheet');
@@ -1883,14 +2187,34 @@
     toast('QR Code detected!', 'success');
     var urlObj = null;
     try { urlObj = new URL(dataStr); } catch(e){}
-    
-    if (urlObj && (urlObj.searchParams.get('room') || urlObj.searchParams.get('sku'))) {
+
+    if (urlObj) {
+      var tab = urlObj.searchParams.get('tab') || '';
       var room = urlObj.searchParams.get('room') || '';
       var aisle = urlObj.searchParams.get('aisle') || '';
       var bay = urlObj.searchParams.get('bay') || '';
       var bin = urlObj.searchParams.get('bin') || '';
       var sku = urlObj.searchParams.get('sku') || '';
-      populateWmsFields(room, aisle, bay, bin, sku);
+      var subtab = urlObj.searchParams.get('subtab') || '';
+
+      // Bin QR → route to Bin Contents Search
+      if (tab === 'bins' && room) {
+        stopScanner();
+        D('bs-room').value = cleanLocVal(room);
+        D('bs-aisle').value = cleanLocVal(aisle);
+        D('bs-bay').value = cleanLocVal(bay);
+        D('bs-bin').value = cleanLocVal(bin);
+        showTab('bins');
+        showBinsSubtab('binsearch');
+        setTimeout(function(){ D('btn-bs-search').click(); }, 200);
+        return;
+      }
+
+      if (room || sku) {
+        populateWmsFields(room, aisle, bay, bin, sku);
+      } else {
+        populateWmsFields('', '', '', '', dataStr.trim());
+      }
     } else {
       populateWmsFields('', '', '', '', dataStr.trim());
     }
@@ -2191,64 +2515,13 @@
     badgeEl.textContent = 'Level: ' + level;
     
     qrBox.innerHTML = '';
-    var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(r) + '&aisle=' + encodeURIComponent(a) + '&bay=' + encodeURIComponent(ba) + '&bin=' + encodeURIComponent(bn) + '&subtab=putaway';
+    var url = window.location.origin + window.location.pathname + '?tab=bins&subtab=binsearch&room=' + encodeURIComponent(r) + '&aisle=' + encodeURIComponent(a) + '&bay=' + encodeURIComponent(ba) + '&bin=' + encodeURIComponent(bn);
     qrLbl.textContent = formatLocation(r, a, ba, bn);
     
-    try {
-      new QRCode(qrBox, {
-        text: url,
-        width: 160,
-        height: 160,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
-      });
-      
-      setTimeout(function(){
-        var canvas = qrBox.querySelector('canvas');
-        var img = qrBox.querySelector('img');
-        if (canvas) {
-          var ctx = canvas.getContext('2d');
-          var w = canvas.width;
-          var h = canvas.height;
-          
-          var cleanR = cleanLocVal(r), cleanA = cleanLocVal(a), cleanBa = cleanLocVal(ba), cleanBn = cleanLocVal(bin);
-          var parts = [];
-          if (cleanR && cleanR !== '-') parts.push('R:' + cleanR);
-          if (cleanA && cleanA !== '-') parts.push('A:' + cleanA);
-          if (cleanBa && cleanBa !== '-') parts.push('B:' + cleanBa);
-          if (cleanBn && cleanBn !== '-') parts.push('B:' + cleanBn);
-          var badgeText = parts.length ? parts.join(' ') : 'WMS';
-          
-          var badgeW = w * 0.82;
-          var badgeH = h * 0.22;
-          var badgeX = (w - badgeW) / 2;
-          var badgeY = (h - badgeH) / 2;
-          
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          if (ctx.roundRect) ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
-          else ctx.rect(badgeX, badgeY, badgeW, badgeH);
-          ctx.fill();
-          
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          
-          ctx.fillStyle = '#4f46e5'; // Indigo
-          ctx.font = 'bold 9px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, w / 2, h / 2);
-          
-          if (img) {
-            img.src = canvas.toDataURL();
-          }
-        }
-      }, 60);
-    } catch(e) {
-      console.error(e);
-    }
+    var badge = readQrBadgeText(r, a, ba, bin);
+    renderQrSvg(url, badge, 200).then(function(svgHtml){
+      if (svgHtml) qrBox.innerHTML = svgHtml;
+    });
   }
 
   function setPaMode(mode) {
@@ -2320,7 +2593,7 @@
       return;
     }
 
-    paList.push({ sku: sku, name: cached.name, qty: qty });
+    paList.push({ sku: sku, name: cached.name, category: cached.category || '', group: cached.group || '', description: cached.description || '', qty: qty });
     renderPaListTable();
     
     D('pa-m-sku').value = '';
@@ -2339,6 +2612,9 @@
   D('btn-add-item-submit').addEventListener('click', function(){
     var sku = S(D('add-sku').value);
     var name = D('add-name').value.trim();
+    var category = (D('add-category').value || '').trim();
+    var group = (D('add-group').value || '').trim();
+    var description = (D('add-description').value || '').trim();
     var room = S(D('add-room').value);
     var aisle = S(D('add-aisle').value);
     var bay = S(D('add-bay').value);
@@ -2366,6 +2642,9 @@
         tx.set(ref, {
           sku: sku,
           item_name: name,
+          category: category,
+          group: group,
+          description: description,
           room: r,
           aisle: a,
           bay: ba,
@@ -2378,6 +2657,9 @@
       toast('Item registered successfully: ' + sku, 'success');
       D('add-sku').value = '';
       D('add-name').value = '';
+      D('add-category').value = '';
+      D('add-group').value = '';
+      D('add-description').value = '';
       D('add-room').value = '';
       D('add-aisle').value = '';
       D('add-bay').value = '';
@@ -2421,6 +2703,9 @@
         tx.set(ref, {
           sku: sku,
           item_name: cached.name,
+          category: cached.category || '',
+          group: cached.group || '',
+          description: cached.description || '',
           room: r,
           aisle: a,
           bay: ba,
@@ -2464,6 +2749,9 @@
           tx.set(ref, {
             sku: item.sku,
             item_name: item.name,
+            category: item.category || '',
+            group: item.group || '',
+            description: item.description || '',
             room: r,
             aisle: a,
             bay: ba,
@@ -2539,6 +2827,36 @@
       .catch(function(e){
         toast('Delete failed: ' + e.message, 'error');
       });
+  };
+
+  window.bsVerify = function(docId, expectedQty, sku, name) {
+    var safeId = docId.replace(/[^a-zA-Z0-9_]/g,'_');
+    var inp = document.getElementById('bs-qty-' + safeId);
+    var newQty = Math.max(0, parseInt(inp ? inp.value : expectedQty, 10) || 0);
+    db.runTransaction(function(tx){
+      return tx.get(db.collection('inventory').doc(docId)).then(function(doc){
+        if (!doc.exists) return;
+        var oldQty = Math.max(0, Number(doc.data().quantity) || 0);
+        tx.set(doc.ref, { quantity:newQty, updated_at:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+        if (newQty !== oldQty) {
+          tx.set(db.collection('discrepancies').doc(), {
+            inventory_id:docId, sku:sku, name:name,
+            expected_qty:oldQty, actual_qty:newQty, variance:newQty-oldQty,
+            worker_uid:auth.currentUser ? auth.currentUser.uid : 'anon',
+            bin:formatLocationShort(doc.data().room, doc.data().aisle, doc.data().bay, doc.data().bin),
+            timestamp:firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+    }).then(function(){
+      toast(sku + ' → ' + newQty + (newQty !== expectedQty ? ' (was '+expectedQty+')' : ''), 'success');
+      if (inp && newQty !== expectedQty) {
+        var row = document.getElementById('bs-row-' + safeId);
+        if (row) row.classList.add('bg-emerald-50', 'dark:bg-emerald-950/20');
+      }
+    }).catch(function(e){
+      toast('Verify failed: ' + e.message, 'error');
+    });
   };
 
   D('pa-inspect-filter').addEventListener('input', renderPaInspectList);
@@ -2889,7 +3207,7 @@
     var room = S(D('bx-room').value), aisle = S(D('bx-aisle').value);
     D('bx-grid').querySelectorAll('.bin-cell.selected').forEach(function(c){
       var bay = c.dataset.bay, bin = c.dataset.bin;
-      var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin) + '&subtab=putaway';
+      var url = window.location.origin + window.location.pathname + '?tab=bins&subtab=binsearch&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin);
       qrItems.push({ url: url, label: 'R' + room + '-A' + aisle + '-B' + bay + '-B' + bin });
     });
     toast(bxSelected.size + ' bins → QR codes', 'success');
@@ -2906,7 +3224,7 @@
     D('bx-grid').querySelectorAll('.bin-cell.selected').forEach(function(c){
       var bay = c.dataset.bay, bin = c.dataset.bin;
       var loc = 'R' + room + '-A' + aisle + '-B' + bay + '-B' + bin;
-      var url = window.location.origin + window.location.pathname + '?tab=wizard&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin) + '&subtab=putaway';
+      var url = window.location.origin + window.location.pathname + '?tab=bins&subtab=binsearch&room=' + encodeURIComponent(room) + '&aisle=' + encodeURIComponent(aisle) + '&bay=' + encodeURIComponent(bay) + '&bin=' + encodeURIComponent(bin);
       blItems.push({ loc: loc, url: url, room: room, aisle: aisle, bay: bay, bin: bin });
     });
     toast(bxSelected.size + ' bins → Bin Labels', 'success');
@@ -2948,8 +3266,11 @@
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku=' + encodeURIComponent(item.sku) + '&subtab=count';
       if (withQr) {
         setTimeout(function(){
-          try { new QRCode(document.getElementById(boxId), { text: url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H }); } catch (e) {}
-        }, 0);
+          renderQrSvg(url, item.sku, 200).then(function(svgHtml){
+            var el = document.getElementById(boxId);
+            if (el && svgHtml) el.innerHTML = svgHtml;
+          });
+        }, idx * 50);
       }
       var lines = [];
       if (size === '4x2') {
@@ -3005,7 +3326,10 @@
     grid.innerHTML = qrItems.map(function(item, idx){
       var boxId = 'qr-box-' + idx;
       setTimeout(function(){
-        try { new QRCode(document.getElementById(boxId), { text: item.url, width: 160, height: 160, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H }); } catch(e){}
+        renderQrSvg(item.url, item.label, 200).then(function(svgHtml){
+          var el = document.getElementById(boxId);
+          if (el && svgHtml) el.innerHTML = svgHtml;
+        });
       }, 0);
       return '<div class="qr-card">'
         + '<div id="' + boxId + '" class="qr-box"></div>'
@@ -3037,7 +3361,7 @@
       for (var n = binStart; n <= binEnd; n++) {
         var bin = String(n).padStart(2,'0');
         var loc = 'R'+room+'-A'+aisle+'-B'+bay+'-B'+bin;
-        var url = window.location.origin + window.location.pathname + '?tab=wizard&room='+encodeURIComponent(room)+'&aisle='+encodeURIComponent(aisle)+'&bay='+encodeURIComponent(bay)+'&bin='+encodeURIComponent(bin)+'&subtab=putaway';
+        var url = window.location.origin + window.location.pathname + '?tab=bins&subtab=binsearch&room='+encodeURIComponent(room)+'&aisle='+encodeURIComponent(aisle)+'&bay='+encodeURIComponent(bay)+'&bin='+encodeURIComponent(bin);
         blItems.push({ loc: loc, url: url, room: room, aisle: aisle, bay: bay, bin: bin });
       }
     }
@@ -3050,8 +3374,12 @@
       var boxId = 'bl-box-'+idx;
       var dims = labelDims(size);
       setTimeout(function(){
-        try { new QRCode(document.getElementById(boxId), { text: item.url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e){}
-      }, 0);
+        var badge = readQrBadgeText(item.room, item.aisle, item.bay, item.bin);
+        renderQrSvg(item.url, badge, 200).then(function(svgHtml){
+          var el = document.getElementById(boxId);
+          if (el && svgHtml) el.innerHTML = svgHtml;
+        });
+      }, idx * 30);
       return '<div class="qr-card" style="width:'+dims.w+'mm;height:'+dims.h+'mm;min-width:'+dims.w+'mm;min-height:'+dims.h+'mm;">'
         + '<div id="'+boxId+'" class="qr-box" style="width:'+dims.qr+'mm;height:'+dims.qr+'mm;margin:0 auto;"></div>'
         + '<div class="label" style="font-size:'+dims.font+'px;margin-top:2px;">'+esc(item.loc)+'</div>'
@@ -3183,8 +3511,11 @@
       var url = window.location.origin + window.location.pathname + '?tab=wizard&sku='+encodeURIComponent(item.sku)+'&subtab=count';
       if (withQr) {
         setTimeout(function(){
-          try { new QRCode(document.getElementById(boxId), { text: url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.H }); } catch(e){}
-        }, 0);
+          renderQrSvg(url, item.sku, 200).then(function(svgHtml){
+            var el = document.getElementById(boxId);
+            if (el && svgHtml) el.innerHTML = svgHtml;
+          });
+        }, idx * 50);
       }
       var lines = [];
       var showSku = field === 'both' || field === 'sku';
@@ -3672,12 +4003,178 @@
   });
 
   /* ================================================================
+     ITEM DETAIL MODAL — view/edit metadata + bin locations
+     ================================================================ */
+  function openItemDetailModal(item){
+    D('id-sku').textContent = item.sku;
+    D('id-total').textContent = item.total.toLocaleString();
+    D('id-name').value = item.name;
+    D('id-category').value = item.category || '';
+    D('id-group').value = item.group || '';
+    D('id-description').value = item.description || '';
+    var binsEl = D('id-bins');
+    if (item.bins && item.bins.length) {
+      binsEl.innerHTML = item.bins.map(function(b){
+        return '<div class="flex items-center justify-between bg-slate-50 dark:bg-slate-700/40 rounded-lg px-3 py-2">'
+          + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400">' + formatLocationShort(b.room, b.aisle, b.bay, b.bin) + '</span>'
+          + '<span class="mono text-xs font-bold text-emerald-600 dark:text-emerald-400">' + b.qty.toLocaleString() + '</span>'
+          + '</div>';
+      }).join('');
+    } else {
+      binsEl.innerHTML = '<p class="text-xs text-slate-400 italic">No bin assignments yet.</p>';
+    }
+    D('item-detail-modal').classList.remove('hidden');
+    D('item-detail-modal').classList.add('flex');
+  }
+
+  window.openItemDetail = function(sku){
+    var item = stockItems.find(function(i){ return i.sku === sku; });
+    if (!item) { toast('Item not found: ' + sku, 'error'); return; }
+    openItemDetailModal(item);
+  };
+
+  function closeItemDetailModal(){
+    D('item-detail-modal').classList.add('hidden');
+    D('item-detail-modal').classList.remove('flex');
+  }
+
+  D('item-detail-close').addEventListener('click', closeItemDetailModal);
+  D('id-close').addEventListener('click', closeItemDetailModal);
+  D('item-detail-modal').addEventListener('click', function(e){ if (e.target === this) closeItemDetailModal(); });
+
+  D('id-save').addEventListener('click', function(){
+    var sku = D('id-sku').textContent;
+    var name = D('id-name').value.trim();
+    var category = D('id-category').value.trim();
+    var group = D('id-group').value.trim();
+    var description = D('id-description').value.trim();
+    if (!name) { toast('Item name required', 'error'); return; }
+
+    // Update all inventory docs for this SKU
+    var docs = rawInventoryDocs.filter(function(d){ return d.sku === sku; });
+    if (!docs.length) { toast('No inventory records for this SKU', 'error'); return; }
+
+    var btn = D('id-save');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    var batch = db.batch();
+    docs.forEach(function(d){
+      var ref = db.collection('inventory').doc(d.id);
+      batch.set(ref, { item_name: name, category: category, group: group, description: description }, { merge: true });
+    });
+    batch.commit().then(function(){
+      toast('Item updated: ' + sku, 'success');
+      btn.disabled = false; btn.textContent = 'Save Changes';
+      closeItemDetailModal();
+    }).catch(function(e){
+      toast('Update failed: ' + e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Save Changes';
+    });
+  });
+
+  /* ================================================================
+     LOCATIONS MANAGEMENT — CRUD for named warehouse locations
+     ================================================================ */
+  var locUnsub = null;
+  var locationsCache = [];
+
+  function startLocationsSync(){
+    if (locUnsub) return;
+    locUnsub = db.collection('locations').orderBy('room').onSnapshot(function(snap){
+      locationsCache = [];
+      snap.forEach(function(doc){
+        var d = doc.data();
+        locationsCache.push({
+          id: doc.id,
+          room: (d.room||'').trim().toUpperCase(),
+          aisle: (d.aisle||'').trim().toUpperCase(),
+          bay: (d.bay||'').trim().toUpperCase(),
+          bin: (d.bin||'').trim().toUpperCase(),
+          name: d.name || '',
+          description: d.description || ''
+        });
+      });
+      renderLocationsList();
+    }, function(err){
+      toast('Locations sync error: ' + (err.message || err.code), 'error');
+    });
+  }
+
+  function renderLocationsList(){
+    var list = D('loc-list');
+    var filter = (D('loc-filter').value || '').toLowerCase().trim();
+    var filtered = locationsCache;
+    if (filter) {
+      filtered = locationsCache.filter(function(l){
+        return (l.room + ' ' + l.aisle + ' ' + l.bay + ' ' + l.bin + ' ' + l.name + ' ' + l.description).toLowerCase().indexOf(filter) >= 0;
+      });
+    }
+    D('loc-count').textContent = locationsCache.length;
+    if (!filtered.length) {
+      list.innerHTML = '<p class="text-sm text-slate-400 italic text-center py-6">No locations registered yet. Add one above.</p>';
+      return;
+    }
+    list.innerHTML = filtered.map(function(l){
+      var short = formatLocationShort(l.room, l.aisle || '-', l.bay || '-', l.bin || '-');
+      return '<div class="flex items-center justify-between flex-wrap gap-2 bg-slate-50 dark:bg-slate-700/40 rounded-lg px-3 py-2 border border-slate-200 dark:border-slate-600">'
+        + '<div class="min-w-0">'
+        + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400">' + esc(short) + '</span>'
+        + (l.name ? ' <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">' + esc(l.name) + '</span>' : '')
+        + (l.description ? '<div class="text-[11px] text-slate-400 truncate">' + esc(l.description) + '</div>' : '')
+        + '</div>'
+        + '<button onclick="deleteLocation(\'' + l.id + '\')" class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/40 text-red-600 hover:bg-red-200 transition font-bold text-[10px]">✕</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  window.deleteLocation = function(id){
+    if (!confirm('Delete this location?')) return;
+    db.collection('locations').doc(id).delete()
+      .then(function(){ toast('Location deleted', 'success'); })
+      .catch(function(e){ toast('Delete failed: ' + e.message, 'error'); });
+  };
+
+  D('loc-filter').addEventListener('input', renderLocationsList);
+
+  D('btn-loc-add').addEventListener('click', function(){
+    var room = S(D('loc-room').value);
+    var aisle = S(D('loc-aisle').value);
+    var bay = S(D('loc-bay').value);
+    var bin = S(D('loc-bin').value);
+    var name = D('loc-name').value.trim();
+    var desc = D('loc-desc').value.trim();
+    if (!room) { toast('Room is required', 'error'); return; }
+    if (!name) name = formatLocationShort(room, aisle || '-', bay || '-', bin || '-');
+
+    var docId = 'LOC_' + [room, aisle || '-', bay || '-', bin || '-'].join('_');
+    db.collection('locations').doc(docId).set({
+      room: room, aisle: aisle || '-', bay: bay || '-', bin: bin || '-',
+      name: name, description: desc,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).then(function(){
+      toast('Location added: ' + name, 'success');
+      D('loc-room').value = ''; D('loc-aisle').value = ''; D('loc-bay').value = ''; D('loc-bin').value = '';
+      D('loc-name').value = ''; D('loc-desc').value = '';
+    }).catch(function(e){ toast('Add failed: ' + e.message, 'error'); });
+  });
+
+  // Refresh category/group datalists from cache
+  function refreshCategoryDatalists(){
+    var catDl = D('category-options'), grpDl = D('group-options');
+    if (!catDl || !grpDl) return;
+    catDl.innerHTML = catCache.categories.map(function(c){ return '<option value="' + esc(c) + '">'; }).join('');
+    grpDl.innerHTML = catCache.groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join('');
+  }
+  document.addEventListener('stockUpdated', refreshCategoryDatalists);
+  document.addEventListener('stockUpdated', refreshCategoryFilters);
+
+  /* ================================================================
      INITIAL TAB FROM URL
      ================================================================ */
   (function initTabFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','count','batch','bins','labels','sync'];
+    var validTabs = ['stock','wizard','count','batch','bins','locations','labels','sync'];
     if (!validTabs.includes(tab)) tab = 'stock';
     showTab(tab);
   })();
@@ -3748,12 +4245,17 @@ PWA SERVICE WORKER REGISTRATION
     }
     
     tbody.innerHTML = filtered.map(function(doc){
-      return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">'
+      var safeId = doc.id.replace(/[^a-zA-Z0-9_]/g,'_');
+      return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors" id="bs-row-' + esc(safeId) + '">'
         + '<td class="px-3 py-2 font-mono font-bold text-indigo-700 dark:text-indigo-400">' + esc(doc.sku) + '</td>'
         + '<td class="px-3 py-2 font-medium">' + esc(doc.name) + '</td>'
         + '<td class="px-3 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right">' + doc.quantity.toLocaleString() + '</td>'
         + '<td class="px-3 py-2 text-center">'
-        + '<button onclick="deleteAssignment(\'' + doc.id + '\'); D(\'btn-bs-search\').click();" class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/40 text-red-600 hover:bg-red-200 transition font-bold text-[10px]">Delete</button>'
+        + '<div class="flex items-center gap-1.5 justify-center flex-wrap">'
+        + '<input id="bs-qty-' + safeId + '" type="number" min="0" value="' + doc.quantity + '" class="w-20 px-2 py-1.5 mono rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-bold text-center focus:ring-1 focus:ring-emerald-500 outline-none" />'
+        + '<button onclick="bsVerify(\'' + doc.id + '\',' + doc.quantity + ',\'' + doc.sku.replace(/'/g,"\\'") + '\',\'' + (doc.name||'').replace(/'/g,"\\'") + '\');" class="px-2.5 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 transition font-bold text-[10px]">✓</button>'
+        + '<button onclick="deleteAssignment(\'' + doc.id + '\'); D(\'btn-bs-search\').click();" class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/40 text-red-600 hover:bg-red-200 transition font-bold text-[10px]">✕</button>'
+        + '</div>'
         + '</td>'
         + '</tr>';
     }).join('');
