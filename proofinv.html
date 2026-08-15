@@ -1375,13 +1375,14 @@
       return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     } catch(e){ return ''; }
   };
-  var logMovement = function(type, sku, name, qtyDelta, fromLoc, toLoc, note){
+  var logMovement = function(type, sku, name, qtyDelta, fromLoc, toLoc, note, workerName){
     try {
       db.collection('movements').add({
         type: type, sku: sku, name: name || '',
         qty_delta: qtyDelta || 0,
         from_loc: fromLoc || '', to_loc: toLoc || '',
         note: note || '',
+        worker_name: workerName || '',
         user_uid: auth.currentUser ? auth.currentUser.uid : 'anon',
         user_email: auth.currentUser ? (auth.currentUser.email || '') : '',
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -3408,7 +3409,7 @@
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
-        logMovement('verify', r.sku, r.name, newQty - q, '', formatLocationShort(r.room, r.aisle, r.bay, r.bin), workerName ? 'count by ' + workerName : '');
+        logMovement('verify', r.sku, r.name, newQty - q, '', formatLocationShort(r.room, r.aisle, r.bay, r.bin), '', workerName);
       });
     }).then(function(){
       cvBins[idx].qty = newQty;
@@ -4492,6 +4493,7 @@
           id: doc.id, type: d.type || '', sku: d.sku || '', name: d.name || '',
           qty_delta: Number(d.qty_delta) || 0,
           from_loc: d.from_loc || '', to_loc: d.to_loc || '',
+          worker_name: d.worker_name || '',
           user_email: d.user_email || d.user_uid || '',
           timestamp: d.timestamp || null
         });
@@ -4509,7 +4511,7 @@
           id: doc.id, sku: d.sku || '', bin: d.bin || '',
           expected_qty: Number(d.expected_qty) || 0, actual_qty: Number(d.actual_qty) || 0,
           variance: Number(d.variance) || 0,
-          worker_uid: d.worker_uid || '', timestamp: d.timestamp || null
+          worker_uid: d.worker_uid || '', worker_name: d.worker_name || '', timestamp: d.timestamp || null
         });
       });
       renderDiscrepancies();
@@ -4534,7 +4536,7 @@
     if (typeFilter) rows = rows.filter(function(m){ return m.type === typeFilter; });
     if (filter) {
       rows = rows.filter(function(m){
-        return (m.sku + ' ' + m.name + ' ' + m.from_loc + ' ' + m.to_loc + ' ' + m.user_email).toLowerCase().indexOf(filter) >= 0;
+        return (m.sku + ' ' + m.name + ' ' + m.from_loc + ' ' + m.to_loc + ' ' + m.user_email + ' ' + m.worker_name).toLowerCase().indexOf(filter) >= 0;
       });
     }
     if (!rows.length) {
@@ -4544,6 +4546,7 @@
     tbody.innerHTML = rows.map(function(m){
       var badge = MOV_COLORS[m.type] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
       var qtyColor = m.qty_delta > 0 ? 'text-emerald-600' : (m.qty_delta < 0 ? 'text-red-500' : 'text-slate-400');
+      var userLabel = m.worker_name ? ('👷 ' + m.worker_name) : m.user_email;
       return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">'
         + '<td class="px-3 py-1.5 text-slate-400 whitespace-nowrap">' + fmtTs(m.timestamp) + '</td>'
         + '<td class="px-3 py-1.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ' + badge + '">' + esc(m.type) + '</span></td>'
@@ -4552,7 +4555,7 @@
         + '<td class="px-3 py-1.5 text-right font-mono font-bold ' + qtyColor + '">' + (m.qty_delta > 0 ? '+' : '') + m.qty_delta + '</td>'
         + '<td class="px-3 py-1.5 font-mono text-slate-500">' + (m.from_loc ? esc(m.from_loc) : '—') + '</td>'
         + '<td class="px-3 py-1.5 font-mono text-slate-500">' + (m.to_loc ? esc(m.to_loc) : '—') + '</td>'
-        + '<td class="px-3 py-1.5 text-slate-400 max-w-[120px] truncate">' + esc(m.user_email) + '</td>'
+        + '<td class="px-3 py-1.5 text-slate-400 max-w-[140px] truncate">' + esc(userLabel) + '</td>'
         + '</tr>';
     }).join('');
   }
@@ -4579,7 +4582,7 @@
         + '<td class="px-3 py-1.5 text-right font-mono">' + dd.expected_qty + '</td>'
         + '<td class="px-3 py-1.5 text-right font-mono font-bold">' + dd.actual_qty + '</td>'
         + '<td class="px-3 py-1.5 text-right font-mono font-bold ' + vColor + '">' + (dd.variance > 0 ? '+' : '') + dd.variance + '</td>'
-        + '<td class="px-3 py-1.5 text-slate-400 font-mono text-[10px]">' + esc(String(dd.worker_uid).substr(0, 10)) + '</td>'
+        + '<td class="px-3 py-1.5 text-slate-400 text-[10px]">' + esc(dd.worker_name || String(dd.worker_uid).substr(0, 10)) + '</td>'
         + '</tr>';
     }).join('');
   }
@@ -4761,7 +4764,7 @@
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
-        logMovement('verify', rec.sku, rec.name, newQty - q, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), workerName ? 'stocktake by ' + workerName : 'stocktake');
+        logMovement('verify', rec.sku, rec.name, newQty - q, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), '', workerName);
       });
     }).then(function(){
       toast(rec.sku + ' @ ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + ' → ' + newQty + (workerName ? ' (by ' + workerName + ')' : ''), 'success');
