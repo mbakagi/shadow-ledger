@@ -21,6 +21,17 @@
     .tab-pane { display: none; }
     .tab-pane.active { display: block; animation: fadeIn 120ms ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* Mobile collapsible nav — tabs hide behind a hamburger on small screens */
+    #tab-nav-panel { display: none; width: 100%; }
+    #tab-nav-panel.nav-open { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px; }
+    #tab-nav-panel .tab-btn { width: 100%; text-align: left; }
+    #btn-nav-toggle { display: inline-flex; }
+    @media (min-width: 768px) {
+      #tab-nav-panel, #tab-nav-panel.nav-open { display: flex !important; flex: 1 1 0%; flex-wrap: wrap; flex-direction: row !important; width: auto !important; gap: 8px; padding: 0; }
+      #tab-nav-panel .tab-btn { width: auto !important; text-align: center; }
+      #btn-nav-toggle { display: none !important; }
+    }
     #camera-canvas { display: none; }
     .batch-row input { transition: border-color 0.15s; }
     .batch-row input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
@@ -115,9 +126,10 @@
        ────────────────────────────────────────────────────────────── -->
   <nav class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-4 flex-wrap">
     <h1 class="text-lg font-black tracking-tight text-indigo-600 dark:text-indigo-400 mono no-print">proofinv</h1>
+    <button id="btn-nav-toggle" class="ml-auto md:hidden px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-200 text-sm font-bold transition" aria-label="Toggle menu" aria-expanded="false" aria-controls="tab-nav-panel">☰ Menu</button>
 
     <!-- Tab navigation -->
-    <div class="tab-nav flex flex-1 min-w-0 flex-wrap gap-2 no-print" role="tablist" aria-label="Main views">
+    <div id="tab-nav-panel" class="no-print" role="tablist" aria-label="Main views">
       <button class="tab-btn active px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="stock" role="tab" aria-selected="true" aria-controls="pane-stock">
         📊 Live Stock
       </button>
@@ -1896,6 +1908,7 @@
      ================================================================ */
   function showTab(tabName){
     if (typeof stopScanner === 'function') stopScanner();
+    closeMobileNav();
     // Main tabs
     document.querySelectorAll('.tab-btn').forEach(function(b){
       var isActive = b.dataset.tab === tabName;
@@ -1950,10 +1963,23 @@
   }
 
   document.querySelectorAll('.tab-btn').forEach(function(b){
-    b.addEventListener('click', function(){ showTab(b.dataset.tab); });
+    b.addEventListener('click', function(){ showTab(b.dataset.tab); closeMobileNav(); });
   });
   document.querySelectorAll('.wizard-subtab-btn').forEach(function(b){
     b.addEventListener('click', function(){ showWizardSubtab(b.dataset.subtab); });
+  });
+
+  // Mobile collapsible nav
+  function closeMobileNav(){
+    var panel = D('tab-nav-panel');
+    var toggle = D('btn-nav-toggle');
+    if (panel) panel.classList.remove('nav-open');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  }
+  D('btn-nav-toggle').addEventListener('click', function(){
+    var panel = D('tab-nav-panel');
+    var isOpen = panel.classList.toggle('nav-open');
+    this.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   });
 
   /* ================================================================
