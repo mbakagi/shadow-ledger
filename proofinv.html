@@ -1642,94 +1642,44 @@
     tmp.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
     document.body.appendChild(tmp);
 
-    // Render QR to hidden temp canvas using qrcodejs for encoding
-    new QRCode(tmp, {
-      text: text,
-      width: size, height: size,
-      colorDark: '#000000', colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.H
-    });
-
-    return new Promise(function(resolve) {
-      var tries = 0;
-      function poll() {
-        tries++;
-        var canvas = tmp.querySelector('canvas');
-        if (canvas && canvas.width > 0) {
-          var svg = buildSvgFromCanvas(canvas, size, badgeText);
-          document.body.removeChild(tmp);
-          resolve(svg);
-        } else if (tries < 30) {
-          setTimeout(poll, 16);
-        } else {
-          document.body.removeChild(tmp);
-          resolve(null);
-        }
+    var svg = null;
+    try {
+      var qr = new QRCode(tmp, {
+        text: text,
+        width: size, height: size,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+      var model = qr._oQRCode;
+      if (model && model.moduleCount && model.modules) {
+        svg = buildSvgFromModel(model, size);
       }
-      setTimeout(poll, 20);
-    });
+    } catch(e) {
+      console.error('QR generation error:', e);
+    }
+    document.body.removeChild(tmp);
+    return Promise.resolve(svg);
   }
 
-  function buildSvgFromCanvas(canvas, size, badgeText) {
-    var imgData = canvas.getContext('2d').getImageData(0, 0, size, size);
-    var pixels = imgData.data;
-    var stride = size * 4;
-
-    // Find QR module count by scanning for quiet zone boundary
-    var moduleCount = 21;
-    var quietRows = 0;
-    for (var y = 0; y < size; y++) {
-      var white = true;
-      for (var x = 0; x < size; x++) {
-        if (pixels[(y * stride + x * 4)] < 128) { white = false; break; }
-      }
-      if (!white) { quietRows = y; break; }
-    }
-    if (quietRows > 2) {
-      var quietCols = 0;
-      for (var xc = 0; xc < size; xc++) {
-        var wc = true;
-        for (var yc = 0; yc < size; yc++) {
-          if (pixels[(yc * stride + xc * 4)] < 128) { wc = false; break; }
-        }
-        if (!wc) { quietCols = xc; break; }
-      }
-      if (quietCols > 2 && quietRows > 2) {
-        var modSize = quietRows;
-        moduleCount = Math.round((size - modSize * 2) / modSize);
-      }
-    }
-
-    var cell = size / moduleCount;
+  function buildSvgFromModel(model, size) {
+    var n = model.moduleCount;
+    var cell = size / n;
     var rects = [];
-    for (var r = 0; r < moduleCount; r++) {
-      for (var c = 0; c < moduleCount; c++) {
-        var cx = Math.floor((c + 0.5) * cell);
-        var cy = Math.floor((r + 0.5) * cell);
-        var idx = cy * stride + cx * 4;
-        if (pixels[idx] < 128) {
-          rects.push('<rect x="' + (c * cell).toFixed(2) + '" y="' + (r * cell).toFixed(2) + '" width="' + cell.toFixed(2) + '" height="' + cell.toFixed(2) + '" shape-rendering="crispEdges"/>');
+    for (var r = 0; r < n; r++) {
+      for (var c = 0; c < n; c++) {
+        var dark = (typeof model.isDark === 'function')
+          ? model.isDark(r, c)
+          : !!(model.modules[r] && model.modules[r][c]);
+        if (dark) {
+          rects.push('<rect x="' + (c * cell).toFixed(2) + '" y="' + (r * cell).toFixed(2) + '" width="' + cell.toFixed(2) + '" height="' + cell.toFixed(2) + '" fill="#000000" shape-rendering="crispEdges"/>');
         }
       }
     }
-
-    var badgeHtml = '';
-    if (badgeText) {
-      var bw = size * 0.72, bh = size * 0.2;
-      var bx = (size - bw) / 2, by = (size - bh) / 2;
-      var fs = Math.max(9, Math.round(bh * 0.5));
-      badgeHtml = '<rect x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="4" fill="#fff" stroke="#4f46e5" stroke-width="1.5"/>'
-        + '<text x="' + (size / 2).toFixed(1) + '" y="' + (size / 2).toFixed(1) + '" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-weight="bold" font-size="' + fs + '" fill="#4f46e5">' + xmlSafe(badgeText) + '</text>';
-    }
-
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size + '" width="100%" height="100%" shape-rendering="crispEdges">'
       + '<rect width="' + size + '" height="' + size + '" fill="#fff"/>'
       + rects.join('')
-      + badgeHtml
       + '</svg>';
   }
-
-  function xmlSafe(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function readQrBadgeText(r, a, b, bn) {
     var cr = cleanLocVal(r), ca = cleanLocVal(a), cb = cleanLocVal(b), cbn = cleanLocVal(bn);
