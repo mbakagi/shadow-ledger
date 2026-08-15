@@ -733,6 +733,22 @@
       </div>
     </div>
 
+    <!-- Workers roster: register counters, assign zones, print their sheet -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h3 class="font-bold text-sm">👷 Counters / Workers</h3>
+        <button id="st-workers-toggle" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">Hide</button>
+      </div>
+      <div id="st-workers-body">
+        <p class="text-xs text-slate-500">Register your counting team, then pick a worker to auto-fill their name and print a count sheet assigned to them.</p>
+        <div class="flex flex-wrap items-center gap-2 mt-2">
+          <input id="st-add-worker" type="text" placeholder="Add worker name…" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-48 focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <button id="st-add-worker-btn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">+ Add Worker</button>
+        </div>
+        <div id="st-workers-list" class="flex flex-wrap gap-2 mt-3"></div>
+      </div>
+    </div>
+
     <!-- Count sheet list (grouped by location) -->
     <div id="st-sheet" class="space-y-4"></div>
     <div id="st-empty" class="hidden text-center py-8 text-slate-400 dark:text-slate-500">
@@ -4781,11 +4797,87 @@
     window.__stDebounce = setTimeout(renderStocktake, 300);
   });
 
-  D('st-print').addEventListener('click', function(){
+  // ── Workers roster: register, assign, print per-worker sheet ──
+  var stWorkers = [];
+  try { stWorkers = JSON.parse(localStorage.getItem('stWorkers') || '[]'); } catch(e){ stWorkers = []; }
+
+  function saveWorkers(){
+    try { localStorage.setItem('stWorkers', JSON.stringify(stWorkers)); } catch(e){}
+  }
+  function renderWorkersList(){
+    var list = D('st-workers-list');
+    if (!list) return;
+    if (!stWorkers.length) {
+      list.innerHTML = '<span class="text-xs text-slate-400 italic">No workers yet. Add your team above.</span>';
+      return;
+    }
+    list.innerHTML = stWorkers.map(function(w, idx){
+      return '<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 text-sm font-semibold text-indigo-700 dark:text-indigo-300">'
+        + '<button type="button" class="hover:underline font-semibold" title="Use as counter" onclick="stAssignWorker(' + idx + ')">' + esc(w) + '</button>'
+        + '<button type="button" class="ml-1 text-indigo-400 hover:text-red-500 font-bold leading-none" title="Print sheet for this worker" onclick="stPrintWorkerSheet(' + idx + ')">🖨</button>'
+        + '<button type="button" class="text-indigo-400 hover:text-red-500 font-bold leading-none" title="Remove" onclick="stRemoveWorker(' + idx + ')">✕</button>'
+        + '</span>';
+    }).join('');
+  }
+  window.stAssignWorker = function(idx){
+    var w = stWorkers[idx];
+    if (!w) return;
+    D('st-worker').value = w;
+    try { localStorage.setItem('stWorkerName', w); } catch(e){}
+    toast('Counter set to ' + w, 'success');
+    renderStocktake();
+  };
+  window.stRemoveWorker = function(idx){
+    stWorkers.splice(idx, 1);
+    saveWorkers();
+    renderWorkersList();
+    refreshWorkerOptions();
+  };
+  window.stPrintWorkerSheet = function(idx){
+    var w = stWorkers[idx];
+    if (!w) return;
+    // Assign this worker, then print the count sheet (respects current zone/depot filters)
+    D('st-worker').value = w;
+    try { localStorage.setItem('stWorkerName', w); } catch(e){}
+    printCountSheet(w);
+  };
+  D('st-add-worker-btn').addEventListener('click', function(){
+    var name = (D('st-add-worker').value || '').trim();
+    if (!name) { toast('Enter a worker name', 'error'); return; }
+    if (stWorkers.indexOf(name) >= 0) { toast('Already added', 'info'); return; }
+    stWorkers.push(name);
+    stWorkers.sort();
+    saveWorkers();
+    D('st-add-worker').value = '';
+    renderWorkersList();
+    refreshWorkerOptions();
+    toast('Worker added: ' + name, 'success');
+  });
+  D('st-add-worker').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); D('st-add-worker-btn').click(); }
+  });
+  D('st-workers-toggle').addEventListener('click', function(){
+    var body = D('st-workers-body');
+    var hidden = body.classList.toggle('hidden');
+    this.textContent = hidden ? 'Show' : 'Hide';
+  });
+
+  function refreshWorkerOptions(){
+    var dl = D('worker-options');
+    if (!dl) return;
+    var names = new Set(stWorkers);
+    rawInventoryDocs.forEach(function(d){ if (d.verified_by_name) names.add(d.verified_by_name); });
+    dl.innerHTML = Array.from(names).sort().map(function(w){ return '<option value="' + esc(w) + '">'; }).join('');
+  }
+  document.addEventListener('stockUpdated', refreshWorkerOptions);
+  renderWorkersList();
+  refreshWorkerOptions();
+
+  function printCountSheet(workerNameOverride){
     var room = S(D('st-room').value);
     var aisle = S(D('st-aisle').value);
     var depot = D('st-depot').value;
-    var workerName = (D('st-worker').value || '').trim();
+    var workerName = workerNameOverride !== undefined ? workerNameOverride : (D('st-worker').value || '').trim();
     var groupItems = D('st-group-items').checked;
     var blind = D('st-blind').checked;
     var showLocation = D('st-show-location').checked;
@@ -4821,7 +4913,7 @@
 
     var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
     var html = '<h1>Stocktake Count Sheet' + (depot ? ' — ' + depotLabels[depot] : '') + (room ? ' · Room ' + esc(room) : '') + (aisle ? ' / Aisle ' + esc(aisle) : '') + (groupItems ? ' · grouped by item family' : '') + '</h1>'
-      + '<p class="print-date">Generated ' + new Date().toLocaleString() + ' · Counted by: ' + (workerName ? esc(workerName) : '______________________') + '</p>'
+      + '<p class="print-date">Generated ' + new Date().toLocaleString() + (workerName ? ' · <b>Assigned to: ' + esc(workerName) + '</b>' : ' · Counted by: ______________________') + '</p>'
       + '<table id="dashboard-table"><thead><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>'
       + rows.map(function(d){
           var cells = [];
@@ -4832,8 +4924,10 @@
           return '<tr>' + cells.join('') + '</tr>';
         }).join('')
       + '</tbody></table>';
-    printHtml(html, 'Stocktake Count Sheet');
-  });
+    printHtml(html, 'Stocktake Count Sheet' + (workerName ? ' — ' + workerName : ''));
+  }
+
+  D('st-print').addEventListener('click', function(){ printCountSheet(); });
 
   document.addEventListener('stockUpdated', function(){
     if (document.getElementById('pane-stocktake').classList.contains('active')) renderStocktake();
