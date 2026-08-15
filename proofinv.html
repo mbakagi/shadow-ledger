@@ -151,6 +151,9 @@
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="locations" role="tab" aria-selected="false" aria-controls="pane-locations">
         📍 Locations
       </button>
+      <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="categories" role="tab" aria-selected="false" aria-controls="pane-categories">
+        🔖 Categories
+      </button>
       <button class="tab-btn px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-bold transition" data-tab="labels" role="tab" aria-selected="false" aria-controls="pane-labels">
         🏷 Labels
       </button>
@@ -932,6 +935,61 @@
         <input id="loc-filter" type="text" placeholder="Filter locations…" class="mono px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 w-full sm:w-64 focus:ring-2 focus:ring-indigo-500 outline-none" />
       </div>
       <div id="loc-list" class="space-y-2 max-h-[55vh] overflow-y-auto scrollbar-thin"></div>
+    </div>
+  </section>
+
+  <!-- Pane: Categories & Brands Management -->
+  <section id="pane-categories" class="tab-pane hidden p-4 max-w-6xl mx-auto space-y-4" role="tabpanel" aria-labelledby="tab-categories">
+    <h2 class="font-black text-sm uppercase tracking-wider text-slate-500">Categories & Brands</h2>
+    <p class="text-xs text-slate-500">Define your own categories and brands, then assign existing items to them. Assignments write directly to every bin record of that item.</p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Categories -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+        <h3 class="font-bold text-sm">📂 Categories</h3>
+        <div class="flex gap-2">
+          <input id="cat-new" type="text" list="cat-options" placeholder="Add category (e.g. Détection Incendie)" class="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <datalist id="cat-options"></datalist>
+          <button id="btn-cat-add" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">+ Add</button>
+        </div>
+        <div id="cat-list" class="space-y-1.5 max-h-[50vh] overflow-y-auto scrollbar-thin"></div>
+      </div>
+
+      <!-- Brands -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+        <h3 class="font-bold text-sm">🏷 Brands</h3>
+        <div class="flex gap-2">
+          <input id="brand-new" type="text" list="brand-options" placeholder="Add brand (e.g. Hochiki)" class="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <datalist id="brand-options"></datalist>
+          <button id="btn-brand-add" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">+ Add</button>
+        </div>
+        <div id="brand-list" class="space-y-1.5 max-h-[50vh] overflow-y-auto scrollbar-thin"></div>
+      </div>
+    </div>
+
+    <!-- Assign items -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+      <h3 class="font-bold text-sm">🔗 Assign Items to a Category / Brand</h3>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Category</label>
+          <select id="asn-category" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Brand</label>
+          <select id="asn-brand" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Items (type SKU, Enter to add)</label>
+          <input id="asn-sku" type="text" placeholder="Type SKU and press Enter to add to list…" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+      </div>
+      <div id="asn-list" class="flex flex-wrap gap-2 min-h-[40px]"></div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="btn-asn-apply" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">Assign to selected items</button>
+        <button id="btn-asn-clear" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-bold transition">Clear</button>
+        <span id="asn-status" class="text-xs text-slate-400"></span>
+      </div>
     </div>
   </section>
 
@@ -2053,7 +2111,7 @@
   (function routeFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','count','stocktake','batch','bins','locations','labels','history','sync'];
+    var validTabs = ['stock','wizard','count','stocktake','batch','bins','locations','categories','labels','history','sync'];
     if (!validTabs.includes(tab)) tab = 'stock';
 
     // Pre-fill wizard fields from URL
@@ -2107,6 +2165,7 @@
     if (tabName === 'wizard') applyDeepLinkWizard();
     if (tabName === 'bins') applyDeepLinkBins();
     if (tabName === 'locations' && !window.__locationsBuilt) { window.__locationsBuilt = true; startLocationsSync(); }
+    if (tabName === 'categories' && !window.__categoriesBuilt) { window.__categoriesBuilt = true; startTaxonomySync(); }
     if (tabName === 'history' && !window.__historyBuilt) { window.__historyBuilt = true; startHistorySync(); }
     if (tabName === 'stocktake' && !window.__stocktakeBuilt) { window.__stocktakeBuilt = true; renderStocktake(); }
     if (tabName === 'labels' && !window.__labelsBuilt) buildLabelsTab();
@@ -2284,6 +2343,7 @@
       var cat = (d.category || '').trim();
       var grp = (d.group || '').trim();
       var desc = (d.description || '').trim();
+      var brand = (d.brand || '').trim();
       rawInventoryDocs.push({
         id: doc.id,
         sku: s,
@@ -2295,6 +2355,7 @@
         quantity: qty,
         category: cat,
         group: grp,
+        brand: brand,
         description: desc,
         depot: d.depot || '',
         last_verified_at: d.last_verified_at || null,
@@ -2303,10 +2364,11 @@
       });
 
       if (!skuMap.has(s)) {
-        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', category:cat, group:grp, description:desc, depots:{}, total:0, bins:[], docCount:0 });
+        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', category:cat, group:grp, brand:brand, description:desc, depots:{}, total:0, bins:[], docCount:0 });
       } else if (!skuMap.get(s).category && cat) {
         skuMap.get(s).category = cat;
         skuMap.get(s).group = grp;
+        skuMap.get(s).brand = brand;
         skuMap.get(s).description = desc;
       }
       var row = skuMap.get(s);
@@ -2331,7 +2393,7 @@
             return formatLocationShort(x.room, x.aisle, x.bay, x.bin) + ' (Qty:' + x.qty + ')';
           }).join(' | ')
         : '—';
-      stockItems.push({ sku:v.sku, name:v.name, category:v.category||'', group:v.group||'', description:v.description||'', depots:v.depots||{}, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount, bins: unique });
+      stockItems.push({ sku:v.sku, name:v.name, category:v.category||'', group:v.group||'', brand:v.brand||'', description:v.description||'', depots:v.depots||{}, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount, bins: unique });
     });
     stockItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
     window.__stockRendered = true;
@@ -4566,6 +4628,174 @@
   document.addEventListener('stockUpdated', refreshCategoryFilters);
 
   /* ================================================================
+     CATEGORIES & BRANDS TAB — taxonomy management + item assignment
+     ================================================================ */
+  var taxUnsub = null;
+  var taxonomy = [];        // [{ id, type:'category'|'brand', name }]
+  var asnItems = [];        // SKUs queued for assignment
+
+  function startTaxonomySync(){
+    if (taxUnsub) return;
+    taxUnsub = db.collection('taxonomy').onSnapshot(function(snap){
+      taxonomy = [];
+      snap.forEach(function(doc){
+        var d = doc.data();
+        taxonomy.push({ id: doc.id, type: d.type || 'category', name: (d.name || '').trim() });
+      });
+      renderTaxonomy();
+    }, function(err){
+      toast('Taxonomy sync error: ' + (err.message || err.code), 'error');
+    });
+  }
+
+  function distinctValues(field){
+    var set = new Set();
+    rawInventoryDocs.forEach(function(d){ var v = (d[field] || '').trim(); if (v) set.add(v); });
+    return Array.from(set).sort();
+  }
+
+  function renderTaxonomy(){
+    var cats = taxonomy.filter(function(t){ return t.type === 'category'; });
+    var brands = taxonomy.filter(function(t){ return t.type === 'brand'; });
+    // merge with values already on items
+    var catNames = new Set(cats.map(function(c){ return c.name; }));
+    var brandNames = new Set(brands.map(function(b){ return b.name; }));
+    distinctValues('category').forEach(function(c){ catNames.add(c); });
+    distinctValues('brand').forEach(function(b){ brandNames.add(b); });
+
+    function itemCount(field, value){
+      var skus = new Set();
+      rawInventoryDocs.forEach(function(d){ if ((d[field] || '') === value) skus.add(d.sku); });
+      return skus.size;
+    }
+
+    var catList = D('cat-list');
+    catList.innerHTML = Array.from(catNames).sort().map(function(name){
+      var count = itemCount('category', name);
+      var isManaged = cats.some(function(c){ return c.name === name; });
+      return '<div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40">'
+        + '<span class="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 truncate">' + esc(name) + '</span>'
+        + '<span class="text-xs font-mono text-slate-400">' + count + ' item(s)</span>'
+        + '<button onclick="asnQuickAssign(\'category\',\'' + esc(name.replace(/'/g,"\\'")) + '\')" class="px-2.5 py-1 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold hover:bg-indigo-200 transition">Assign</button>'
+        + (isManaged ? '<button onclick="deleteTaxonomy(\'' + esc((cats.find(function(c){return c.name===name;})||{}).id || '') + '\')" class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/40 text-red-600 text-[10px] font-bold hover:bg-red-200 transition">✕</button>' : '')
+        + '</div>';
+    }).join('');
+
+    var brandList = D('brand-list');
+    brandList.innerHTML = Array.from(brandNames).sort().map(function(name){
+      var count = itemCount('brand', name);
+      var isManaged = brands.some(function(b){ return b.name === name; });
+      return '<div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40">'
+        + '<span class="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 truncate">' + esc(name) + '</span>'
+        + '<span class="text-xs font-mono text-slate-400">' + count + ' item(s)</span>'
+        + '<button onclick="asnQuickAssign(\'brand\',\'' + esc(name.replace(/'/g,"\\'")) + '\')" class="px-2.5 py-1 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold hover:bg-indigo-200 transition">Assign</button>'
+        + (isManaged ? '<button onclick="deleteTaxonomy(\'' + esc((brands.find(function(b){return b.name===name;})||{}).id || '') + '\')" class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/40 text-red-600 text-[10px] font-bold hover:bg-red-200 transition">✕</button>' : '')
+        + '</div>';
+    }).join('');
+
+    // refresh assignment dropdowns
+    var asnCat = D('asn-category'), asnBrand = D('asn-brand');
+    if (asnCat) {
+      var catCur = asnCat.value, brandCur = asnBrand.value;
+      asnCat.innerHTML = '<option value="">— no category —</option>' + Array.from(catNames).sort().map(function(c){ return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+      asnBrand.innerHTML = '<option value="">— no brand —</option>' + Array.from(brandNames).sort().map(function(b){ return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('');
+      asnCat.value = catCur || '';
+      asnBrand.value = brandCur || '';
+    }
+    // datalists
+    D('cat-options').innerHTML = Array.from(catNames).sort().map(function(c){ return '<option value="' + esc(c) + '">'; }).join('');
+    D('brand-options').innerHTML = Array.from(brandNames).sort().map(function(b){ return '<option value="' + esc(b) + '">'; }).join('');
+  }
+
+  window.deleteTaxonomy = function(id){
+    if (!id) return;
+    if (!confirm('Delete this category/brand definition? (items keep their current value)')) return;
+    db.collection('taxonomy').doc(id).delete().catch(function(e){ toast('Delete failed: ' + e.message, 'error'); });
+  };
+
+  window.asnQuickAssign = function(field, value){
+    if (field === 'category') D('asn-category').value = value;
+    else D('asn-brand').value = value;
+    D('asn-sku').focus();
+    toast('Now add items to assign to "' + value + '"', 'info');
+  };
+
+  D('btn-cat-add').addEventListener('click', function(){
+    var name = (D('cat-new').value || '').trim();
+    if (!name) { toast('Enter a category name', 'error'); return; }
+    db.collection('taxonomy').add({ type: 'category', name: name, created_at: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(function(){ D('cat-new').value = ''; toast('Category added: ' + name, 'success'); })
+      .catch(function(e){ toast('Failed: ' + e.message, 'error'); });
+  });
+  D('cat-new').addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); D('btn-cat-add').click(); } });
+
+  D('btn-brand-add').addEventListener('click', function(){
+    var name = (D('brand-new').value || '').trim();
+    if (!name) { toast('Enter a brand name', 'error'); return; }
+    db.collection('taxonomy').add({ type: 'brand', name: name, created_at: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(function(){ D('brand-new').value = ''; toast('Brand added: ' + name, 'success'); })
+      .catch(function(e){ toast('Failed: ' + e.message, 'error'); });
+  });
+  D('brand-new').addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); D('btn-brand-add').click(); } });
+
+  // Queue SKUs for assignment
+  function renderAsnList(){
+    D('asn-list').innerHTML = asnItems.map(function(sku, idx){
+      return '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-mono">'
+        + esc(sku)
+        + '<button type="button" onclick="asnRemove(' + idx + ')" class="ml-1 text-emerald-600 hover:text-red-500 font-bold">✕</button>'
+        + '</span>';
+    }).join('');
+    D('asn-status').textContent = asnItems.length ? asnItems.length + ' item(s) queued' : '';
+  }
+  window.asnRemove = function(idx){ asnItems.splice(idx, 1); renderAsnList(); };
+  D('btn-asn-clear').addEventListener('click', function(){ asnItems = []; renderAsnList(); });
+
+  D('asn-sku').addEventListener('keydown', function(e){
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var sku = S(this.value);
+    if (!sku) return;
+    var known = skuCache.find(function(c){ return c.sku === sku; });
+    if (!known) { toast('SKU "' + sku + '" not found in inventory', 'error'); return; }
+    if (asnItems.indexOf(sku) < 0) asnItems.push(sku);
+    this.value = '';
+    renderAsnList();
+  });
+
+  D('btn-asn-apply').addEventListener('click', function(){
+    if (!asnItems.length) { toast('Add items first (type SKU + Enter)', 'error'); return; }
+    var category = D('asn-category').value;
+    var brand = D('asn-brand').value;
+    if (!category && !brand) { toast('Pick a category and/or brand to assign', 'error'); return; }
+
+    var btn = D('btn-asn-apply');
+    btn.disabled = true; btn.textContent = 'Assigning…';
+
+    // collect all inventory doc ids for these SKUs
+    var docIds = rawInventoryDocs.filter(function(d){ return asnItems.indexOf(d.sku) >= 0; }).map(function(d){ return d.id; });
+    var batch = db.batch();
+    var patch = {};
+    if (category) patch.category = category;
+    if (brand) patch.brand = brand;
+    docIds.forEach(function(id){ batch.set(db.collection('inventory').doc(id), patch, { merge: true }); });
+
+    batch.commit().then(function(){
+      toast('Assigned ' + asnItems.length + ' item(s) to ' + [category, brand].filter(Boolean).join(' / '), 'success');
+      asnItems = [];
+      renderAsnList();
+      btn.disabled = false; btn.textContent = 'Assign to selected items';
+    }).catch(function(e){
+      toast('Assign failed: ' + e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Assign to selected items';
+    });
+  });
+
+  document.addEventListener('stockUpdated', function(){
+    if (window.__categoriesBuilt) renderTaxonomy();
+  });
+
+  /* ================================================================
      HISTORY TAB — movements + discrepancy viewers (live)
      ================================================================ */
   var movementsCache = [];
@@ -5126,7 +5356,7 @@
   (function initTabFromUrl(){
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'stock';
-    var validTabs = ['stock','wizard','count','stocktake','batch','bins','locations','labels','history','sync'];
+    var validTabs = ['stock','wizard','count','stocktake','batch','bins','locations','categories','labels','history','sync'];
     if (!validTabs.includes(tab)) tab = 'stock';
     showTab(tab);
   })();
