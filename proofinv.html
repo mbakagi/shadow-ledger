@@ -207,6 +207,12 @@
       <select id="filter-group" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
         <option value="">All Groups</option>
       </select>
+      <select id="filter-depot" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        <option value="">All Depots</option>
+        <option value="MAIN">Main Building</option>
+        <option value="DEPOT1">Depot 1</option>
+        <option value="DEPOT2">Depot 2</option>
+      </select>
       <button id="btn-clear-filters" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">✕ Clear</button>
     </section>
 
@@ -220,6 +226,7 @@
             <th class="px-3 py-2.5 hidden md:table-cell">Category</th>
             <th class="px-3 py-2.5 hidden md:table-cell">Group</th>
             <th class="px-3 py-2.5">Total Qty</th>
+            <th class="px-3 py-2.5 hidden lg:table-cell">Depot(s)</th>
             <th class="px-3 py-2.5">Bin Count</th>
             <th class="px-3 py-2.5">Added to Bin</th>
           </tr>
@@ -303,7 +310,19 @@
       </div>
 
       <div class="bg-slate-50 dark:bg-slate-700/20 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Initial Location & Quantity (Optional)</div>
+        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+          <span>Initial Location & Quantity (Optional)</span>
+          <span class="text-[10px] normal-case font-medium">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              Depot:
+              <select id="add-depot" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] focus:ring-1 focus:ring-indigo-500 outline-none">
+                <option value="MAIN">Main Building</option>
+                <option value="DEPOT1">Depot 1</option>
+                <option value="DEPOT2">Depot 2</option>
+              </select>
+            </label>
+          </span>
+        </div>
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room</label><input id="add-room" type="text" placeholder="e.g. 1" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="add-aisle" type="text" placeholder="e.g. A" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
@@ -412,7 +431,17 @@
       <!-- Location Input + QR Card side-by-side -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-700/20 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
         <div class="md:col-span-2 space-y-3">
-          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Target Location</div>
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between flex-wrap gap-2">
+            <span>Target Location</span>
+            <label class="flex items-center gap-1.5 text-[11px] normal-case font-semibold text-slate-500 cursor-pointer">
+              Depot:
+              <select id="pa-depot" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] focus:ring-1 focus:ring-indigo-500 outline-none">
+                <option value="MAIN">Main Building</option>
+                <option value="DEPOT1">Depot 1</option>
+                <option value="DEPOT2">Depot 2</option>
+              </select>
+            </label>
+          </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room (req)</label><input id="pa-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
             <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="pa-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
@@ -587,10 +616,14 @@
     <p class="text-xs text-slate-500">Look up a SKU, see every bin where it's stored with recorded quantity, verify each bin, log discrepancies.</p>
 
     <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div class="md:col-span-2">
           <label class="block text-xs font-semibold text-slate-500 mb-1">SKU</label>
           <input id="cv-sku" type="text" placeholder="e.g. FB-M8-50" class="mono w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Counter (optional)</label>
+          <input id="cv-worker" type="text" list="worker-options" placeholder="Who is counting" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
         </div>
         <div class="flex items-end">
           <button id="btn-cv-search" class="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Search Bins</button>
@@ -666,14 +699,37 @@
       <div class="flex flex-wrap items-center gap-2">
         <input id="st-room" type="text" placeholder="Room filter (zone)" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-40 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
         <input id="st-aisle" type="text" placeholder="Aisle" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-32 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
+        <select id="st-depot" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All Depots</option>
+          <option value="MAIN">Main Building</option>
+          <option value="DEPOT1">Depot 1</option>
+          <option value="DEPOT2">Depot 2</option>
+        </select>
+        <input id="st-worker" type="text" list="worker-options" placeholder="Counter (your name)" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-44 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <datalist id="worker-options"></datalist>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
         <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
           <input id="st-unverified-only" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /> Only unverified
         </label>
         <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer" title="Hide system quantities — counters can't just copy the expected number. More accurate counts.">
-          <input id="st-blind" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /> Blind count (hide expected qty)
+          <input id="st-blind" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /> Blind count (hide qty)
+        </label>
+        <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer" title="Group similar items together by name/brand for faster counting.">
+          <input id="st-group-items" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked /> Group similar items
         </label>
         <button id="st-refresh" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">Apply / Refresh</button>
         <button id="st-print" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition">Print Count Sheet</button>
+      </div>
+      <!-- Column visibility toggles -->
+      <div class="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-200 dark:border-slate-700">
+        <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Show columns:</span>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-location" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Location</label>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-sku" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> SKU</label>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-name" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Item Name</label>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-qty" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> System Qty</label>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-verifier" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Verifier</label>
+        <span id="st-summary-hint" class="ml-auto text-[10px] text-slate-400"></span>
       </div>
     </div>
 
@@ -1316,6 +1372,22 @@
       });
     } catch(e) { console.warn('logMovement failed:', e); }
   };
+
+  // Detect a "brand family" key from a name+sku for affinity grouping.
+  // Extracts the leading uppercase token (brand/model prefix) or SKU prefix.
+  var smartBrand = function(text){
+    if (!text) return 'OTHER';
+    var t = String(text).toUpperCase().trim();
+    // 1) Brand/model prefix — leading letters before a digit or dash
+    var m = t.match(/^([A-Z]{2,6})[\s\-\/]?/);
+    if (m && m[1].length >= 2) return m[1];
+    // 2) SKU prefix (e.g. "FB-M8-50" → "FB")
+    var m2 = t.match(/([A-Z]{2,5})\b/);
+    if (m2) return m2[1];
+    // 3) First word (e.g. "Détection Incendie" → "DÉTECTION")
+    var word = t.split(/[\s\-\/,]+/)[0];
+    return word && word.length >= 2 ? word : 'OTHER';
+  };
   var toast = function(msg, type){
     var t = document.createElement('div');
     t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full text-white text-xs font-semibold shadow-lg animate-pulse ' +
@@ -1785,6 +1857,7 @@
   var stockFilter = '';
   var stockCategoryFilter = '';
   var stockGroupFilter = '';
+  var stockDepotFilter = '';
   var stockPage = 1;
   var stockPageSize = 25;
   var cameraStream = null;
@@ -2119,12 +2192,14 @@
         category: cat,
         group: grp,
         description: desc,
+        depot: d.depot || '',
         last_verified_at: d.last_verified_at || null,
-        verified_by: d.verified_by || ''
+        verified_by: d.verified_by || '',
+        verified_by_name: d.verified_by_name || ''
       });
 
       if (!skuMap.has(s)) {
-        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', category:cat, group:grp, description:desc, total:0, bins:[], docCount:0 });
+        skuMap.set(s, { sku:s, name: d.item_name || d.name || 'Unknown', category:cat, group:grp, description:desc, depots:{}, total:0, bins:[], docCount:0 });
       } else if (!skuMap.get(s).category && cat) {
         skuMap.get(s).category = cat;
         skuMap.get(s).group = grp;
@@ -2133,6 +2208,8 @@
       var row = skuMap.get(s);
       row.docCount++;
       row.total += qty;
+      var dv = d.depot || (r === 'NONE' ? '' : 'MAIN');
+      if (dv) row.depots[dv] = (row.depots[dv] || 0) + qty;
       if (r || a || ba || bn) row.bins.push({ room:r, aisle:a, bay:ba, bin:bn, qty:qty });
     });
 
@@ -2150,7 +2227,7 @@
             return formatLocationShort(x.room, x.aisle, x.bay, x.bin) + ' (Qty:' + x.qty + ')';
           }).join(' | ')
         : '—';
-      stockItems.push({ sku:v.sku, name:v.name, category:v.category||'', group:v.group||'', description:v.description||'', total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount, bins: unique });
+      stockItems.push({ sku:v.sku, name:v.name, category:v.category||'', group:v.group||'', description:v.description||'', depots:v.depots||{}, total:v.total, binCount:unique.length, binsAdded:addedToBin, docCount:v.docCount, bins: unique });
     });
     stockItems.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
     window.__stockRendered = true;
@@ -2175,6 +2252,10 @@
     }
     if (stockCategoryFilter) filtered = filtered.filter(function(i){ return i.category === stockCategoryFilter; });
     if (stockGroupFilter) filtered = filtered.filter(function(i){ return i.group === stockGroupFilter; });
+    if (stockDepotFilter) filtered = filtered.filter(function(i){
+      // an SKU is in a depot if any of its bin docs has that depot
+      return rawInventoryDocs.some(function(d){ return d.sku === i.sku && (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) === stockDepotFilter; });
+    });
 
     var tbody = D('table-body');
     var empty = D('empty-state');
@@ -2182,12 +2263,15 @@
     else { empty.classList.add('hidden'); }
 
     tbody.innerHTML = filtered.map(function(i){
+      var depotLabels = { MAIN: 'Main Bldg', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
+      var depotStr = Object.keys(i.depots || {}).map(function(k){ return (depotLabels[k] || k) + ':' + i.depots[k]; }).join(' · ') || '—';
       return '<tr class="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">'
         + '<td class="px-3 py-2 font-mono font-semibold text-indigo-700 dark:text-indigo-400 text-xs whitespace-nowrap"><a href="#" class="hover:underline" onclick="openItemDetail(\'' + esc(i.sku.replace(/'/g,"\\'")) + '\'); return false;">' + esc(i.sku) + '</a></td>'
         + '<td class="px-3 py-2 font-medium">' + esc(i.name) + '</td>'
         + '<td class="px-3 py-2 hidden md:table-cell text-xs">' + (i.category ? '<span class="inline-block px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-semibold">' + esc(i.category) + '</span>' : '—') + '</td>'
         + '<td class="px-3 py-2 hidden md:table-cell text-xs text-slate-600 dark:text-slate-300">' + (i.group ? esc(i.group) : '—') + '</td>'
         + '<td class="px-3 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right">' + i.total.toLocaleString() + '</td>'
+        + '<td class="px-3 py-2 hidden lg:table-cell text-[10px] font-mono text-slate-500 whitespace-nowrap">' + esc(depotStr) + '</td>'
         + '<td class="px-3 py-2 font-mono text-slate-500 text-center">' + i.binCount + '</td>'
         + '<td class="px-3 py-2 font-mono text-[11px] leading-tight text-slate-600 dark:text-slate-300 max-w-[420px] whitespace-normal break-words">' + esc(i.binsAdded) + '</td>'
         + '</tr>';
@@ -2217,13 +2301,20 @@
     renderStock();
   });
 
+  D('filter-depot').addEventListener('change', function(){
+    stockDepotFilter = D('filter-depot').value;
+    renderStock();
+  });
+
   D('btn-clear-filters').addEventListener('click', function(){
     stockFilter = '';
     stockCategoryFilter = '';
     stockGroupFilter = '';
+    stockDepotFilter = '';
     D('search-input').value = '';
     D('filter-category').value = '';
     D('filter-group').value = '';
+    D('filter-depot').value = '';
     renderStock();
   });
 
@@ -2785,6 +2876,7 @@
     var category = (D('add-category').value || '').trim();
     var group = (D('add-group').value || '').trim();
     var description = (D('add-description').value || '').trim();
+    var depot = D('add-depot').value || 'MAIN';
     var room = S(D('add-room').value);
     var aisle = S(D('add-aisle').value);
     var bay = S(D('add-bay').value);
@@ -2815,6 +2907,7 @@
           category: category,
           group: group,
           description: description,
+          depot: depot,
           room: r,
           aisle: a,
           bay: ba,
@@ -2825,7 +2918,7 @@
       });
     }).then(function(){
       toast('Item registered successfully: ' + sku, 'success');
-      logMovement('add', sku, name, qty, '', (r !== 'NONE') ? formatLocationShort(r, a, ba, bn) : '');
+      logMovement('add', sku, name, qty, '', (r !== 'NONE') ? formatLocationShort(r, a, ba, bn) : '', depot);
       D('add-sku').value = '';
       D('add-name').value = '';
       D('add-category').value = '';
@@ -2848,25 +2941,26 @@
   // Single putaway action
   D('btn-putaway').addEventListener('click', function(){
     var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
+    var depot = D('pa-depot').value || 'MAIN';
     var sku = S(D('pa-sku').value), qty = Math.max(1, parseInt(D('pa-qty').value,10)||1);
-    
+
     if (!room) { toast('Room is required','error'); return; }
     if (!sku) { toast('SKU is required','error'); return; }
-    
+
     var cached = skuCache.find(function(c){ return c.sku === sku; });
     if (!cached) {
       toast('SKU "' + sku + '" is not registered. Add it via "Add SKU / Item" tab first.', 'error');
       return;
     }
-    
+
     var r = room;
     var a = aisle || '-';
     var ba = bay || '-';
     var bn = bin || '-';
-    
+
     var docId = normId(sku, r, a, ba, bn);
     var ref = db.collection('inventory').doc(docId);
-    
+
     db.runTransaction(function(tx){
       return tx.get(ref).then(function(doc){
         var oldQty = doc.exists ? Math.max(0, Number(doc.data().quantity)||0) : 0;
@@ -2877,6 +2971,7 @@
           category: cached.category || '',
           group: cached.group || '',
           description: cached.description || '',
+          depot: depot,
           room: r,
           aisle: a,
           bay: ba,
@@ -2887,7 +2982,7 @@
       });
     }).then(function(){
       toast('Putaway OK: ' + sku + ' +' + qty + ' → ' + r + '-' + a + '-' + ba + '-' + bn, 'success');
-      logMovement('putaway', sku, cached.name, qty, '', formatLocationShort(r, a, ba, bn));
+      logMovement('putaway', sku, cached.name, qty, '', formatLocationShort(r, a, ba, bn), depot);
       D('pa-sku').value = '';
       D('pa-name').value = '';
       D('pa-qty').value = 1;
@@ -2899,6 +2994,7 @@
   // Multiple putaway action
   D('btn-putaway-all').addEventListener('click', function(){
     var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
+    var depot = D('pa-depot').value || 'MAIN';
     if (!room) { toast('Room is required','error'); return; }
     if (!paList.length) { toast('Putaway list is empty','error'); return; }
     
@@ -2924,6 +3020,7 @@
             category: item.category || '',
             group: item.group || '',
             description: item.description || '',
+            depot: depot,
             room: r,
             aisle: a,
             bay: ba,
@@ -2938,7 +3035,7 @@
     Promise.all(promises).then(function(){
       toast('Putaway successful for ' + paList.length + ' items', 'success');
       var toLoc = formatLocationShort(r, a, ba, bn);
-      paList.forEach(function(item){ logMovement('putaway', item.sku, item.name, item.qty, '', toLoc); });
+      paList.forEach(function(item){ logMovement('putaway', item.sku, item.name, item.qty, '', toLoc, depot); });
       paList = [];
       renderPaListTable();
       btn.disabled = false;
@@ -3206,6 +3303,9 @@
             name: data.item_name || data.name || '',
             qty: Math.max(0, Number(data.quantity) || 0),
             sku: data.sku || sku,
+            depot: data.depot || '',
+            verified_at: data.last_verified_at || null,
+            verified_by_name: data.verified_by_name || '',
             counted: null
           });
         });
@@ -3244,6 +3344,7 @@
     bins.innerHTML = cvBins.map(function(r, idx){
       var loc = formatLocationShort(r.room, r.aisle, r.bay, r.bin);
       var safeId = r.id.replace(/[^a-zA-Z0-9_]/g,'_');
+      var vInfo = r.verified_at ? '<span class="text-[10px] font-bold text-emerald-600 whitespace-nowrap">✓ ' + (r.verified_by_name ? esc(r.verified_by_name) + ' · ' : '') + fmtTs(r.verified_at) + '</span>' : '';
       return '<div class="flex items-center gap-2 flex-wrap bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200 dark:border-slate-600">'
         + '<span class="mono text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[130px]">' + loc + '</span>'
         + '<span class="text-xs text-slate-400">Qty:</span>'
@@ -3251,7 +3352,7 @@
         + '<span class="text-xs text-slate-400">→</span>'
         + '<input id="cv-' + safeId + '" type="number" min="0" value="' + r.qty + '" class="w-20 px-2 py-1.5 mono rounded-lg border border-slate-400 dark:border-slate-500 bg-white dark:bg-black text-black dark:text-white text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none" />'
         + '<button onclick="cvCommitOne(' + idx + ')" class="px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-200 transition">OK</button>'
-        + (r.counted !== null ? '<span class="text-xs font-bold text-emerald-600">✓ '+r.counted+'</span>' : '')
+        + (r.counted !== null ? '<span class="text-xs font-bold text-emerald-600">✓ '+r.counted+'</span>' : vInfo)
         + '</div>';
     }).join('');
   }
@@ -3270,29 +3371,38 @@
     var inp = D('cv-' + safeId);
     var newQty = Math.max(0, parseInt(inp.value, 10) || 0);
     var oldQty = r.qty;
+    var workerName = (D('cv-worker') ? D('cv-worker').value.trim() : '') || (r.verified_by_name || '');
     db.runTransaction(function(tx){
       return tx.get(db.collection('inventory').doc(r.id)).then(function(doc){
         var q = doc.exists ? Math.max(0, Number(doc.data().quantity) || 0) : 0;
-        tx.update(doc.ref, { quantity: newQty, last_verified_at: firebase.firestore.FieldValue.serverTimestamp(), verified_by: auth.currentUser ? auth.currentUser.uid : 'anon', updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+        tx.update(doc.ref, {
+          quantity: newQty,
+          last_verified_at: firebase.firestore.FieldValue.serverTimestamp(),
+          verified_by: auth.currentUser ? auth.currentUser.uid : 'anon',
+          verified_by_name: workerName || (auth.currentUser ? (auth.currentUser.email || '') : ''),
+          updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
         if (newQty !== q) {
           tx.set(db.collection('discrepancies').doc(), {
             inventory_id: r.id, sku: r.sku, name: r.name,
             expected_qty: q, actual_qty: newQty, variance: newQty - q,
-            worker_uid: auth.currentUser.uid,
+            worker_uid: auth.currentUser ? auth.currentUser.uid : 'anon',
+            worker_name: workerName || '',
             bin: formatLocationShort(r.room, r.aisle, r.bay, r.bin),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
-        logMovement('verify', r.sku, r.name, newQty - q, '', formatLocationShort(r.room, r.aisle, r.bay, r.bin));
+        logMovement('verify', r.sku, r.name, newQty - q, '', formatLocationShort(r.room, r.aisle, r.bay, r.bin), workerName ? 'count by ' + workerName : '');
       });
     }).then(function(){
       cvBins[idx].qty = newQty;
       cvBins[idx].counted = newQty;
       cvBins[idx].verified_at = Date.now();
+      cvBins[idx].verified_by_name = workerName;
       renderCvBins();
       updateCvCounted();
       var loc = formatLocationShort(r.room, r.aisle, r.bay, r.bin);
-      toast(loc + ' → ' + newQty, 'success');
+      toast(loc + ' → ' + newQty + (workerName ? ' (by ' + workerName + ')' : ''), 'success');
     }).catch(function(e){ toast('Tx failed: ' + e.message, 'error'); });
   };
 
@@ -4476,8 +4586,16 @@
   function renderStocktake(){
     var room = S(D('st-room').value);
     var aisle = S(D('st-aisle').value);
+    var depot = D('st-depot').value;
+    var workerName = (D('st-worker').value || '').trim();
     var unverifiedOnly = D('st-unverified-only').checked;
     var blind = D('st-blind').checked;
+    var groupItems = D('st-group-items').checked;
+    var showLocation = D('st-show-location').checked;
+    var showSku = D('st-show-sku').checked;
+    var showName = D('st-show-name').checked;
+    var showQty = D('st-show-qty').checked;
+    var showVerifier = D('st-show-verifier').checked;
 
     var all = rawInventoryDocs.slice();
     var verifiedCount = all.filter(isVerifiedRecently).length;
@@ -4491,62 +4609,93 @@
     var rows = all;
     if (room) rows = rows.filter(function(d){ return d.room === room; });
     if (aisle) rows = rows.filter(function(d){ return d.aisle === aisle; });
+    if (depot) rows = rows.filter(function(d){ return (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) === depot; });
     if (unverifiedOnly) rows = rows.filter(function(d){ return !isVerifiedRecently(d); });
 
-    rows = rows.sort(function(a, b){
-      return (a.room + a.aisle + a.bay + a.bin).localeCompare(b.room + b.aisle + b.bay + b.bin);
-    });
+    // Sort: either by location (walking order) or by item affinity
+    if (groupItems) {
+      rows = rows.sort(function(a, b){
+        var ba = smartBrand(a.name + ' ' + a.sku);
+        var bb = smartBrand(b.name + ' ' + b.sku);
+        if (ba !== bb) return ba.localeCompare(bb);
+        return (a.sku).localeCompare(b.sku);
+      });
+    } else {
+      rows = rows.sort(function(a, b){
+        return (a.room + a.aisle + a.bay + a.bin).localeCompare(b.room + b.aisle + b.bay + b.bin);
+      });
+    }
 
     var sheet = D('st-sheet');
     var emptyEl = D('st-empty');
     if (!rows.length) {
       sheet.innerHTML = '';
       emptyEl.classList.remove('hidden');
+      D('st-summary-hint').textContent = '';
       return;
     }
     emptyEl.classList.add('hidden');
+    D('st-summary-hint').textContent = rows.length + ' rows · ' + (workerName ? 'counter: ' + workerName : 'no counter set');
 
-    // Group by Room-Aisle-Bay-Bin (walking order)
+    // Group rows: by location (walking order) OR by brand/item-group (affinity)
     var groups = [];
     var groupMap = new Map();
-    rows.forEach(function(d){
-      var key = [d.room, d.aisle, d.bay, d.bin].join('|');
-      if (!groupMap.has(key)) {
-        var g = { key: key, room: d.room, aisle: d.aisle, bay: d.bay, bin: d.bin, docs: [] };
-        groupMap.set(key, g);
-        groups.push(g);
-      }
-      groupMap.get(key).docs.push(d);
-    });
+    if (groupItems) {
+      // Group by brand/family affinity
+      rows.forEach(function(d){
+        var brand = smartBrand(d.name + ' ' + d.sku);
+        var key = 'BRAND::' + brand;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { key: key, label: brand, isLocationGroup: false, docs: [] });
+          groups.push(groupMap.get(key));
+        }
+        groupMap.get(key).docs.push(d);
+      });
+    } else {
+      // Group by Room-Aisle-Bay-Bin (walking order)
+      rows.forEach(function(d){
+        var key = [d.room, d.aisle, d.bay, d.bin].join('|');
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { key: key, room: d.room, aisle: d.aisle, bay: d.bay, bin: d.bin, isLocationGroup: true, docs: [] });
+          groups.push(groupMap.get(key));
+        }
+        groupMap.get(key).docs.push(d);
+      });
+    }
 
     sheet.innerHTML = groups.map(function(g){
-      var gLoc = formatLocationShort(g.room, g.aisle, g.bay, g.bin);
+      var gLabel = g.isLocationGroup ? formatLocationShort(g.room, g.aisle, g.bay, g.bin) : ('🏷 ' + esc(g.label) + ' family');
       var gVerified = g.docs.every(isVerifiedRecently);
       return '<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">'
         + '<div class="flex items-center justify-between px-4 py-2.5 ' + (gVerified ? 'bg-emerald-50 dark:bg-emerald-950/20' : 'bg-slate-50 dark:bg-slate-700/40') + ' border-b border-slate-200 dark:border-slate-600">'
-        + '<span class="mono text-sm font-black text-indigo-600 dark:text-indigo-400">' + esc(gLoc) + '</span>'
+        + '<span class="mono text-sm font-black text-indigo-600 dark:text-indigo-400">' + gLabel + '</span>'
         + (gVerified ? '<span class="text-xs font-bold text-emerald-600">✓ verified</span>' : '<span class="text-xs font-semibold text-slate-400">' + g.docs.length + ' item(s)</span>')
         + '</div>'
         + '<div class="divide-y divide-slate-100 dark:divide-slate-700/60">'
         + g.docs.map(function(doc){
             var safeId = doc.id.replace(/[^a-zA-Z0-9_]/g, '_');
             var v = isVerifiedRecently(doc);
-            return '<div class="flex items-center gap-2 flex-wrap px-4 py-2 ' + (v ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : '') + '">'
-              + '<span class="mono text-xs font-bold text-indigo-700 dark:text-indigo-400 min-w-[100px]">' + esc(doc.sku) + '</span>'
-              + '<span class="text-xs text-slate-500 dark:text-slate-400 flex-1 min-w-[120px] truncate">' + esc(doc.name) + '</span>'
-              + (blind
-                  ? '<span class="text-xs text-slate-400 font-semibold">Qty: ???</span>'
-                  : '<span class="text-xs text-slate-400">System:</span><span class="mono text-xs font-bold text-slate-600 dark:text-slate-300 min-w-[36px] text-center">' + doc.quantity + '</span>')
-              + '<input id="st-in-' + safeId + '" data-stid="' + esc(doc.id) + '" data-stexp="' + doc.quantity + '" type="number" min="0" placeholder="count" class="st-count-input w-20 px-2 py-1.5 mono rounded-lg border border-slate-400 dark:border-slate-500 bg-white dark:bg-black text-black dark:text-white text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none" />'
-              + '<button onclick="stVerify(\'' + doc.id + '\')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">✓</button>'
-              + (v ? '<span class="text-[10px] font-bold text-emerald-600">✓ ' + fmtTs(doc.last_verified_at) + '</span>' : '')
-              + '</div>';
+            var cells = [];
+            if (showSku) cells.push('<span class="mono text-xs font-bold text-indigo-700 dark:text-indigo-400 ' + (showLocation ? 'min-w-[100px]' : 'min-w-[60px]') + '">' + esc(doc.sku) + '</span>');
+            if (showName) cells.push('<span class="text-xs text-slate-500 dark:text-slate-400 flex-1 min-w-[120px] truncate">' + esc(doc.name) + '</span>');
+            if (showLocation && !g.isLocationGroup) {
+              // Show the per-item location when grouped by brand
+              cells.push('<span class="mono text-[10px] text-slate-400 dark:text-slate-500 min-w-[100px]">@ ' + esc(formatLocationShort(doc.room, doc.aisle, doc.bay, doc.bin)) + '</span>');
+            }
+            if (showQty) {
+              cells.push(blind
+                ? '<span class="text-xs text-slate-400 font-semibold">Qty: ???</span>'
+                : '<span class="text-xs text-slate-400">Sys:</span><span class="mono text-xs font-bold text-slate-600 dark:text-slate-300 min-w-[36px] text-center">' + doc.quantity + '</span>');
+            }
+            cells.push('<input id="st-in-' + safeId + '" data-stid="' + esc(doc.id) + '" data-stexp="' + doc.quantity + '" data-stworker="' + esc(workerName) + '" type="number" min="0" placeholder="count" class="st-count-input w-20 px-2 py-1.5 mono rounded-lg border border-slate-400 dark:border-slate-500 bg-white dark:bg-black text-black dark:text-white text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none" />');
+            cells.push('<button onclick="stVerify(\'' + doc.id + '\')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">✓</button>');
+            if (showVerifier && v) cells.push('<span class="text-[10px] font-bold text-emerald-600 whitespace-nowrap">✓ ' + (doc.verified_by_name ? esc(doc.verified_by_name) + ' · ' : '') + fmtTs(doc.last_verified_at) + '</span>');
+            return '<div class="flex items-center gap-2 flex-wrap px-4 py-2 ' + (v ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : '') + '">' + cells.join('') + '</div>';
           }).join('')
         + '</div>'
         + '</div>';
     }).join('');
 
-    // Enter key in any count input → verify that row, focus next input
     sheet.querySelectorAll('.st-count-input').forEach(function(inp){
       inp.addEventListener('keydown', function(e){
         if (e.key !== 'Enter') return;
@@ -4566,6 +4715,8 @@
     var safeId = docId.replace(/[^a-zA-Z0-9_]/g, '_');
     var inp = document.getElementById('st-in-' + safeId);
     var expected = rec.quantity;
+    var workerName = inp ? (inp.dataset.stworker || '') : '';
+    if (!workerName) workerName = (D('st-worker').value || '').trim();
     var newQty = inp ? parseInt(inp.value, 10) : NaN;
     if (isNaN(newQty)) {
       toast('Enter a counted quantity first', 'error');
@@ -4581,6 +4732,7 @@
           quantity: newQty,
           last_verified_at: firebase.firestore.FieldValue.serverTimestamp(),
           verified_by: auth.currentUser ? auth.currentUser.uid : 'anon',
+          verified_by_name: workerName || (auth.currentUser ? (auth.currentUser.email || '') : ''),
           updated_at: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         if (newQty !== q) {
@@ -4588,20 +4740,38 @@
             inventory_id: docId, sku: rec.sku, name: rec.name,
             expected_qty: q, actual_qty: newQty, variance: newQty - q,
             worker_uid: auth.currentUser ? auth.currentUser.uid : 'anon',
+            worker_name: workerName || '',
             bin: formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
-        logMovement('verify', rec.sku, rec.name, newQty - q, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), 'stocktake');
+        logMovement('verify', rec.sku, rec.name, newQty - q, '', formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin), workerName ? 'stocktake by ' + workerName : 'stocktake');
       });
     }).then(function(){
-      toast(rec.sku + ' @ ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + ' → ' + newQty, 'success');
+      toast(rec.sku + ' @ ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + ' → ' + newQty + (workerName ? ' (by ' + workerName + ')' : ''), 'success');
     }).catch(function(e){ toast('Verify failed: ' + e.message, 'error'); });
   };
 
   D('st-refresh').addEventListener('click', renderStocktake);
   D('st-unverified-only').addEventListener('change', renderStocktake);
   D('st-blind').addEventListener('change', renderStocktake);
+  D('st-group-items').addEventListener('change', renderStocktake);
+  D('st-depot').addEventListener('change', renderStocktake);
+  ['st-show-location','st-show-sku','st-show-name','st-show-qty','st-show-verifier'].forEach(function(id){
+    D(id).addEventListener('change', renderStocktake);
+  });
+  D('st-worker').addEventListener('input', function(){
+    // remember worker name across reloads
+    try { localStorage.setItem('stWorkerName', this.value); } catch(e){}
+  });
+  try { var sw = localStorage.getItem('stWorkerName'); if (sw) D('st-worker').value = sw; } catch(e){}
+  D('st-worker').addEventListener('input', function(){
+    // build worker autocomplete from existing verified_by_name values
+    var seen = new Set();
+    rawInventoryDocs.forEach(function(d){ if (d.verified_by_name) seen.add(d.verified_by_name); });
+    var dl = D('worker-options');
+    if (dl) dl.innerHTML = Array.from(seen).sort().map(function(w){ return '<option value="' + esc(w) + '">'; }).join('');
+  });
   D('st-room').addEventListener('input', function(){
     clearTimeout(window.__stDebounce);
     window.__stDebounce = setTimeout(renderStocktake, 300);
@@ -4614,24 +4784,52 @@
   D('st-print').addEventListener('click', function(){
     var room = S(D('st-room').value);
     var aisle = S(D('st-aisle').value);
+    var depot = D('st-depot').value;
+    var workerName = (D('st-worker').value || '').trim();
+    var groupItems = D('st-group-items').checked;
+    var blind = D('st-blind').checked;
+    var showLocation = D('st-show-location').checked;
+    var showSku = D('st-show-sku').checked;
+    var showName = D('st-show-name').checked;
+    var showQty = D('st-show-qty').checked;
+
     var rows = rawInventoryDocs.filter(function(d){
       if (room && d.room !== room) return false;
       if (aisle && d.aisle !== aisle) return false;
+      if (depot && (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) !== depot) return false;
       return true;
-    }).sort(function(a, b){
-      return (a.room + a.aisle + a.bay + a.bin + a.sku).localeCompare(b.room + b.aisle + b.bay + b.bin + b.sku);
     });
+    if (groupItems) {
+      rows = rows.sort(function(a, b){
+        var ba = smartBrand(a.name + ' ' + a.sku);
+        var bb = smartBrand(b.name + ' ' + b.sku);
+        if (ba !== bb) return ba.localeCompare(bb);
+        return a.sku.localeCompare(b.sku);
+      });
+    } else {
+      rows = rows.sort(function(a, b){
+        return (a.room + a.aisle + a.bay + a.bin + a.sku).localeCompare(b.room + b.aisle + b.bay + b.bin + b.sku);
+      });
+    }
     if (!rows.length) { toast('Nothing to print', 'error'); return; }
-    var blind = D('st-blind').checked;
-    var html = '<h1>Stocktake Count Sheet' + (room ? ' — Room ' + esc(room) : '') + (aisle ? ' / Aisle ' + esc(aisle) : '') + '</h1>'
-      + '<p class="print-date">Generated ' + new Date().toLocaleString() + ' · Counted by: ______________________</p>'
-      + '<table id="dashboard-table"><thead><tr><th>Location</th><th>SKU</th><th>Item</th><th>' + (blind ? 'Counted Qty' : 'System Qty') + (blind ? '' : ' / Counted') + '</th></tr></thead><tbody>'
+
+    var headers = [];
+    if (showLocation) headers.push('Location');
+    if (showSku) headers.push('SKU');
+    if (showName) headers.push('Item');
+    headers.push(blind ? 'Counted Qty' : (showQty ? 'System / Counted' : 'Counted'));
+
+    var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
+    var html = '<h1>Stocktake Count Sheet' + (depot ? ' — ' + depotLabels[depot] : '') + (room ? ' · Room ' + esc(room) : '') + (aisle ? ' / Aisle ' + esc(aisle) : '') + (groupItems ? ' · grouped by item family' : '') + '</h1>'
+      + '<p class="print-date">Generated ' + new Date().toLocaleString() + ' · Counted by: ' + (workerName ? esc(workerName) : '______________________') + '</p>'
+      + '<table id="dashboard-table"><thead><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>'
       + rows.map(function(d){
-          return '<tr><td class="mono">' + esc(formatLocationShort(d.room, d.aisle, d.bay, d.bin)) + '</td>'
-            + '<td class="mono">' + esc(d.sku) + '</td>'
-            + '<td>' + esc(d.name) + '</td>'
-            + (blind ? '<td>______</td>' : '<td>' + d.quantity + ' / ______</td>')
-            + '</tr>';
+          var cells = [];
+          if (showLocation) cells.push('<td class="mono">' + esc(formatLocationShort(d.room, d.aisle, d.bay, d.bin)) + '</td>');
+          if (showSku) cells.push('<td class="mono">' + esc(d.sku) + '</td>');
+          if (showName) cells.push('<td>' + esc(d.name) + '</td>');
+          cells.push(blind ? '<td>______</td>' : (showQty ? '<td>' + d.quantity + ' / ______</td>' : '<td>______</td>'));
+          return '<tr>' + cells.join('') + '</tr>';
         }).join('')
       + '</tbody></table>';
     printHtml(html, 'Stocktake Count Sheet');
