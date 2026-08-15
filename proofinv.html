@@ -4724,6 +4724,7 @@
             }
             cells.push('<input id="st-in-' + safeId + '" data-stid="' + esc(doc.id) + '" data-stexp="' + doc.quantity + '" data-stworker="' + esc(workerName) + '" type="number" min="0" placeholder="count" class="st-count-input w-20 px-2 py-1.5 mono rounded-lg border border-slate-400 dark:border-slate-500 bg-white dark:bg-black text-black dark:text-white text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none" />');
             cells.push('<button onclick="stVerify(\'' + doc.id + '\')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">✓</button>');
+            if (showQty && !blind) cells.push('<button onclick="stVerifySystem(\'' + doc.id + '\')" title="Mark counted = system qty (no change)" class="px-2.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-emerald-200 dark:hover:bg-emerald-900/40 text-slate-600 dark:text-slate-300 text-[10px] font-bold transition">= SYS</button>');
             if (showVerifier && v) cells.push('<span class="text-[10px] font-bold text-emerald-600 whitespace-nowrap">✓ ' + (doc.verified_by_name ? esc(doc.verified_by_name) + ' · ' : '') + fmtTs(doc.last_verified_at) + '</span>');
             return '<div class="flex items-center gap-2 flex-wrap px-4 py-2 ' + (v ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : '') + '">' + cells.join('') + '</div>';
           }).join('')
@@ -4759,6 +4760,18 @@
       return;
     }
     newQty = Math.max(0, newQty);
+    stCommitCount(docId, rec, newQty, workerName);
+  };
+
+  // Mark as "system counted" — quick verify using the system quantity (no change)
+  window.stVerifySystem = function(docId){
+    var rec = rawInventoryDocs.find(function(d){ return d.id === docId; });
+    if (!rec) { toast('Record not found', 'error'); return; }
+    var workerName = (D('st-worker').value || '').trim();
+    stCommitCount(docId, rec, rec.quantity, workerName);
+  };
+
+  function stCommitCount(docId, rec, newQty, workerName){
     db.runTransaction(function(tx){
       return tx.get(db.collection('inventory').doc(docId)).then(function(doc){
         if (!doc.exists) return;
@@ -4785,7 +4798,7 @@
     }).then(function(){
       toast(rec.sku + ' @ ' + formatLocationShort(rec.room, rec.aisle, rec.bay, rec.bin) + ' → ' + newQty + (workerName ? ' (by ' + workerName + ')' : ''), 'success');
     }).catch(function(e){ toast('Verify failed: ' + e.message, 'error'); });
-  };
+  }
 
   D('st-refresh').addEventListener('click', renderStocktake);
   D('st-unverified-only').addEventListener('change', renderStocktake);
