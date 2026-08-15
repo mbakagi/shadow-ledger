@@ -207,8 +207,8 @@
       <select id="filter-category" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
         <option value="">All Categories</option>
       </select>
-      <select id="filter-group" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
-        <option value="">All Groups</option>
+      <select id="filter-brand" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        <option value="">All Brands</option>
       </select>
       <select id="filter-depot" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
         <option value="">All Depots</option>
@@ -227,7 +227,7 @@
             <th class="px-3 py-2.5">SKU</th>
             <th class="px-3 py-2.5">Item Name</th>
             <th class="px-3 py-2.5 hidden md:table-cell">Category</th>
-            <th class="px-3 py-2.5 hidden md:table-cell">Group</th>
+            <th class="px-3 py-2.5 hidden md:table-cell">Brand</th>
             <th class="px-3 py-2.5">Total Qty</th>
             <th class="px-3 py-2.5 hidden lg:table-cell">Depot(s)</th>
             <th class="px-3 py-2.5">Bin Count</th>
@@ -302,9 +302,8 @@
           <datalist id="category-options"></datalist>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">Group</label>
-          <input id="add-group" type="text" list="group-options" placeholder="e.g. Security Systems" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          <datalist id="group-options"></datalist>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Brand</label>
+          <input id="add-brand" type="text" list="brand-options" placeholder="e.g. Hochiki" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" />
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-500 mb-1">Description</label>
@@ -725,10 +724,8 @@
           Group by:
           <select id="st-groupby" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
             <option value="location">Location (walking order)</option>
-            <option value="category">Category (brand + type)</option>
-            <option value="family">Family (Fire / Access / CCTV…)</option>
+            <option value="category">Category</option>
             <option value="brand">Brand</option>
-            <option value="tech">Addressable / Conventional</option>
           </select>
         </label>
         <button id="st-refresh" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">Apply / Refresh</button>
@@ -1355,8 +1352,8 @@
             <input id="id-category" type="text" list="category-options" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
           </div>
           <div>
-            <label class="block text-[10px] font-semibold text-slate-400 mb-1">Group</label>
-            <input id="id-group" type="text" list="group-options" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+            <label class="block text-[10px] font-semibold text-slate-400 mb-1">Brand</label>
+            <input id="id-brand" type="text" list="brand-options" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
           </div>
         </div>
         <div>
@@ -1460,97 +1457,6 @@
     } catch(e) { console.warn('logMovement failed:', e); }
   };
 
-  // Detect a "brand family" key from a name+sku for affinity grouping.
-  // Extracts the leading uppercase token (brand/model prefix) or SKU prefix.
-  var smartBrand = function(text){
-    if (!text) return 'OTHER';
-    var t = String(text).toUpperCase().trim();
-    // 1) Brand/model prefix — leading letters before a digit or dash
-    var m = t.match(/^([A-Z]{2,6})[\s\-\/]?/);
-    if (m && m[1].length >= 2) return m[1];
-    // 2) SKU prefix (e.g. "FB-M8-50" → "FB")
-    var m2 = t.match(/([A-Z]{2,5})\b/);
-    if (m2) return m2[1];
-    // 3) First word (e.g. "Détection Incendie" → "DÉTECTION")
-    var word = t.split(/[\s\-\/,]+/)[0];
-    return word && word.length >= 2 ? word : 'OTHER';
-  };
-
-  // Fire & security product classifier: brand + technology (addressable/conventional) + type.
-  // Normalises accents/ligatures, then keyword-matches French + English catalog terms.
-  var KNOWN_BRANDS = [
-    ['Hochiki', /HOCHIKI/],
-    ['Inim', /INIM|CLOUD|SMARTLOOP|SMART LINK/],
-    ['Finsecur', /FINSEGUR|FINSECUR/],
-    ['Numens', /NUMENS|N-MARK/],
-    ['Apollo', /APOLLO/],
-    ['Morley', /MORLEY/],
-    ['Kentec', /KENTEC/],
-    ['Siemens', /SIEMENS/],
-    ['Honeywell', /HONEYWELL|NOTIFIER|GENT\b|MORLEY/],
-    ['Bosch', /BOSCH/],
-    ['Daitem', /DAITEM/],
-    ['Sick', /SICK\b/],
-    ['Hikvision', /HIKVISION/],
-    ['Dahua', /DAHUA/],
-    ['Ziton', /ZITON/],
-    ['C-Tec', /C-?TEC|CAST/],
-    ['Cooper', /COOPER/],
-    ['Eaton', /EATON/],
-    ['Aritech', /ARITECH/]
-  ];
-  var classifyItem = function(sku, name){
-    var t = (String(name || '') + ' ' + String(sku || '')).toUpperCase();
-
-    // Brand
-    var brand = '';
-    for (var i = 0; i < KNOWN_BRANDS.length; i++) {
-      if (KNOWN_BRANDS[i][1].test(t)) { brand = KNOWN_BRANDS[i][0]; break; }
-    }
-
-    // Technology: addressable vs conventional (fire detection only; ignored for other families)
-    var tech = '';
-    if (/ADDRESSABLE|ADRESSABLE|ANALOGUE|ANALOGIQUE|ANALOG\b|ADDRESSED/.test(t)) tech = 'Addressable';
-    else if (/CONVENTIONNEL|CONVENTIONNELLE|CONVENTIONAL/.test(t)) tech = 'Conventional';
-
-    // Product type + family (order matters: specific before generic, access-control before "centrale")
-    var type = '';
-    var family = 'Other';
-    var TYPES = [
-      // ── Access Control (sub-categorised) ──
-      ['Controller', 'Access Control', /CONTROLEUR|CONTROLLER|CENTRALE D'ACCES|ACCESS PANEL|ACCESS CENTRAL|PANEL D'ACCES|CONTROLADOR/],
-      ['Electric Lock', 'Access Control', /VENTOUSE|SERRURE|GACHE|MAGLOCK|MAGNETIC LOCK|VERROU ELECTRIQUE|ELECTRO-?LOCK|OUVRE-?PORTE/],
-      ['Reader', 'Access Control', /LECTEUR|READER|PROXIMITE|PROXIMITY|RFID|ANTENNE|NFC|BLUETOOTH LECTEUR/],
-      ['Biometric', 'Access Control', /EMPREINTE|FINGERPRINT|PALM|BIOMETRIE|BIOMETRIC|RECONNAISSANCE|RECOGNITION|FACE\b|IRIS|VEINE/],
-      ['Keypad', 'Access Control', /CLAVIER|KEYPAD|CODE PAD/],
-      ['Badge / Credential', 'Access Control', /BADGE|CREDENTIAL|KEYFOB|\bFOB\b|CARTE D'ACCES|PROX TAG|TRANSPONDEUR/],
-      ['Software', 'Access Control', /LOGICIEL|SOFTWARE|POINTAGE|GESTION DES VISITEURS|GESTION DES VISITES|SERVICE LIBRE|GESTION DES TRAVAILLEURS/],
-      ['Push Button', 'Access Control', /BOUTON DE SORTIE|EXIT BUTTON|PUSH BUTTON|RELEASE BUTTON|DEMANDE DE SORTIE|BIP\b/],
-      ['Accessory', 'Access Control', /ARMATURE|FLEXIBLE|ACCESSOIRE|ACCESSORY|BOITIER|COFFRET D'ACCES/],
-      // ── Fire Detection ──
-      ['Fire Panel', 'Fire', /CENTRALE|FIRE PANEL|CONTROL PANEL|TABLEAU DE SIGNALISATION|EXTINCTION|LARGAGE|SPRINKLER|BUSE|NOZZLE/],
-      ['Detector', 'Fire', /DETECTEUR|DETECTOR|SMOKE|FUMEE|OPTICAL|OPTIQUE|THERMAL|THERMIQUE|HEAT|CHALEUR|MULTISENSOR|MULTI-?SENSOR|MULTICRITERIA|CARBON|MONOXIDE|CO\b|ASPIRATION|FLAMME|FLAME|BEAM|BARRIERE/],
-      ['Call Point', 'Fire', /CALL ?POINT|CALLPOINT|DECLENCHEUR|MANUAL|MANUEL|BREAK ?GLASS|MCP\b|\bDM\b|PULL STATION|POINT D'APPEL/],
-      ['Siren / Sounder', 'Fire', /SIREN|SIRENE|SOUNDER|AVERTISSEUR|BELL|CLOCHE|FLASHER|BEACON|AVF|DIFFUSEUR|VISUAL INDICATOR|SONORE/],
-      ['Base / Socket', 'Fire', /BASE|SOCLE|SOCKET|SUPPORT/],
-      ['Module / I-O', 'Fire', /MODULE|RELAY|RELAIS|MONITOR|INTERFACE|CARTE|ZONE MODULE|ENTREE|SORTIE/],
-      // ── Surveillance ──
-      ['Camera', 'Surveillance', /CAMERA|CAMERA|CCTV|DOME|IP CAM|OBJECTIF|LENS/],
-      ['Recorder', 'Surveillance', /NVR|DVR|RECORDER|ENREGISTREUR/],
-      // ── Cabling / Network ──
-      ['Cable / Network', 'Network', /CABLE|WIRE|COAXIAL|UTP|FTP|RJ45|FIBER|FIBRE|RESEAU|PANNEAU DE BRASSAGE|SWITCH|ARMOIRE|BAIE|ONDULEUR|UPS|ROUTEUR|MODEM|CONNECTEUR|PRISE/],
-      // ── Power ──
-      ['Power / Battery', 'Power', /ALIMENTATION|POWER|PSU|BATTERY|BATTERIE|CHARGEUR|TRANSFORMATEUR|ALIM\b/],
-      // ── Gas ──
-      ['Gas Detection', 'Gas', /GAZ|GAS|ELECTROVANNE|VANNE|SONDE|CO2|OXYGENE/]
-    ];
-    for (var j = 0; j < TYPES.length; j++) {
-      if (TYPES[j][2].test(t)) { type = TYPES[j][0]; family = TYPES[j][1]; break; }
-    }
-
-    var groupLabel = (brand ? brand + ' · ' : '') + (tech ? tech + ' ' : '') + (type || 'Other / Uncategorised');
-    return { brand: brand, tech: tech, type: type || 'Other', family: family, label: groupLabel };
-  };
   var toast = function(msg, type){
     var t = document.createElement('div');
     t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 rounded-full text-white text-xs font-semibold shadow-lg animate-pulse ' +
@@ -1919,26 +1825,29 @@
 
   var skuCache = [];
   var binLocCache = { rooms: [], aisles: [], bays: [], bins: [] };
-  var catCache = { categories: [], groups: [] };
+  var catCache = { categories: [], groups: [], brands: [] };
 
   function rebuildSkuCache(){
     var seen = new Set();
     skuCache = [];
     stockItems.forEach(function(i){
-      if (!seen.has(i.sku)) { seen.add(i.sku); skuCache.push({ sku:i.sku, name:i.name, category:i.category, group:i.group, description:i.description, total:i.total, bins:i.binCount }); }
+      if (!seen.has(i.sku)) { seen.add(i.sku); skuCache.push({ sku:i.sku, name:i.name, category:i.category, group:i.group, brand:i.brand, description:i.description, total:i.total, bins:i.binCount }); }
     });
     skuCache.sort(function(a,b){ return a.sku.localeCompare(b.sku); });
   }
 
   function rebuildCategoryCache(){
-    var cs = new Set(), gs = new Set();
+    var cs = new Set(), gs = new Set(), bs = new Set();
     stockItems.forEach(function(i){
       if (i.category) cs.add(i.category);
       if (i.group) gs.add(i.group);
+      if (i.brand) bs.add(i.brand);
     });
     catCache.categories = Array.from(cs).sort();
     catCache.groups = Array.from(gs).sort();
+    catCache.brands = Array.from(bs).sort();
     refreshCategoryFilters();
+    refreshCategoryDatalists();
   }
 
   function rebuildBinLocCache(){
@@ -2019,7 +1928,7 @@
   var stockItems = [];
   var stockFilter = '';
   var stockCategoryFilter = '';
-  var stockGroupFilter = '';
+  var stockBrandFilter = '';
   var stockDepotFilter = '';
   var stockPage = 1;
   var stockPageSize = 25;
@@ -2413,12 +2322,12 @@
         return i.sku.toLowerCase().indexOf(q) >= 0
             || i.name.toLowerCase().indexOf(q) >= 0
             || (i.category||'').toLowerCase().indexOf(q) >= 0
-            || (i.group||'').toLowerCase().indexOf(q) >= 0
+            || (i.brand||'').toLowerCase().indexOf(q) >= 0
             || i.binsAdded.toLowerCase().indexOf(q) >= 0;
       });
     }
     if (stockCategoryFilter) filtered = filtered.filter(function(i){ return i.category === stockCategoryFilter; });
-    if (stockGroupFilter) filtered = filtered.filter(function(i){ return i.group === stockGroupFilter; });
+    if (stockBrandFilter) filtered = filtered.filter(function(i){ return i.brand === stockBrandFilter; });
     if (stockDepotFilter) filtered = filtered.filter(function(i){
       // an SKU is in a depot if any of its bin docs has that depot
       return rawInventoryDocs.some(function(d){ return d.sku === i.sku && (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) === stockDepotFilter; });
@@ -2436,7 +2345,7 @@
         + '<td class="px-3 py-2 font-mono font-semibold text-indigo-700 dark:text-indigo-400 text-xs whitespace-nowrap"><a href="#" class="hover:underline" onclick="openItemDetail(\'' + esc(i.sku.replace(/'/g,"\\'")) + '\'); return false;">' + esc(i.sku) + '</a></td>'
         + '<td class="px-3 py-2 font-medium">' + esc(i.name) + '</td>'
         + '<td class="px-3 py-2 hidden md:table-cell text-xs">' + (i.category ? '<span class="inline-block px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-semibold">' + esc(i.category) + '</span>' : '—') + '</td>'
-        + '<td class="px-3 py-2 hidden md:table-cell text-xs text-slate-600 dark:text-slate-300">' + (i.group ? esc(i.group) : '—') + '</td>'
+        + '<td class="px-3 py-2 hidden md:table-cell text-xs text-slate-600 dark:text-slate-300">' + (i.brand ? esc(i.brand) : '—') + '</td>'
         + '<td class="px-3 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 text-right">' + i.total.toLocaleString() + '</td>'
         + '<td class="px-3 py-2 hidden lg:table-cell text-[10px] font-mono text-slate-500 whitespace-nowrap">' + esc(depotStr) + '</td>'
         + '<td class="px-3 py-2 font-mono text-slate-500 text-center">' + i.binCount + '</td>'
@@ -2463,8 +2372,8 @@
     renderStock();
   });
 
-  D('filter-group').addEventListener('change', function(){
-    stockGroupFilter = D('filter-group').value;
+  D('filter-brand').addEventListener('change', function(){
+    stockBrandFilter = D('filter-brand').value;
     renderStock();
   });
 
@@ -2476,23 +2385,23 @@
   D('btn-clear-filters').addEventListener('click', function(){
     stockFilter = '';
     stockCategoryFilter = '';
-    stockGroupFilter = '';
+    stockBrandFilter = '';
     stockDepotFilter = '';
     D('search-input').value = '';
     D('filter-category').value = '';
-    D('filter-group').value = '';
+    D('filter-brand').value = '';
     D('filter-depot').value = '';
     renderStock();
   });
 
   function refreshCategoryFilters(){
-    var catSel = D('filter-category'), grpSel = D('filter-group');
-    if (!catSel || !grpSel) return;
-    var catCur = catSel.value, grpCur = grpSel.value;
+    var catSel = D('filter-category'), brdSel = D('filter-brand');
+    if (!catSel || !brdSel) return;
+    var catCur = catSel.value, brdCur = brdSel.value;
     catSel.innerHTML = '<option value="">All Categories</option>' + catCache.categories.map(function(c){ return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
-    grpSel.innerHTML = '<option value="">All Groups</option>' + catCache.groups.map(function(g){ return '<option value="' + esc(g) + '">' + esc(g) + '</option>'; }).join('');
+    brdSel.innerHTML = '<option value="">All Brands</option>' + catCache.brands.map(function(b){ return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('');
     catSel.value = catCur || '';
-    grpSel.value = grpCur || '';
+    brdSel.value = brdCur || '';
   }
 
   D('btn-print').addEventListener('click', function(){
@@ -3021,7 +2930,7 @@
       return;
     }
 
-    paList.push({ sku: sku, name: cached.name, category: cached.category || '', group: cached.group || '', description: cached.description || '', qty: qty });
+    paList.push({ sku: sku, name: cached.name, category: cached.category || '', brand: cached.brand || '', description: cached.description || '', qty: qty });
     renderPaListTable();
     
     D('pa-m-sku').value = '';
@@ -3041,7 +2950,7 @@
     var sku = S(D('add-sku').value);
     var name = D('add-name').value.trim();
     var category = (D('add-category').value || '').trim();
-    var group = (D('add-group').value || '').trim();
+    var brand = (D('add-brand').value || '').trim();
     var description = (D('add-description').value || '').trim();
     var depot = D('add-depot').value || 'MAIN';
     var room = S(D('add-room').value);
@@ -3072,7 +2981,7 @@
           sku: sku,
           item_name: name,
           category: category,
-          group: group,
+          brand: brand,
           description: description,
           depot: depot,
           room: r,
@@ -3089,7 +2998,7 @@
       D('add-sku').value = '';
       D('add-name').value = '';
       D('add-category').value = '';
-      D('add-group').value = '';
+      D('add-brand').value = '';
       D('add-description').value = '';
       D('add-room').value = '';
       D('add-aisle').value = '';
@@ -3136,7 +3045,7 @@
           sku: sku,
           item_name: cached.name,
           category: cached.category || '',
-          group: cached.group || '',
+          brand: cached.brand || '',
           description: cached.description || '',
           depot: depot,
           room: r,
@@ -3185,7 +3094,7 @@
             sku: item.sku,
             item_name: item.name,
             category: item.category || '',
-            group: item.group || '',
+            brand: item.brand || '',
             description: item.description || '',
             depot: depot,
             room: r,
@@ -4470,7 +4379,7 @@
     D('id-total').textContent = item.total.toLocaleString();
     D('id-name').value = item.name;
     D('id-category').value = item.category || '';
-    D('id-group').value = item.group || '';
+    D('id-brand').value = item.brand || '';
     D('id-description').value = item.description || '';
     var binsEl = D('id-bins');
     if (item.bins && item.bins.length) {
@@ -4506,7 +4415,7 @@
     var sku = D('id-sku').textContent;
     var name = D('id-name').value.trim();
     var category = D('id-category').value.trim();
-    var group = D('id-group').value.trim();
+    var brand = D('id-brand').value.trim();
     var description = D('id-description').value.trim();
     if (!name) { toast('Item name required', 'error'); return; }
 
@@ -4520,7 +4429,7 @@
     var batch = db.batch();
     docs.forEach(function(d){
       var ref = db.collection('inventory').doc(d.id);
-      batch.set(ref, { item_name: name, category: category, group: group, description: description }, { merge: true });
+      batch.set(ref, { item_name: name, category: category, brand: brand, description: description }, { merge: true });
     });
     batch.commit().then(function(){
       toast('Item updated: ' + sku, 'success');
@@ -4620,10 +4529,11 @@
 
   // Refresh category/group datalists from cache
   function refreshCategoryDatalists(){
-    var catDl = D('category-options'), grpDl = D('group-options');
-    if (!catDl || !grpDl) return;
-    catDl.innerHTML = catCache.categories.map(function(c){ return '<option value="' + esc(c) + '">'; }).join('');
-    grpDl.innerHTML = catCache.groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join('');
+    var catDl = D('category-options'), grpDl = D('group-options'), brdDl = D('brand-options');
+    if (!catDl && !brdDl) return;
+    if (catDl) catDl.innerHTML = catCache.categories.map(function(c){ return '<option value="' + esc(c) + '">'; }).join('');
+    if (grpDl) grpDl.innerHTML = catCache.groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join('');
+    if (brdDl) brdDl.innerHTML = catCache.brands.map(function(b){ return '<option value="' + esc(b) + '">'; }).join('');
   }
   document.addEventListener('stockUpdated', refreshCategoryDatalists);
   document.addEventListener('stockUpdated', refreshCategoryFilters);
@@ -5011,17 +4921,15 @@
     if (bin) locParts.push('Bin ' + bin);
     D('st-loc-hint').textContent = (locParts.length ? locParts.join(' · ') : 'Location: all depots · all zones') + ' · ' + rows.length + ' items shown';
 
-    // Sort: either by location (walking order) or by classification
+    // Sort: either by location (walking order) or by category/brand
     if (groupBy === 'location') {
       rows = rows.sort(function(a, b){
         return (a.room + a.aisle + a.bay + a.bin).localeCompare(b.room + b.aisle + b.bay + b.bin);
       });
     } else {
       rows = rows.sort(function(a, b){
-        var ca = classifyItem(a.sku, a.name);
-        var cb = classifyItem(b.sku, b.name);
-        var ka = groupBy === 'brand' ? (ca.brand || 'Unbranded') : groupBy === 'tech' ? (ca.tech || 'Unspecified') : groupBy === 'family' ? (ca.family || 'Other') : ca.label;
-        var kb = groupBy === 'brand' ? (cb.brand || 'Unbranded') : groupBy === 'tech' ? (cb.tech || 'Unspecified') : groupBy === 'family' ? (cb.family || 'Other') : cb.label;
+        var ka = groupBy === 'brand' ? (a.brand || 'Unassigned') : (a.category || 'Unassigned');
+        var kb = groupBy === 'brand' ? (b.brand || 'Unassigned') : (b.category || 'Unassigned');
         if (ka !== kb) return ka.localeCompare(kb);
         return (a.sku).localeCompare(b.sku);
       });
@@ -5042,19 +4950,13 @@
     var groups = [];
     var groupMap = new Map();
     function groupKey(d){
-      var c = classifyItem(d.sku, d.name);
-      if (groupBy === 'brand') return 'BR::' + (c.brand || 'Unbranded');
-      if (groupBy === 'tech') return 'TECH::' + (c.tech || 'Unspecified');
-      if (groupBy === 'family') return 'FAM::' + (c.family || 'Other');
-      if (groupBy === 'category') return 'CAT::' + c.label;
+      if (groupBy === 'brand') return 'BR::' + (d.brand || 'Unassigned');
+      if (groupBy === 'category') return 'CAT::' + (d.category || 'Unassigned');
       return 'LOC::' + [d.room, d.aisle, d.bay, d.bin].join('|');
     }
     function groupLabel(d){
-      var c = classifyItem(d.sku, d.name);
-      if (groupBy === 'brand') return '🏷 ' + (c.brand || 'Unbranded');
-      if (groupBy === 'tech') return '⚙ ' + (c.tech || 'Unspecified technology');
-      if (groupBy === 'family') return '🗂 ' + (c.family || 'Other');
-      if (groupBy === 'category') return '📦 ' + c.label;
+      if (groupBy === 'brand') return '🏷 ' + (d.brand || 'Unassigned');
+      if (groupBy === 'category') return '📂 ' + (d.category || 'Unassigned');
       return formatLocationShort(d.room, d.aisle, d.bay, d.bin);
     }
     rows.forEach(function(d){
@@ -5347,10 +5249,8 @@
     });
     if (groupBy !== 'location') {
       rows = rows.sort(function(a, b){
-        var ca = classifyItem(a.sku, a.name);
-        var cb = classifyItem(b.sku, b.name);
-        var ka = groupBy === 'brand' ? (ca.brand || 'Unbranded') : groupBy === 'tech' ? (ca.tech || 'Unspecified') : groupBy === 'family' ? (ca.family || 'Other') : ca.label;
-        var kb = groupBy === 'brand' ? (cb.brand || 'Unbranded') : groupBy === 'tech' ? (cb.tech || 'Unspecified') : groupBy === 'family' ? (cb.family || 'Other') : cb.label;
+        var ka = groupBy === 'brand' ? (a.brand || 'Unassigned') : (a.category || 'Unassigned');
+        var kb = groupBy === 'brand' ? (b.brand || 'Unassigned') : (b.category || 'Unassigned');
         if (ka !== kb) return ka.localeCompare(kb);
         return a.sku.localeCompare(b.sku);
       });
@@ -5367,7 +5267,7 @@
     if (showName) headers.push('Item');
     headers.push(blind ? 'Counted Qty' : (showQty ? 'System / Counted' : 'Counted'));
 
-    var groupLabels = { location: 'by location', category: 'by category', family: 'by family', brand: 'by brand', tech: 'by technology' };
+    var groupLabels = { location: 'by location', category: 'by category', brand: 'by brand' };
     var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
     var locTitle = [];
     if (depot) locTitle.push('Counting into ' + (depotLabels[depot] || depot));
