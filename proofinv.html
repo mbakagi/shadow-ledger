@@ -720,14 +720,6 @@
         <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer" title="Hide system quantities — counters can't just copy the expected number. More accurate counts.">
           <input id="st-blind" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /> Blind count (hide qty)
         </label>
-        <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
-          Group by:
-          <select id="st-groupby" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
-            <option value="location">Location (walking order)</option>
-            <option value="category">Category</option>
-            <option value="brand">Brand</option>
-          </select>
-        </label>
         <button id="st-refresh" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition">Apply / Refresh</button>
         <button id="st-print" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition">Print Count Sheet</button>
       </div>
@@ -739,6 +731,7 @@
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-name" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Item Name</label>
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-qty" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> System Qty</label>
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer" title="Show each item's grand total across all bins/depots"><input id="st-show-total" type="checkbox" class="rounded border-slate-300 text-indigo-600" /> Total Qty</label>
+        <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer" title="Show the assigned category (only items with a category from the Categories tab)"><input id="st-show-category" type="checkbox" class="rounded border-slate-300 text-indigo-600" /> Category</label>
         <label class="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"><input id="st-show-verifier" type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Verifier</label>
         <span id="st-summary-hint" class="ml-auto text-[10px] text-slate-400"></span>
       </div>
@@ -4885,12 +4878,12 @@
     var workerName = (D('st-worker').value || '').trim();
     var unverifiedOnly = D('st-unverified-only').checked;
     var blind = D('st-blind').checked;
-    var groupBy = D('st-groupby') ? D('st-groupby').value : 'location';
     var showLocation = D('st-show-location').checked;
     var showSku = D('st-show-sku').checked;
     var showName = D('st-show-name').checked;
     var showQty = D('st-show-qty').checked;
     var showTotal = D('st-show-total').checked;
+    var showCategory = D('st-show-category').checked;
     var showVerifier = D('st-show-verifier').checked;
 
     var all = rawInventoryDocs.slice();
@@ -4921,19 +4914,10 @@
     if (bin) locParts.push('Bin ' + bin);
     D('st-loc-hint').textContent = (locParts.length ? locParts.join(' · ') : 'Location: all depots · all zones') + ' · ' + rows.length + ' items shown';
 
-    // Sort: either by location (walking order) or by category/brand
-    if (groupBy === 'location') {
-      rows = rows.sort(function(a, b){
-        return (a.room + a.aisle + a.bay + a.bin).localeCompare(b.room + b.aisle + b.bay + b.bin);
-      });
-    } else {
-      rows = rows.sort(function(a, b){
-        var ka = groupBy === 'brand' ? (a.brand || 'Unassigned') : (a.category || 'Unassigned');
-        var kb = groupBy === 'brand' ? (b.brand || 'Unassigned') : (b.category || 'Unassigned');
-        if (ka !== kb) return ka.localeCompare(kb);
-        return (a.sku).localeCompare(b.sku);
-      });
-    }
+    // Always sort by location (walking order)
+    rows = rows.sort(function(a, b){
+      return (a.room + a.aisle + a.bay + a.bin).localeCompare(b.room + b.aisle + b.bay + b.bin);
+    });
 
     var sheet = D('st-sheet');
     var emptyEl = D('st-empty');
@@ -4946,30 +4930,20 @@
     emptyEl.classList.add('hidden');
     D('st-summary-hint').textContent = rows.length + ' rows · ' + (workerName ? 'counter: ' + workerName : 'no counter set');
 
-    // Group rows by selected mode
+    // Group rows by location (walking order)
     var groups = [];
     var groupMap = new Map();
-    function groupKey(d){
-      if (groupBy === 'brand') return 'BR::' + (d.brand || 'Unassigned');
-      if (groupBy === 'category') return 'CAT::' + (d.category || 'Unassigned');
-      return 'LOC::' + [d.room, d.aisle, d.bay, d.bin].join('|');
-    }
-    function groupLabel(d){
-      if (groupBy === 'brand') return '🏷 ' + (d.brand || 'Unassigned');
-      if (groupBy === 'category') return '📂 ' + (d.category || 'Unassigned');
-      return formatLocationShort(d.room, d.aisle, d.bay, d.bin);
-    }
     rows.forEach(function(d){
-      var key = groupKey(d);
+      var key = [d.room, d.aisle, d.bay, d.bin].join('|');
       if (!groupMap.has(key)) {
-        groupMap.set(key, { key: key, label: groupLabel(d), isLocationGroup: groupBy === 'location', room: d.room, aisle: d.aisle, bay: d.bay, bin: d.bin, docs: [] });
+        groupMap.set(key, { key: key, room: d.room, aisle: d.aisle, bay: d.bay, bin: d.bin, docs: [] });
         groups.push(groupMap.get(key));
       }
       groupMap.get(key).docs.push(d);
     });
 
     sheet.innerHTML = groups.map(function(g){
-      var gLabel = g.label;
+      var gLabel = formatLocationShort(g.room, g.aisle, g.bay, g.bin);
       var gVerified = g.docs.every(isVerifiedRecently);
       return '<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">'
         + '<div class="flex items-center justify-between px-4 py-2.5 ' + (gVerified ? 'bg-emerald-50 dark:bg-emerald-950/20' : 'bg-slate-50 dark:bg-slate-700/40') + ' border-b border-slate-200 dark:border-slate-600">'
@@ -4983,10 +4957,7 @@
             var cells = [];
             if (showSku) cells.push('<span class="mono text-xs font-bold text-indigo-700 dark:text-indigo-400 ' + (showLocation ? 'min-w-[100px]' : 'min-w-[60px]') + '">' + esc(doc.sku) + '</span>');
             if (showName) cells.push('<span class="text-xs text-slate-500 dark:text-slate-400 flex-1 min-w-[120px] truncate">' + esc(doc.name) + '</span>');
-            if (showLocation && !g.isLocationGroup) {
-              // Show the per-item location when grouped by brand
-              cells.push('<span class="mono text-[10px] text-slate-400 dark:text-slate-500 min-w-[100px]">@ ' + esc(formatLocationShort(doc.room, doc.aisle, doc.bay, doc.bin)) + '</span>');
-            }
+            if (showCategory && doc.category) cells.push('<span class="inline-block px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-semibold">' + esc(doc.category) + '</span>');
             if (showQty) {
               cells.push(blind
                 ? '<span class="text-xs text-slate-400 font-semibold">Qty: ???</span>'
@@ -5116,9 +5087,8 @@
   D('st-refresh').addEventListener('click', renderStocktake);
   D('st-unverified-only').addEventListener('change', renderStocktake);
   D('st-blind').addEventListener('change', renderStocktake);
-  D('st-groupby').addEventListener('change', renderStocktake);
   D('st-depot').addEventListener('change', renderStocktake);
-  ['st-show-location','st-show-sku','st-show-name','st-show-qty','st-show-total','st-show-verifier'].forEach(function(id){
+  ['st-show-location','st-show-sku','st-show-name','st-show-qty','st-show-total','st-show-category','st-show-verifier'].forEach(function(id){
     D(id).addEventListener('change', renderStocktake);
   });
   D('st-worker').addEventListener('input', function(){
@@ -5233,12 +5203,12 @@
     var bin = S(D('st-bin').value);
     var depot = D('st-depot').value;
     var workerName = workerNameOverride !== undefined ? workerNameOverride : (D('st-worker').value || '').trim();
-    var groupBy = D('st-groupby') ? D('st-groupby').value : 'location';
     var blind = D('st-blind').checked;
     var showLocation = D('st-show-location').checked;
     var showSku = D('st-show-sku').checked;
     var showName = D('st-show-name').checked;
     var showQty = D('st-show-qty').checked;
+    var showCategory = D('st-show-category').checked;
 
     var rows = rawInventoryDocs.filter(function(d){
       if (room && d.room !== room) return false;
@@ -5247,27 +5217,18 @@
       if (bin && d.bin !== bin) return false;
       return true;
     });
-    if (groupBy !== 'location') {
-      rows = rows.sort(function(a, b){
-        var ka = groupBy === 'brand' ? (a.brand || 'Unassigned') : (a.category || 'Unassigned');
-        var kb = groupBy === 'brand' ? (b.brand || 'Unassigned') : (b.category || 'Unassigned');
-        if (ka !== kb) return ka.localeCompare(kb);
-        return a.sku.localeCompare(b.sku);
-      });
-    } else {
-      rows = rows.sort(function(a, b){
-        return (a.room + a.aisle + a.bay + a.bin + a.sku).localeCompare(b.room + b.aisle + b.bay + b.bin + b.sku);
-      });
-    }
+    rows = rows.sort(function(a, b){
+      return (a.room + a.aisle + a.bay + a.bin + a.sku).localeCompare(b.room + b.aisle + b.bay + b.bin + b.sku);
+    });
     if (!rows.length) { toast('Nothing to print', 'error'); return; }
 
     var headers = [];
     if (showLocation) headers.push('Location');
     if (showSku) headers.push('SKU');
     if (showName) headers.push('Item');
+    if (showCategory) headers.push('Category');
     headers.push(blind ? 'Counted Qty' : (showQty ? 'System / Counted' : 'Counted'));
 
-    var groupLabels = { location: 'by location', category: 'by category', brand: 'by brand' };
     var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
     var locTitle = [];
     if (depot) locTitle.push('Counting into ' + (depotLabels[depot] || depot));
@@ -5277,13 +5238,14 @@
     if (bin) locTitle.push('Bin ' + esc(bin));
     var html = '<h1>Stocktake Count Sheet</h1>'
       + (locTitle.length ? '<p style="font-size:12pt;font-weight:700;margin:0 0 2px;">' + locTitle.join(' · ') + '</p>' : '')
-      + '<p class="print-date">Generated ' + new Date().toLocaleString() + (workerName ? ' · <b>Assigned to: ' + esc(workerName) + '</b>' : ' · Counted by: ______________________') + ' · grouped ' + (groupLabels[groupBy] || 'by location') + '</p>'
+      + '<p class="print-date">Generated ' + new Date().toLocaleString() + (workerName ? ' · <b>Assigned to: ' + esc(workerName) + '</b>' : ' · Counted by: ______________________') + '</p>'
       + '<table id="dashboard-table"><thead><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>'
       + rows.map(function(d){
           var cells = [];
           if (showLocation) cells.push('<td class="mono">' + esc(formatLocationShort(d.room, d.aisle, d.bay, d.bin)) + '</td>');
           if (showSku) cells.push('<td class="mono">' + esc(d.sku) + '</td>');
           if (showName) cells.push('<td>' + esc(d.name) + '</td>');
+          if (showCategory) cells.push('<td>' + esc(d.category || '') + '</td>');
           cells.push(blind ? '<td>______</td>' : (showQty ? '<td>' + d.quantity + ' / ______</td>' : '<td>______</td>'));
           return '<tr>' + cells.join('') + '</tr>';
         }).join('')
