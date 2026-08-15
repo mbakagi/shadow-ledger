@@ -697,17 +697,20 @@
 
       <!-- Controls -->
       <div class="flex flex-wrap items-center gap-2">
-        <input id="st-room" type="text" placeholder="Room filter (zone)" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-40 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
-        <input id="st-aisle" type="text" placeholder="Aisle" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-32 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
         <select id="st-depot" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
           <option value="">All Depots</option>
           <option value="MAIN">Main Building</option>
           <option value="DEPOT1">Depot 1</option>
           <option value="DEPOT2">Depot 2</option>
         </select>
+        <input id="st-room" type="text" placeholder="Room" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-24 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
+        <input id="st-aisle" type="text" placeholder="Aisle" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-20 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
+        <input id="st-bay" type="text" placeholder="Bay" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-20 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
+        <input id="st-bin" type="text" placeholder="Bin" class="mono px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-20 uppercase focus:ring-2 focus:ring-indigo-500 outline-none" maxlength="4" />
         <input id="st-worker" type="text" list="worker-options" placeholder="Counter (your name)" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm w-44 focus:ring-2 focus:ring-indigo-500 outline-none" />
         <datalist id="worker-options"></datalist>
       </div>
+      <div class="text-[11px] text-slate-400" id="st-loc-hint">Location: all depots · all zones. Pick Room/Aisle/Bay/Bin to narrow the count.</div>
       <div class="flex flex-wrap items-center gap-3">
         <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
           <input id="st-unverified-only" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /> Only unverified
@@ -4605,6 +4608,8 @@
   function renderStocktake(){
     var room = S(D('st-room').value);
     var aisle = S(D('st-aisle').value);
+    var bay = S(D('st-bay').value);
+    var bin = S(D('st-bin').value);
     var depot = D('st-depot').value;
     var workerName = (D('st-worker').value || '').trim();
     var unverifiedOnly = D('st-unverified-only').checked;
@@ -4628,8 +4633,19 @@
     var rows = all;
     if (room) rows = rows.filter(function(d){ return d.room === room; });
     if (aisle) rows = rows.filter(function(d){ return d.aisle === aisle; });
+    if (bay) rows = rows.filter(function(d){ return d.bay === bay; });
+    if (bin) rows = rows.filter(function(d){ return d.bin === bin; });
     if (depot) rows = rows.filter(function(d){ return (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) === depot; });
     if (unverifiedOnly) rows = rows.filter(function(d){ return !isVerifiedRecently(d); });
+
+    // Location hint
+    var locParts = [];
+    if (depot) locParts.push(({MAIN:'Main Building',DEPOT1:'Depot 1',DEPOT2:'Depot 2'})[depot] || depot);
+    if (room) locParts.push('Room ' + room);
+    if (aisle) locParts.push('Aisle ' + aisle);
+    if (bay) locParts.push('Bay ' + bay);
+    if (bin) locParts.push('Bin ' + bin);
+    D('st-loc-hint').textContent = 'Location: ' + (locParts.length ? locParts.join(' · ') : 'all depots · all zones');
 
     // Sort: either by location (walking order) or by item affinity
     if (groupItems) {
@@ -4799,6 +4815,14 @@
     clearTimeout(window.__stDebounce);
     window.__stDebounce = setTimeout(renderStocktake, 300);
   });
+  D('st-bay').addEventListener('input', function(){
+    clearTimeout(window.__stDebounce);
+    window.__stDebounce = setTimeout(renderStocktake, 300);
+  });
+  D('st-bin').addEventListener('input', function(){
+    clearTimeout(window.__stDebounce);
+    window.__stDebounce = setTimeout(renderStocktake, 300);
+  });
 
   // ── Workers roster: register, assign, print per-worker sheet ──
   var stWorkers = [];
@@ -4879,6 +4903,8 @@
   function printCountSheet(workerNameOverride){
     var room = S(D('st-room').value);
     var aisle = S(D('st-aisle').value);
+    var bay = S(D('st-bay').value);
+    var bin = S(D('st-bin').value);
     var depot = D('st-depot').value;
     var workerName = workerNameOverride !== undefined ? workerNameOverride : (D('st-worker').value || '').trim();
     var groupItems = D('st-group-items').checked;
@@ -4891,6 +4917,8 @@
     var rows = rawInventoryDocs.filter(function(d){
       if (room && d.room !== room) return false;
       if (aisle && d.aisle !== aisle) return false;
+      if (bay && d.bay !== bay) return false;
+      if (bin && d.bin !== bin) return false;
       if (depot && (d.depot || (d.room === 'NONE' ? '' : 'MAIN')) !== depot) return false;
       return true;
     });
@@ -4906,7 +4934,7 @@
         return (a.room + a.aisle + a.bay + a.bin + a.sku).localeCompare(b.room + b.aisle + b.bay + b.bin + b.sku);
       });
     }
-    if (!rows.length) { toast('Nothing to print', 'error'); return; }
+    if (!rows.length) { toast('Nothing to print for this location', 'error'); return; }
 
     var headers = [];
     if (showLocation) headers.push('Location');
@@ -4915,8 +4943,15 @@
     headers.push(blind ? 'Counted Qty' : (showQty ? 'System / Counted' : 'Counted'));
 
     var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
-    var html = '<h1>Stocktake Count Sheet' + (depot ? ' — ' + depotLabels[depot] : '') + (room ? ' · Room ' + esc(room) : '') + (aisle ? ' / Aisle ' + esc(aisle) : '') + (groupItems ? ' · grouped by item family' : '') + '</h1>'
-      + '<p class="print-date">Generated ' + new Date().toLocaleString() + (workerName ? ' · <b>Assigned to: ' + esc(workerName) + '</b>' : ' · Counted by: ______________________') + '</p>'
+    var locTitle = [];
+    if (depot) locTitle.push(depotLabels[depot] || depot);
+    if (room) locTitle.push('Room ' + esc(room));
+    if (aisle) locTitle.push('Aisle ' + esc(aisle));
+    if (bay) locTitle.push('Bay ' + esc(bay));
+    if (bin) locTitle.push('Bin ' + esc(bin));
+    var html = '<h1>Stocktake Count Sheet</h1>'
+      + (locTitle.length ? '<p style="font-size:12pt;font-weight:700;margin:0 0 2px;">' + locTitle.join(' · ') + '</p>' : '')
+      + '<p class="print-date">Generated ' + new Date().toLocaleString() + (workerName ? ' · <b>Assigned to: ' + esc(workerName) + '</b>' : ' · Counted by: ______________________') + (groupItems ? ' · grouped by item family' : '') + '</p>'
       + '<table id="dashboard-table"><thead><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>'
       + rows.map(function(d){
           var cells = [];
@@ -4927,7 +4962,7 @@
           return '<tr>' + cells.join('') + '</tr>';
         }).join('')
       + '</tbody></table>';
-    printHtml(html, 'Stocktake Count Sheet' + (workerName ? ' — ' + workerName : ''));
+    printHtml(html, 'Count Sheet' + (workerName ? ' — ' + workerName : ''));
   }
 
   D('st-print').addEventListener('click', function(){ printCountSheet(); });
