@@ -325,14 +325,14 @@
             </label>
           </span>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div id="add-rabb-fields" class="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room</label><input id="add-room" type="text" placeholder="e.g. 1" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="add-aisle" type="text" placeholder="e.g. A" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bay</label><input id="add-bay" type="text" placeholder="e.g. 01" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bin</label><input id="add-bin" type="text" placeholder="e.g. 02" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
           <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Initial Qty</label><input id="add-qty" type="number" min="0" value="0" class="mono w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
         </div>
-        <p class="text-[10px] text-slate-400">If no location is selected, the item will be initialized in the database at Room: <span class="font-bold">NONE</span> with quantity <span class="font-bold">0</span>.</p>
+        <p class="text-[10px] text-slate-400" id="add-loc-hint">Room-Aisle-Bay-Bin (R-A-B-B) applies to <span class="font-bold">Main Building</span> only. Depot 1 / Depot 2 are flat locations without R-A-B-B.</p>
       </div>
 
       <button id="btn-add-item-submit" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition">Create Item Record</button>
@@ -444,7 +444,7 @@
               </select>
             </label>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div id="pa-rabb-fields" class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Room (req)</label><input id="pa-room" type="text" placeholder="e.g. 1" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
             <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Aisle</label><input id="pa-aisle" type="text" placeholder="e.g. A" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
             <div><label class="block text-[10px] font-semibold text-slate-500 mb-1">Bay</label><input id="pa-bay" type="text" placeholder="e.g. 01" class="mono w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none uppercase" maxlength="4" /></div>
@@ -454,6 +454,7 @@
             <span id="pa-loc-level-badge" class="font-bold text-slate-400">Level: Room Only (unassigned sublevels)</span>
             <span class="mono text-indigo-600 dark:text-indigo-400 font-semibold" id="pa-loc-preview-str">R- -A- -B- -B-</span>
           </div>
+          <p class="text-[10px] text-slate-400">R-A-B-B applies to <span class="font-bold">Main Building</span> only. Depot 1 / Depot 2 are flat locations.</p>
           <div id="pa-bin-preview" class="hidden mt-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2.5 space-y-1"></div>
         </div>
         
@@ -1420,6 +1421,8 @@
   };
   var formatLocation = function(room, aisle, bay, bin){
     var r = cleanLocVal(room), a = cleanLocVal(aisle), ba = cleanLocVal(bay), bn = cleanLocVal(bin);
+    if (r === 'DEPOT1') return 'Depot 1';
+    if (r === 'DEPOT2') return 'Depot 2';
     var parts = [];
     if (r) parts.push('Room ' + r);
     if (a) parts.push('Aisle ' + a);
@@ -1429,6 +1432,8 @@
   };
   var formatLocationShort = function(room, aisle, bay, bin){
     var r = cleanLocVal(room), a = cleanLocVal(aisle), ba = cleanLocVal(bay), bn = cleanLocVal(bin);
+    if (r === 'DEPOT1') return 'Depot 1';
+    if (r === 'DEPOT2') return 'Depot 2';
     var parts = [];
     if (r) parts.push('R' + r);
     if (a) parts.push('A' + a);
@@ -2803,12 +2808,44 @@
 
   // ── Putaway / Assign & Multiple Mode UI ──
   function updatePutawayLiveLoc() {
+    var depot = D('pa-depot').value || 'MAIN';
     var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
     var previewEl = D('pa-loc-preview-str');
     var badgeEl = D('pa-loc-level-badge');
     var qrBox = D('pa-live-qr-box');
     var qrLbl = D('pa-live-qr-lbl');
-    
+
+    if (depot !== 'MAIN') {
+      // Depot 1/2 are flat locations — no R-A-B-B
+      var r = depot, a = '', ba = '', bn = '';
+      var depotName = depot === 'DEPOT1' ? 'Depot 1' : 'Depot 2';
+      previewEl.textContent = depotName;
+      badgeEl.textContent = 'Location: ' + depotName + ' (flat)';
+      qrBox.innerHTML = '';
+      var url = window.location.origin + window.location.pathname + '?tab=bins&subtab=binsearch&room=' + encodeURIComponent(r) + '&aisle=&bay=&bin=';
+      qrLbl.textContent = depotName;
+      renderQrSvg(url, depotName, 200).then(function(svgHtml){ if (svgHtml) qrBox.innerHTML = svgHtml; });
+
+      var prev = D('pa-bin-preview');
+      if (prev) {
+        var contents = rawInventoryDocs.filter(function(doc){ return doc.room === r; });
+        if (!contents.length) { prev.classList.add('hidden'); prev.innerHTML = ''; }
+        else {
+          prev.classList.remove('hidden');
+          var totalUnits = contents.reduce(function(s,d){ return s + d.quantity; }, 0);
+          prev.innerHTML = '<p class="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">⚠ ' + depotName + ' currently holds ' + contents.length + ' item(s), ' + totalUnits + ' units</p>'
+            + contents.map(function(doc){
+                return '<div class="flex items-center justify-between text-xs">'
+                  + '<span class="mono font-bold text-indigo-600 dark:text-indigo-400">' + esc(doc.sku) + '</span>'
+                  + '<span class="text-slate-500 dark:text-slate-400 truncate mx-2 flex-1">' + esc(doc.name) + '</span>'
+                  + '<span class="mono font-bold text-emerald-600 dark:text-emerald-400">' + doc.quantity.toLocaleString() + '</span>'
+                  + '</div>';
+              }).join('');
+        }
+      }
+      return;
+    }
+
     if (!room) {
       previewEl.textContent = 'R- -A- -B- -B-';
       badgeEl.textContent = 'Level: Room Required';
@@ -2947,6 +2984,21 @@
     toast('List cleared', 'info');
   });
 
+  // Toggle R-A-B-B fields: only Main Building uses Room/Aisle/Bay/Bin
+  function updateDepotLocationUI(){
+    var addDepot = D('add-depot').value;
+    var addRabb = D('add-rabb-fields');
+    if (addRabb) addRabb.classList.toggle('hidden', addDepot !== 'MAIN');
+
+    var paDepot = D('pa-depot').value;
+    var paRabb = D('pa-rabb-fields');
+    if (paRabb) paRabb.classList.toggle('hidden', paDepot !== 'MAIN');
+    updatePutawayLiveLoc();
+  }
+  D('add-depot').addEventListener('change', updateDepotLocationUI);
+  D('pa-depot').addEventListener('change', updateDepotLocationUI);
+  updateDepotLocationUI();
+
   // Create/Add Item Submit Action
   D('btn-add-item-submit').addEventListener('click', function(){
     var sku = S(D('add-sku').value);
@@ -2964,10 +3016,12 @@
     if (!sku) { toast('SKU is required', 'error'); return; }
     if (!name) { toast('Item Name is required', 'error'); return; }
 
-    var r = room || 'NONE';
-    var a = aisle || '-';
-    var ba = bay || '-';
-    var bn = bin || '-';
+    // R-A-B-B only for Main Building; Depot 1/2 are flat locations
+    if (depot !== 'MAIN') {
+      var r = depot, a = '', ba = '', bn = '';
+    } else {
+      var r = room || 'NONE', a = aisle || '-', ba = bay || '-', bn = bin || '-';
+    }
 
     var docId = normId(sku, r, a, ba, bn);
     var ref = db.collection('inventory').doc(docId);
@@ -3022,7 +3076,7 @@
     var depot = D('pa-depot').value || 'MAIN';
     var sku = S(D('pa-sku').value), qty = Math.max(1, parseInt(D('pa-qty').value,10)||1);
 
-    if (!room) { toast('Room is required','error'); return; }
+    if (depot === 'MAIN' && !room) { toast('Room is required (Main Building)','error'); return; }
     if (!sku) { toast('SKU is required','error'); return; }
 
     var cached = skuCache.find(function(c){ return c.sku === sku; });
@@ -3031,10 +3085,12 @@
       return;
     }
 
-    var r = room;
-    var a = aisle || '-';
-    var ba = bay || '-';
-    var bn = bin || '-';
+    // R-A-B-B only for Main Building; Depot 1/2 are flat locations
+    if (depot !== 'MAIN') {
+      var r = depot, a = '', ba = '', bn = '';
+    } else {
+      var r = room, a = aisle || '-', ba = bay || '-', bn = bin || '-';
+    }
 
     var docId = normId(sku, r, a, ba, bn);
     var ref = db.collection('inventory').doc(docId);
@@ -3073,13 +3129,14 @@
   D('btn-putaway-all').addEventListener('click', function(){
     var room = S(D('pa-room').value), aisle = S(D('pa-aisle').value), bay = S(D('pa-bay').value), bin = S(D('pa-bin').value);
     var depot = D('pa-depot').value || 'MAIN';
-    if (!room) { toast('Room is required','error'); return; }
+    if (depot === 'MAIN' && !room) { toast('Room is required (Main Building)','error'); return; }
     if (!paList.length) { toast('Putaway list is empty','error'); return; }
-    
-    var r = room;
-    var a = aisle || '-';
-    var ba = bay || '-';
-    var bn = bin || '-';
+
+    if (depot !== 'MAIN') {
+      var r = depot, a = '', ba = '', bn = '';
+    } else {
+      var r = room, a = aisle || '-', ba = bay || '-', bn = bin || '-';
+    }
     
     var btn = D('btn-putaway-all');
     btn.disabled = true;
