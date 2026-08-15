@@ -723,6 +723,7 @@
           <select id="st-groupby" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
             <option value="location">Location (walking order)</option>
             <option value="category">Category (brand + type)</option>
+            <option value="family">Family (Fire / Access / CCTV…)</option>
             <option value="brand">Brand</option>
             <option value="tech">Addressable / Conventional</option>
           </select>
@@ -1448,32 +1449,48 @@
       if (KNOWN_BRANDS[i][1].test(t)) { brand = KNOWN_BRANDS[i][0]; break; }
     }
 
-    // Technology: addressable vs conventional
+    // Technology: addressable vs conventional (fire detection only; ignored for other families)
     var tech = '';
     if (/ADDRESSABLE|ADRESSABLE|ANALOGUE|ANALOGIQUE|ANALOG\b|ADDRESSED/.test(t)) tech = 'Addressable';
     else if (/CONVENTIONNEL|CONVENTIONNELLE|CONVENTIONAL/.test(t)) tech = 'Conventional';
 
-    // Product type (order matters: specific before generic)
+    // Product type + family (order matters: specific before generic, access-control before "centrale")
     var type = '';
+    var family = 'Other';
     var TYPES = [
-      ['Fire Panel', /CENTRALE|FIRE PANEL|CONTROL PANEL|TABLEAU DE SIGNALISATION|CENTRAL UNIT|EXTINCTION|LARGAGE/],
-      ['Detector', /DETECTEUR|DETECTOR|SMOKE|FUMEE|OPTICAL|OPTIQUE|THERMAL|THERMIQUE|HEAT|CHALEUR|MULTISENSOR|MULTI-?SENSOR|MULTICRITERIA|CARBON|MONOXIDE|CO\b|ASPIRATION|FLAMME|FLAME|BEAM|BARRIERE/],
-      ['Call Point', /CALL ?POINT|CALLPOINT|DECLENCHEUR|MANUAL|MANUEL|BREAK ?GLASS|MCP\b|\bDM\b|PULL STATION|POINT D'APPEL/],
-      ['Siren / Sounder', /SIREN|SIRENE|SOUNDER|AVERTISSEUR|BELL|CLOCHE|FLASHER|BEACON|AVF|DIFFUSEUR|VISUAL INDICATOR|SONORE/],
-      ['Base / Socket', /BASE|SOCLE|SOCKET|SUPPORT/],
-      ['Module / I-O', /MODULE|RELAY|RELAIS|MONITOR|INTERFACE|CARTE|ZONE MODULE|ENTREE|SORTIE/],
-      ['Surveillance', /CAMERA|CAMERA|CCTV|NVR|DVR|VIDEO|DOME|RECORDER|IP CAM|OBJECTIF|LENS/],
-      ['Cable / Network', /CABLE|WIRE|COAXIAL|UTP|FTP|RJ45|FIBER|FIBRE|RESEAU|PANNEAU DE BRASSAGE|SWITCH|ARMOIRE|BAIE|ONDULEUR|UPS|ROUTEUR|MODEM|CONNECTEUR|PRISE/],
-      ['Power / Battery', /ALIMENTATION|POWER|PSU|BATTERY|BATTERIE|CHARGEUR|TRANSFORMATEUR|ALIM\b/],
-      ['Gas Detection', /GAZ|GAS|ELECTROVANNE|VANNE|SONDE|CO2|OXYGENE/],
-      ['Access Control', /ACCES|ACCESS|BADGE|READER|LECTEUR|POINTAGE|CONTROLEUR|CONTROLLER|CLAVIER|KEYPAD|SERRURE|VENTOUSE|GACHE|ARMATURE|BOUTON DE SORTIE|INTERPHONE/]
+      // ── Access Control (sub-categorised) ──
+      ['Controller', 'Access Control', /CONTROLEUR|CONTROLLER|CENTRALE D'ACCES|ACCESS PANEL|ACCESS CENTRAL|PANEL D'ACCES|CONTROLADOR/],
+      ['Electric Lock', 'Access Control', /VENTOUSE|SERRURE|GACHE|MAGLOCK|MAGNETIC LOCK|VERROU ELECTRIQUE|ELECTRO-?LOCK|OUVRE-?PORTE/],
+      ['Reader', 'Access Control', /LECTEUR|READER|PROXIMITE|PROXIMITY|RFID|ANTENNE|NFC|BLUETOOTH LECTEUR/],
+      ['Biometric', 'Access Control', /EMPREINTE|FINGERPRINT|PALM|BIOMETRIE|BIOMETRIC|RECONNAISSANCE|RECOGNITION|FACE\b|IRIS|VEINE/],
+      ['Keypad', 'Access Control', /CLAVIER|KEYPAD|CODE PAD/],
+      ['Badge / Credential', 'Access Control', /BADGE|CREDENTIAL|KEYFOB|\bFOB\b|CARTE D'ACCES|PROX TAG|TRANSPONDEUR/],
+      ['Software', 'Access Control', /LOGICIEL|SOFTWARE|POINTAGE|GESTION DES VISITEURS|GESTION DES VISITES|SERVICE LIBRE|GESTION DES TRAVAILLEURS/],
+      ['Push Button', 'Access Control', /BOUTON DE SORTIE|EXIT BUTTON|PUSH BUTTON|RELEASE BUTTON|DEMANDE DE SORTIE|BIP\b/],
+      ['Accessory', 'Access Control', /ARMATURE|FLEXIBLE|ACCESSOIRE|ACCESSORY|BOITIER|COFFRET D'ACCES/],
+      // ── Fire Detection ──
+      ['Fire Panel', 'Fire', /CENTRALE|FIRE PANEL|CONTROL PANEL|TABLEAU DE SIGNALISATION|EXTINCTION|LARGAGE|SPRINKLER|BUSE|NOZZLE/],
+      ['Detector', 'Fire', /DETECTEUR|DETECTOR|SMOKE|FUMEE|OPTICAL|OPTIQUE|THERMAL|THERMIQUE|HEAT|CHALEUR|MULTISENSOR|MULTI-?SENSOR|MULTICRITERIA|CARBON|MONOXIDE|CO\b|ASPIRATION|FLAMME|FLAME|BEAM|BARRIERE/],
+      ['Call Point', 'Fire', /CALL ?POINT|CALLPOINT|DECLENCHEUR|MANUAL|MANUEL|BREAK ?GLASS|MCP\b|\bDM\b|PULL STATION|POINT D'APPEL/],
+      ['Siren / Sounder', 'Fire', /SIREN|SIRENE|SOUNDER|AVERTISSEUR|BELL|CLOCHE|FLASHER|BEACON|AVF|DIFFUSEUR|VISUAL INDICATOR|SONORE/],
+      ['Base / Socket', 'Fire', /BASE|SOCLE|SOCKET|SUPPORT/],
+      ['Module / I-O', 'Fire', /MODULE|RELAY|RELAIS|MONITOR|INTERFACE|CARTE|ZONE MODULE|ENTREE|SORTIE/],
+      // ── Surveillance ──
+      ['Camera', 'Surveillance', /CAMERA|CAMERA|CCTV|DOME|IP CAM|OBJECTIF|LENS/],
+      ['Recorder', 'Surveillance', /NVR|DVR|RECORDER|ENREGISTREUR/],
+      // ── Cabling / Network ──
+      ['Cable / Network', 'Network', /CABLE|WIRE|COAXIAL|UTP|FTP|RJ45|FIBER|FIBRE|RESEAU|PANNEAU DE BRASSAGE|SWITCH|ARMOIRE|BAIE|ONDULEUR|UPS|ROUTEUR|MODEM|CONNECTEUR|PRISE/],
+      // ── Power ──
+      ['Power / Battery', 'Power', /ALIMENTATION|POWER|PSU|BATTERY|BATTERIE|CHARGEUR|TRANSFORMATEUR|ALIM\b/],
+      // ── Gas ──
+      ['Gas Detection', 'Gas', /GAZ|GAS|ELECTROVANNE|VANNE|SONDE|CO2|OXYGENE/]
     ];
     for (var j = 0; j < TYPES.length; j++) {
-      if (TYPES[j][1].test(t)) { type = TYPES[j][0]; break; }
+      if (TYPES[j][2].test(t)) { type = TYPES[j][0]; family = TYPES[j][1]; break; }
     }
 
     var groupLabel = (brand ? brand + ' · ' : '') + (tech ? tech + ' ' : '') + (type || 'Other / Uncategorised');
-    return { brand: brand, tech: tech, type: type || 'Other', label: groupLabel };
+    return { brand: brand, tech: tech, type: type || 'Other', family: family, label: groupLabel };
   };
   var toast = function(msg, type){
     var t = document.createElement('div');
@@ -4726,8 +4743,8 @@
       rows = rows.sort(function(a, b){
         var ca = classifyItem(a.sku, a.name);
         var cb = classifyItem(b.sku, b.name);
-        var ka = groupBy === 'brand' ? (ca.brand || 'Unbranded') : groupBy === 'tech' ? (ca.tech || 'Unspecified') : ca.label;
-        var kb = groupBy === 'brand' ? (cb.brand || 'Unbranded') : groupBy === 'tech' ? (cb.tech || 'Unspecified') : cb.label;
+        var ka = groupBy === 'brand' ? (ca.brand || 'Unbranded') : groupBy === 'tech' ? (ca.tech || 'Unspecified') : groupBy === 'family' ? (ca.family || 'Other') : ca.label;
+        var kb = groupBy === 'brand' ? (cb.brand || 'Unbranded') : groupBy === 'tech' ? (cb.tech || 'Unspecified') : groupBy === 'family' ? (cb.family || 'Other') : cb.label;
         if (ka !== kb) return ka.localeCompare(kb);
         return (a.sku).localeCompare(b.sku);
       });
@@ -4751,6 +4768,7 @@
       var c = classifyItem(d.sku, d.name);
       if (groupBy === 'brand') return 'BR::' + (c.brand || 'Unbranded');
       if (groupBy === 'tech') return 'TECH::' + (c.tech || 'Unspecified');
+      if (groupBy === 'family') return 'FAM::' + (c.family || 'Other');
       if (groupBy === 'category') return 'CAT::' + c.label;
       return 'LOC::' + [d.room, d.aisle, d.bay, d.bin].join('|');
     }
@@ -4758,6 +4776,7 @@
       var c = classifyItem(d.sku, d.name);
       if (groupBy === 'brand') return '🏷 ' + (c.brand || 'Unbranded');
       if (groupBy === 'tech') return '⚙ ' + (c.tech || 'Unspecified technology');
+      if (groupBy === 'family') return '🗂 ' + (c.family || 'Other');
       if (groupBy === 'category') return '📦 ' + c.label;
       return formatLocationShort(d.room, d.aisle, d.bay, d.bin);
     }
@@ -5053,8 +5072,8 @@
       rows = rows.sort(function(a, b){
         var ca = classifyItem(a.sku, a.name);
         var cb = classifyItem(b.sku, b.name);
-        var ka = groupBy === 'brand' ? (ca.brand || 'Unbranded') : groupBy === 'tech' ? (ca.tech || 'Unspecified') : ca.label;
-        var kb = groupBy === 'brand' ? (cb.brand || 'Unbranded') : groupBy === 'tech' ? (cb.tech || 'Unspecified') : cb.label;
+        var ka = groupBy === 'brand' ? (ca.brand || 'Unbranded') : groupBy === 'tech' ? (ca.tech || 'Unspecified') : groupBy === 'family' ? (ca.family || 'Other') : ca.label;
+        var kb = groupBy === 'brand' ? (cb.brand || 'Unbranded') : groupBy === 'tech' ? (cb.tech || 'Unspecified') : groupBy === 'family' ? (cb.family || 'Other') : cb.label;
         if (ka !== kb) return ka.localeCompare(kb);
         return a.sku.localeCompare(b.sku);
       });
@@ -5071,7 +5090,7 @@
     if (showName) headers.push('Item');
     headers.push(blind ? 'Counted Qty' : (showQty ? 'System / Counted' : 'Counted'));
 
-    var groupLabels = { location: 'by location', category: 'by category', brand: 'by brand', tech: 'by technology' };
+    var groupLabels = { location: 'by location', category: 'by category', family: 'by family', brand: 'by brand', tech: 'by technology' };
     var depotLabels = { MAIN: 'Main Building', DEPOT1: 'Depot 1', DEPOT2: 'Depot 2' };
     var locTitle = [];
     if (depot) locTitle.push('Counting into ' + (depotLabels[depot] || depot));
